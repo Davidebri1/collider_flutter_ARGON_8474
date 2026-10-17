@@ -500,32 +500,21 @@ def reply(body):
 
 
 # ---------------- Themes ----------------
-# The live wallpapers live in David's Cloudflare R2 bucket "collider-themes". Its Worker lists every object
-# (name, kind, public URL, tags). A video is a theme; posters/<video>.jpg is its cover; a song named
-# "<theme name> - song.m4a" is its song. Names come from the title tag on the video, then from the curated
-# catalog at CONFIG["theme_names"] (matched by the video's file name), then from the file name itself.
+# The live wallpapers live in David's Cloudflare R2 bucket "collider-themes"; its Worker lists every object (name, kind,
+# public URL, tags). Each wallpaper is numbered and titled in the bucket itself (Claude, 2026-10-17):
+#   "007 Late Night on the Phone.mp4"   the wallpaper
+#   "007 Late Night on the Phone.jpg"   its poster, beside it so the bucket shows it
+#   "007 Late Night on the Phone.m4a"   its song, when it has one
+# The number keeps the three together and sets the order; the app shows the title only.
 _themes_cache = {"at": 0, "data": []}
 _themes_lock = threading.Lock()
+_NUMBERED = re.compile(r"^(\d{3}) (.+)\.([A-Za-z0-9]+)$")
 
 
 def _get_json(url, timeout=25):
-    req = urllib.request.Request(url, headers={"User-Agent": "Collider"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 Collider"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.load(r)
-
-
-def _plain_name(file):
-    """A file name as words: '0_Sky_Moon_1280x720 (2).mp4' -> 'Sky Moon'."""
-    n = re.sub(r"\.[A-Za-z0-9]+$", "", file)
-    n = re.sub(r"\s*\(\d+\)|\s*-\s*Copy", "", n)
-    n = re.sub(r"_\d{12}$|_\d{3,4}x\d{3,4}$|_\d+_hd$|_medium$", "", n)
-    n = re.sub(r"^\d+_(Coll_)?", "", n)
-    n = n.replace("_", " ").strip()
-    return n[:1].upper() + n[1:] if n else file
-
-
-def _slug(file):
-    return re.sub(r"[^a-z0-9]+", "-", re.sub(r"\.[A-Za-z0-9]+$", "", file).lower()).strip("-")
 
 
 def themes():
@@ -541,40 +530,28 @@ def themes():
             return json.load(open(cache, encoding="utf-8"))
         except Exception:
             return []
-    curated = {}
-    try:
-        for t in _get_json(CONFIG.get("theme_names") or ccfg.THEME_NAMES).get("themes", []):
-            if t.get("source"):
-                curated[t["source"]] = t
-    except Exception as e:
-        print("theme names:", e)
-    by_name = {o["name"]: o for o in listing}
-    songs = {}
+    parts = {}
     for o in listing:
-        if o.get("kind") == "audio":
-            title = re.sub(r"\s*-\s*song$", "", re.sub(r"\.[A-Za-z0-9]+$", "", o["name"]), flags=re.I).strip()
-            songs.setdefault(title.lower(), []).append({"title": title, "url": o["url"]})
-    out = []
-    for o in listing:
-        if o.get("kind") != "video":
+        m = _NUMBERED.match(o["name"])
+        if not m:
             continue
-        tags = o.get("tags") or []
-        titled = next((t[6:].strip() for t in tags if t.lower().startswith("title:")), "")
-        cur = curated.get(o["name"]) or {}
-        name = titled or cur.get("name") or _plain_name(o["name"])
-        poster = by_name.get("posters/" + o["name"] + ".jpg")
-        tracks = []
-        for key in dict.fromkeys(x.lower() for x in (name, cur.get("name") or "", titled) if x):
-            tracks += songs.get(key, [])
+        t = parts.setdefault(m.group(1), {"title": m.group(2)})
+        t.setdefault(o.get("kind"), o)
+    out = []
+    for num in sorted(parts):
+        t = parts[num]
+        v = t.get("video")
+        if not v:
+            continue
+        song = t.get("audio")
         out.append({
-            "id": _slug(o["name"]),
-            "name": name,
-            "video": o["url"],
-            "poster": poster["url"] if poster else None,
-            "tags": [t for t in tags if not t.lower().startswith("title:")],
-            "price": cur.get("price"),
-            "productId": cur.get("productId"),
-            "tracks": tracks,
+            "id": num,
+            "name": t["title"],
+            "video": v["url"],
+            "poster": t["image"]["url"] if t.get("image") else None,
+            "tags": v.get("tags") or [],
+            "price": None,
+            "tracks": [{"title": t["title"], "url": song["url"]}] if song else [],
         })
     with _themes_lock:
         _themes_cache.update(at=time.time(), data=out)

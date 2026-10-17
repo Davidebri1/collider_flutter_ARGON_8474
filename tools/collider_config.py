@@ -15,7 +15,6 @@ KEYS_FILE = r"C:\Users\D\Documents\00_Config_and_Secrets\API KEYS.txt"
 NVIDIA_CHAT = "https://integrate.api.nvidia.com/v1/chat/completions"
 TAVILY_SEARCH = "https://api.tavily.com/search"
 THEMES = "https://collider-themes.ebridavid.workers.dev/"
-THEME_NAMES = "https://davidebri1.github.io/collider-media/themes.json"
 
 
 def path(data_dir):
@@ -32,7 +31,7 @@ def _first_run():
         rows.append({"name": "Tavily", "endpoint": TAVILY_SEARCH, "key": k, "models": ""})
     if not rows:
         rows.append({"name": "NVIDIA", "endpoint": NVIDIA_CHAT, "key": "", "models": ""})
-    return {"host": None, "providers": rows, "themes": THEMES, "theme_names": THEME_NAMES}
+    return {"host": None, "providers": rows, "themes": THEMES}
 
 
 def load(data_dir):
@@ -42,7 +41,7 @@ def load(data_dir):
             cfg = json.load(open(p, encoding="utf-8"))
             cfg.setdefault("providers", [])
             cfg.setdefault("themes", THEMES)
-            cfg.setdefault("theme_names", THEME_NAMES)
+            cfg.pop("theme_names", None)
             return cfg
         except Exception:
             pass

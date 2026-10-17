@@ -96,8 +96,7 @@ class Api:
 
     def initial(self):
         cfg = ccfg.load(DATA)
-        return {"host": random_host(), "providers": cfg["providers"], "themes": cfg["themes"],
-                "theme_names": cfg["theme_names"], "uses": describe(cfg["providers"])}
+        return {"host": random_host(), "providers": cfg["providers"], "themes": cfg["themes"], "uses": describe(cfg["providers"])}
 
     def uses(self, providers):
         return describe(providers)
@@ -111,8 +110,7 @@ class Api:
             return {"error": "host"}
         cfg = {"host": port,
                "providers": [r for r in form.get("providers", []) if any((r.get(k) or "").strip() for k in ("name", "endpoint", "key"))],
-               "themes": (form.get("themes") or "").strip() or ccfg.THEMES,
-               "theme_names": (form.get("theme_names") or "").strip() or ccfg.THEME_NAMES}
+               "themes": (form.get("themes") or "").strip() or ccfg.THEMES}
         ccfg.save(DATA, cfg)
         url = start_server(port, cfg)
         threading.Thread(target=self._open, args=(url,), daemon=True).start()
@@ -160,7 +158,7 @@ input.f:focus{border-color:#3B82F6}
   <div id="rows"></div>
   <button type="button" class="add" id="add">+</button>
   <h2>Themes</h2>
-  <div class="row"><input class="f" id="themes" placeholder="Catalog"><div class="grid2" style="grid-template-columns:1fr"><input class="f" id="theme_names" placeholder="Names"></div></div>
+  <div class="row"><input class="f" id="themes" placeholder="Catalog"></div>
   <button class="go" type="submit">Launch</button>
   <div class="where" id="where"></div>
 </form>
@@ -176,11 +174,11 @@ d.querySelector('.uses').textContent=(uses&&uses[i])||'';R.appendChild(d);});}
 async function refresh(){const u=await pywebview.api.uses(rows);draw(u);}
 document.getElementById('add').onclick=()=>{rows.push({name:'',endpoint:'',key:'',models:''});draw();};
 document.getElementById('f').onsubmit=async e=>{e.preventDefault();const h=document.getElementById('host');
-const r=await pywebview.api.launch({host:h.value,providers:rows,themes:document.getElementById('themes').value,theme_names:document.getElementById('theme_names').value});
+const r=await pywebview.api.launch({host:h.value,providers:rows,themes:document.getElementById('themes').value});
 if(r.error){h.classList.add('bad');h.focus();h.select();}};
 document.getElementById('host').addEventListener('input',e=>e.target.classList.remove('bad'));
 window.addEventListener('pywebviewready',async()=>{const c=await pywebview.api.initial();
-document.getElementById('host').value=c.host;document.getElementById('themes').value=c.themes;document.getElementById('theme_names').value=c.theme_names;
+document.getElementById('host').value=c.host;document.getElementById('themes').value=c.themes;
 document.getElementById('where').textContent='Saved to '+WHERE;rows=c.providers;draw(c.uses);const h=document.getElementById('host');h.focus();h.select();});
 </script></body></html>"""
 
