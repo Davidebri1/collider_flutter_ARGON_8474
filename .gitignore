@@ -1,0 +1,12 @@
+# Made by Claude
+build/
+.dart_tool/
+data/
+_ds_work/
+shots/
+_internal/
+Collider.exe
+*.log
+.idea/
+.vscode/
+__pycache__/

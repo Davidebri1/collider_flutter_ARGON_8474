@@ -1,0 +1,583 @@
+import 'package:flutter/material.dart';
+import '../../../core/vision/vision_kit.dart';
+import '../smartgen_store.dart';
+
+/// Smart Gen. Made by Claude; rebuilt 2026-10-17 as a Trello board (Mobbin, Trello iOS: lists side by side, each a
+/// rounded panel with its title on top, cards stacked in it and "+ Add card" at its foot; the next list shows at the
+/// edge; a card is held and dragged to another list or place; a tapped card is edited where it is). From the frames
+/// David mapped it keeps the navbar above the window, the underlined text tabs and the search pill (row 23) and the
+/// in-place editing (row 25). Cards are his own, saved on this device (SmartGenStore); none are made up.
+class SmartGenScreen extends StatefulWidget {
+  final VoidCallback onClose;
+
+  const SmartGenScreen({super.key, required this.onClose});
+
+  @override
+  State<SmartGenScreen> createState() => _SmartGenScreenState();
+}
+
+class _SmartGenScreenState extends State<SmartGenScreen> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  final SmartGenStore _store = SmartGenStore.instance;
+  String _q = '';
+  int _tab = 0;
+
+  static const _tabs = ['Tasks & Kanban', 'Projects', 'Reminders', 'Memory Items', 'Artifacts'];
+
+  /// The lists on each tab. The kanban has David's three; the other tabs are one list each.
+  static const _boards = [
+    ['High', 'Medium', 'Low'],
+    ['Projects'],
+    ['Reminders'],
+    ['Memory Items'],
+    ['Artifacts'],
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _store.addListener(_changed);
+    _store.load();
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _store.removeListener(_changed);
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final isMobile = size.width < 768;
+    final w = VOverlay.toolWidth(context);
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(isMobile ? 56 : 0, 40, 0, 0),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: w,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _navbar(),
+                const SizedBox(height: VSpace.xs),
+                SizedBox(
+                  height: VOverlay.toolMaxHeight(context),
+                  child: VGlass(
+                    material: VMaterial.work,
+                    radius: VRadius.xl,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _tabsRow(),
+                        Expanded(
+                          child: _Board(
+                            key: ValueKey(_tab),
+                            lists: _boards[_tab],
+                            store: _store,
+                            query: _q,
+                            checks: _tab == 2,
+                          ),
+                        ),
+                        _searchBar(isMobile),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Row 23's navbar: a capsule of its own above the window. The title sits left; close sits at the right end, tinted.
+  Widget _navbar() => VGlass(
+        material: VMaterial.elevated,
+        radius: VRadius.full,
+        padding: const EdgeInsets.fromLTRB(16, 5, 5, 5),
+        child: Row(
+          children: [
+            Expanded(child: Text('Smart Gen', maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.callout(weight: FontWeight.w600))),
+            VPress(
+              onTap: widget.onClose,
+              tooltip: 'Close',
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFF6D9C8)),
+                alignment: Alignment.center,
+                child: const Icon(Icons.close_rounded, size: 15, color: Color(0xFFD9653B)),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  /// Row 23's tabs: plain text, the active one bright with a short underline.
+  Widget _tabsRow() => SizedBox(
+        height: 44,
+        child: _Fade(
+          axis: Axis.horizontal,
+          fade: 20,
+          padding: const EdgeInsets.symmetric(horizontal: VSpace.md),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < _tabs.length; i++)
+                VPress(
+                  onTap: () => setState(() {
+                    _tab = i;
+                  }),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: i == _tabs.length - 1 ? 0 : 18),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(_tabs[i],
+                            style: VType.callout(
+                              color: i == _tab ? VColors.textPrimary : VColors.textSecondary,
+                              weight: i == _tab ? FontWeight.w600 : FontWeight.w500,
+                            )),
+                        const SizedBox(height: 6),
+                        AnimatedContainer(
+                          duration: VMotion.base,
+                          width: 16,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: i == _tab ? VColors.accentBlue : Colors.transparent,
+                            borderRadius: BorderRadius.circular(VRadius.full),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+
+  /// Row 23's search bar: the taskbar pill, lighter than the surface it sits on.
+  Widget _searchBar(bool isMobile) => Padding(
+        padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.xs, VSpace.sm, VSpace.sm),
+        child: Align(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: isMobile ? double.infinity : 320),
+            child: Container(
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(VRadius.full),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.10), width: 0.5),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.search_rounded, size: 17, color: VColors.textSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      onChanged: (v) => setState(() => _q = v.trim()),
+                      cursorColor: VColors.textPrimary,
+                      style: VType.callout(weight: FontWeight.w400),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        hintText: 'Search',
+                        hintStyle: VType.callout(color: VColors.textSecondary, weight: FontWeight.w400),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+// ---------------------------------------------------------------- the board (Trello)
+
+// Trello's dark board colours, on Collider's glass: lists a shade above the glass, cards a shade above the lists.
+const _listFill = Color(0x26000000);
+const _cardFill = Color(0xFF22272B);
+const _cardInk = Color(0xFFDEE4EA);
+const _faint = Color(0xFF9FADBC);
+
+class _Board extends StatefulWidget {
+  final List<String> lists;
+  final SmartGenStore store;
+  final String query;
+  final bool checks;
+  const _Board({super.key, required this.lists, required this.store, required this.query, required this.checks});
+
+  @override
+  State<_Board> createState() => _BoardState();
+}
+
+class _BoardState extends State<_Board> {
+  PageController? _pages;
+  String? _adding; // the list whose "+ Add card" is open
+  SgCard? _editing;
+  DateTime _lastTurn = DateTime(0);
+  final _newCtrl = TextEditingController();
+  final _newFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _pages?.dispose();
+    _newCtrl.dispose();
+    _newFocus.dispose();
+    super.dispose();
+  }
+
+  /// While a card is dragged near the window's edge on a phone, the next list slides in (Trello does the same).
+  void _edge(Offset global, Rect box) {
+    final p = _pages;
+    if (p == null || !p.hasClients || DateTime.now().difference(_lastTurn).inMilliseconds < 650) return;
+    final page = (p.page ?? 0).round();
+    if (global.dx > box.right - 28 && page < widget.lists.length - 1) {
+      _lastTurn = DateTime.now();
+      p.animateToPage(page + 1, duration: VMotion.base, curve: Curves.easeOutCubic);
+    } else if (global.dx < box.left + 28 && page > 0) {
+      _lastTurn = DateTime.now();
+      p.animateToPage(page - 1, duration: VMotion.base, curve: Curves.easeOutCubic);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final n = widget.lists.length;
+      // Side by side when every list gets at least 180; otherwise one list at a time with the next one showing.
+      final sideBySide = n == 1 || (c.maxWidth - 24 - (n - 1) * 8) / n >= 180;
+      if (sideBySide) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 2, 12, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int i = 0; i < n; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: _list(widget.lists[i], c.maxHeight))],
+            ],
+          ),
+        );
+      }
+      final frac = ((c.maxWidth - 40) / c.maxWidth).clamp(0.6, 1.0);
+      _pages ??= PageController(viewportFraction: frac);
+      return PageView.builder(
+        controller: _pages,
+        padEnds: false,
+        itemCount: n,
+        itemBuilder: (_, i) => Padding(
+          padding: EdgeInsets.fromLTRB(i == 0 ? 12 : 4, 2, i == n - 1 ? 12 : 4, 0),
+          child: _list(widget.lists[i], c.maxHeight),
+        ),
+      );
+    });
+  }
+
+  Widget _list(String name, double maxH) {
+    final all = widget.store.list(name);
+    final q = widget.query.toLowerCase();
+    final cards = q.isEmpty ? all : all.where((c) => c.title.toLowerCase().contains(q)).toList();
+    return Align(
+      alignment: Alignment.topCenter,
+      child: DragTarget<SgCard>(
+        onWillAcceptWithDetails: (_) => true,
+        onAcceptWithDetails: (d) => widget.store.move(d.data, name, null),
+        builder: (context, over, _) => AnimatedContainer(
+          duration: VMotion.fast,
+          constraints: BoxConstraints(maxHeight: maxH - 10),
+          decoration: BoxDecoration(
+            color: over.isNotEmpty ? const Color(0x3D000000) : _listFill,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.callout(color: _cardInk, weight: FontWeight.w600)),
+              ),
+              Flexible(
+                child: _Fade(
+                  fade: 12,
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final (i, c) in cards.indexed) KeyedSubtree(key: ValueKey(c.id), child: _slot(name, c, all.indexOf(c), i)),
+                      if (_adding == name) KeyedSubtree(key: ValueKey('new-$name'), child: _newCard(name)),
+                    ],
+                  ),
+                ),
+              ),
+              if (_adding != name)
+                VPress(
+                  onTap: () => setState(() {
+                    _adding = name;
+                    _editing = null;
+                  }),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+                    child: Row(children: [
+                      const Icon(Icons.add_rounded, size: 16, color: _faint),
+                      const SizedBox(width: 6),
+                      Text('Add card', style: VType.callout(color: _faint, weight: FontWeight.w500)),
+                    ]),
+                  ),
+                )
+              else
+                const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A card with a drop place above it: a card dragged onto it goes in front of it.
+  Widget _slot(String list, SgCard c, int index, int shown) {
+    return DragTarget<SgCard>(
+      onWillAcceptWithDetails: (d) => d.data != c,
+      onAcceptWithDetails: (d) => widget.store.move(d.data, list, index),
+      builder: (context, over, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AnimatedContainer(
+            duration: VMotion.fast,
+            height: over.isNotEmpty ? 36 : 0,
+            margin: EdgeInsets.only(bottom: over.isNotEmpty ? 6 : 0),
+            decoration: BoxDecoration(color: const Color(0x14FFFFFF), borderRadius: BorderRadius.circular(8)),
+          ),
+          Padding(padding: const EdgeInsets.only(bottom: 6), child: identical(_editing, c) ? _editor(c) : _draggable(c)),
+        ],
+      ),
+    );
+  }
+
+  Widget _draggable(SgCard c) {
+    final card = _cardFace(c);
+    return LayoutBuilder(builder: (context, box) {
+      return LongPressDraggable<SgCard>(
+        data: c,
+        delay: const Duration(milliseconds: 220),
+        onDragUpdate: (d) {
+          final board = this.context.findRenderObject() as RenderBox?;
+          if (board != null && board.hasSize) _edge(d.globalPosition, board.localToGlobal(Offset.zero) & board.size);
+        },
+        feedback: Material(
+          type: MaterialType.transparency,
+          child: Transform.rotate(angle: 0.04, child: SizedBox(width: box.maxWidth, child: card)),
+        ),
+        childWhenDragging: Opacity(opacity: 0.35, child: card),
+        child: VPress(
+          onTap: () => setState(() {
+            _editing = c;
+            _adding = null;
+          }),
+          child: card,
+        ),
+      );
+    });
+  }
+
+  Widget _cardFace(SgCard c) => Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
+        decoration: BoxDecoration(
+          color: _cardFill,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 1, offset: Offset(0, 1))],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.checks) ...[
+              VPress(
+                onTap: () => widget.store.update(c, done: !c.done),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 1, right: 8),
+                  child: Icon(c.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, size: 17, color: c.done ? VColors.accentGreen : _faint),
+                ),
+              ),
+            ],
+            Expanded(
+              child: Text(
+                c.title,
+                style: VType.callout(color: c.done ? _faint : _cardInk, weight: FontWeight.w400)
+                    .copyWith(fontSize: 13.5, height: 18 / 13.5, decoration: c.done ? TextDecoration.lineThrough : null, decorationColor: _faint),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  /// Row 25: the card is edited where it stands. Enter keeps it; the bin takes it off the board.
+  Widget _editor(SgCard c) => Container(
+        padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+        decoration: BoxDecoration(color: _cardFill, borderRadius: BorderRadius.circular(8), border: Border.all(color: VColors.accentBlue, width: 1.5)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              initialValue: c.title,
+              autofocus: true,
+              maxLines: null,
+              textInputAction: TextInputAction.done,
+              cursorColor: _cardInk,
+              style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 13.5, height: 18 / 13.5),
+              decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 2)),
+              onChanged: (v) => c.title = v,
+              onFieldSubmitted: (v) {
+                widget.store.update(c, title: v.trim().isEmpty ? c.title : v.trim());
+                setState(() => _editing = null);
+              },
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _round(Icons.delete_outline_rounded, () {
+                  widget.store.remove(c);
+                  setState(() => _editing = null);
+                }),
+                const SizedBox(width: 6),
+                _round(Icons.check_rounded, () {
+                  widget.store.update(c, title: c.title.trim());
+                  setState(() => _editing = null);
+                }, filled: true),
+              ],
+            ),
+          ],
+        ),
+      );
+
+  /// Trello's "+ Add card": a new card opens at the foot of the list; Enter adds it and opens the next one.
+  Widget _newCard(String list) {
+    final ctrl = _newCtrl;
+    void add() {
+      if (ctrl.text.trim().isEmpty) return setState(() => _adding = null);
+      widget.store.add(list, ctrl.text);
+      ctrl.clear();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _newFocus.requestFocus());
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+        decoration: BoxDecoration(color: _cardFill, borderRadius: BorderRadius.circular(8), border: Border.all(color: VColors.accentBlue, width: 1.5)),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: ctrl,
+                focusNode: _newFocus,
+                autofocus: true,
+                cursorColor: _cardInk,
+                style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 13.5),
+                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 4)),
+                onSubmitted: (_) => add(),
+              ),
+            ),
+            _round(Icons.close_rounded, () => setState(() => _adding = null)),
+            const SizedBox(width: 6),
+            _round(Icons.check_rounded, add, filled: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _round(IconData icon, VoidCallback onTap, {bool filled = false}) => VPress(
+        onTap: onTap,
+        child: Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: filled ? VColors.accentBlue : const Color(0x1FFFFFFF)),
+          child: Icon(icon, size: 15, color: Colors.white),
+        ),
+      );
+}
+
+/// A scroll view that dissolves only at an edge it has more content beyond, so the first card and the first column
+/// stand whole until the board is scrolled. Made by Claude (2026-10-17).
+class _Fade extends StatefulWidget {
+  final Widget child;
+  final double fade;
+  final EdgeInsetsGeometry padding;
+  final Axis axis;
+  const _Fade({required this.child, this.fade = 18, this.padding = EdgeInsets.zero, this.axis = Axis.vertical});
+
+  @override
+  State<_Fade> createState() => _FadeState();
+}
+
+class _FadeState extends State<_Fade> {
+  final _c = ScrollController();
+  bool _lead = false, _trail = false;
+
+  void _update() {
+    if (!_c.hasClients || !_c.position.hasContentDimensions) return;
+    final p = _c.position;
+    final lead = p.pixels > 0.5, trail = p.pixels < p.maxScrollExtent - 0.5;
+    if (lead != _lead || trail != _trail) {
+      setState(() {
+        _lead = lead;
+        _trail = trail;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _c.addListener(_update);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _update());
+    final h = widget.axis == Axis.horizontal;
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (rect) {
+        final len = h ? rect.width : rect.height;
+        final f = (widget.fade / (len <= 0 ? 1 : len)).clamp(0.0, 0.3);
+        return LinearGradient(
+          begin: h ? Alignment.centerLeft : Alignment.topCenter,
+          end: h ? Alignment.centerRight : Alignment.bottomCenter,
+          colors: [_lead ? const Color(0x00FFFFFF) : Colors.white, Colors.white, Colors.white, _trail ? const Color(0x00FFFFFF) : Colors.white],
+          stops: [0, f, 1 - f, 1],
+        ).createShader(rect);
+      },
+      child: SingleChildScrollView(
+        controller: _c,
+        scrollDirection: widget.axis,
+        physics: const BouncingScrollPhysics(),
+        padding: widget.padding,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
