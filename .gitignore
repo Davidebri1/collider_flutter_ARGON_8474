@@ -1,12 +1,18 @@
-# Made by Claude
-build/
-.dart_tool/
-data/
-_ds_work/
-shots/
-_internal/
-Collider.exe
-*.log
-.idea/
-.vscode/
+# Made by Claude. This folder is the repository: only the app's own source is tracked.
+# Collider.exe and _internal go to GitHub as a release download (_ds_work\push_github.ps1).
+/*
+!/lib/
+!/tools/
+!/web/
+!/docs/
+!/test/
+!/assets/
+/assets/**/live/
+!/pubspec.yaml
+!/pubspec.lock
+!/analysis_options.yaml
+!/.metadata
+!/.gitignore
+!/README_CLAUDE.md
 __pycache__/
+*.log

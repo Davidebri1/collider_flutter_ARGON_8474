@@ -108,23 +108,6 @@ The frames are the ones in David's map of 4 Oct 2026 (docs\FIGMA_REFERENCE_MAP_1
 | D52 | The consensus map showed a made-up demo run when nothing had been asked | Shows nothing until a question has been answered | Taken from Grok's build; no made-up data |
 | D53 | History's empty list said "No conversations yet" | Shows nothing | Not David's words |
 | D54 | Wallpaper names came from title tags, a second catalog on GitHub, or the file names | Every wallpaper in the bucket is numbered and titled by what it shows ("007 Late Night on the Phone.mp4"), its poster sits beside it under the same name (so the bucket shows it as the thumbnail) and its song carries the same name ("007 Late Night on the Phone.m4a"). The app reads only the bucket and shows the title without the number. The GitHub catalog is no longer read, and its field is gone from the launch window | David: "renaming each file to a descriptive and appropriate title is just fine. and numbering them as well ... their thumbnail should show in the cloudflare database. numbers dont need to show in the app" |
-
-## Not yet matched to its frame
-
-These are not deviations with a reason. They are work that has not been done.
-
-- Gen options (row 17, 417-15864), Account tab (row 18), Settings alert (row 22). Collider has no image, video or music generation to set options for, no account, and no alert to show; building their screens would put controls on the screen that do nothing.
-- Media Gen ticker (row 13). Skipped, per David's note on it.
-
-## Raised by the second agent on 4 Oct, left as they are
-
-A second agent checked every screen against David's words. What it found and Claude changed is in the tables above.
-These it also raised; they are unchanged, for the reason given.
-
-- The arrow between the ticker and the dock. David's words for the tucked composer: "has an indicator acknowledging its tucked view. an arrow".
-- The opened conversation has no side navigation beside it on a phone, and its actions are in a menu. D17; David: "havent you heard of context menus?"
-- The consensus map's own words (LABELS, DISSENT, TOTAL, SHARE THIS READING, "One reading. Nothing sits outside it."). They belong to the scene from the app David handed over; he asked for a window, and nothing else on it was touched.
-- The first free theme, "VisionOS Spatial Room": its picture is a design kit's cover, with that cover's words on it. It is in the catalogue David handed over.
-- The score reads 5/5 while one model's row reads "No answer". The score counts the models that answered.
-- The dock's three icons have no words.
-- The Collider.exe window shows Flutter's own mark in its title bar. No icon for the app has been given.
+| D55 | The launch window fetched its fields after the page loaded, and showed a blank host and an empty provider list when that failed; the window object hung off the page's Python interface | The fields are written into the page before it opens: a random free host, every saved provider (first run: from the keys file), the themes catalog, and Purchases › Bypass. The window is no longer reachable from the page's interface | David: "showing only the relevant fields to fill in ... it should load last defaults"; "the host number is blank by default, not random"; "your launch tool crashes if you click or double click open area in it" |
+| D56 | A theme listed its own song only (one or none) | Each pack lists five preview tracks: its own song first, then the songs of wallpapers of the same kind, then the nearest by number (the bucket holds 22 songs for 118 wallpapers). They sit under the player, the chosen one in focus at the centre, the rest blurred toward the edges | David: "displays the preview tracks below. 5 of them ... edge blurs and center focus on the selected track" |
+| D57 | Packs bought with a stand-in that unlocked at once; prices were for the old named themes | Every pack is product collider.theme.<number> at $4.99 until the store returns its local price; buying goes through the App Store or Google Play. The store's own sheet confirms a purchase; the app shows only what the store leaves out, as an iOS alert or an Android snackbar. Purchases › Bypass in the launch window completes a buy at once and shows the store's confirmation words | David: "price-marked and listed for actual in app purchase ... give me a debug means to bypass ... in ios and/or android's language and design" |

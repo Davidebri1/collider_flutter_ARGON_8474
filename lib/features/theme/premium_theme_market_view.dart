@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -27,6 +28,9 @@ import 'theme_pack_store.dart';
 /// the bucket as they come into view, and only the centre cover and its neighbours play.
 /// Kept from David's earlier notes: the row goes round ("a looping carousel, like all carousels"), the theme's songs
 /// are listed under its name, and the theme is applied with the round check.
+/// Added 2026-10-17 on David's request: each pack's five preview tracks under the player, the chosen one in focus at
+/// the centre and the rest blurring away toward the edges, so a buyer hears what the pack holds; and the pack's price,
+/// bought through the App Store or Google Play (ThemePackStore), with the platform's own notices (PurchaseNotice).
 class PremiumThemeMarketView extends StatefulWidget {
   final WallpaperTheme currentTheme;
   final ValueChanged<WallpaperTheme> onApplyTheme;
@@ -59,6 +63,8 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
   double _from = 0, _to = 0;
   final FocusNode _keys = FocusNode();
   final Map<int, LiveFrames> _live = {};
+  int _track = 0; // the preview track in focus
+  bool _buying = false;
 
   static const _ease = Cubic(0.23, 1, 0.32, 1); // cubic-bezier(0.23, 1, 0.32, 1)
 
@@ -72,7 +78,8 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     PremiumAmbient.playing.value = true; // the source starts playing the middle song
     ThemeCloud.instance.addListener(_reload);
     ThemeCloud.instance.init();
-    ThemePackStore.instance.init().then((_) => mounted ? setState(() {}) : null);
+    ThemePackStore.instance.addListener(_storeChanged);
+    ThemePackStore.instance.init();
     _move.addListener(() => setState(() {}));
     _reload();
     _keys.requestFocus();
@@ -81,6 +88,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
   @override
   void dispose() {
     ThemeCloud.instance.removeListener(_reload);
+    ThemePackStore.instance.removeListener(_storeChanged);
     _search?.cancel();
     _move.dispose();
     _keys.dispose();
@@ -90,10 +98,15 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     super.dispose();
   }
 
+  void _storeChanged() {
+    if (mounted) setState(() {});
+  }
+
   // ---------------------------------------------------------------- App.tsx: loading and search
 
   void _reload() {
     final all = WallpaperCatalog.premiumThemes;
+    ThemePackStore.instance.loadPrices(all);
     final q = _query.trim().toLowerCase();
     var found = q.isEmpty ? all : all.where((t) => t.name.toLowerCase().contains(q) || t.id.contains(q)).toList();
     if (found.isEmpty) found = all; // localAlbumService: nothing found shows the whole list again
@@ -140,6 +153,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     _index = i;
     _move.forward(from: 0);
     if (!moved) return;
+    _track = 0;
     _dropFrames();
     final t = _selected!;
     widget.onPreviewTheme(t);
@@ -220,15 +234,22 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     setState(() {});
   }
 
-  /// The theme's own song plays with its wallpaper, as the source's song played with its video.
+  /// The preview track in focus plays with the wallpaper, as the source's song played with its video.
   void _playSong(WallpaperTheme t) {
     final p = MusicPlayer.instance;
     if (t.tracks.isEmpty) {
       if (p.playing) p.toggle();
       return;
     }
-    if (p.queueId == t.id && p.playing) return;
-    p.play(0, list: MusicPlayer.forTheme(t), id: t.id);
+    final i = _track.clamp(0, t.tracks.length - 1);
+    if (p.queueId == t.id && p.index == i && p.playing) return;
+    p.play(i, list: MusicPlayer.forTheme(t), id: t.id);
+  }
+
+  void _focusTrack(WallpaperTheme t, int i) {
+    setState(() => _track = i);
+    PremiumAmbient.playing.value = true;
+    _playSong(t);
   }
 
   // ---------------------------------------------------------------- live covers
@@ -307,7 +328,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                                     )),
                                 const SizedBox(height: 16),
                                 _player(t),
-                                if (t.tracks.isNotEmpty) ...[const SizedBox(height: 16), _songList(t)],
+                                if (t.tracks.isNotEmpty) ...[const SizedBox(height: 20), _tracks(t)],
                                 const SizedBox(height: 16),
                                 _apply(t),
                               ],
@@ -552,56 +573,56 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     );
   }
 
-  /// The theme's songs, one line each. A tap plays one; a tap on the one playing stops it.
-  Widget _songList(WallpaperTheme theme) {
+  /// The pack's preview tracks. The one playing (or chosen) sits in focus; changing pack fades one set into the next.
+  Widget _tracks(WallpaperTheme t) {
     final p = MusicPlayer.instance;
-    return AnimatedBuilder(
-      animation: p,
-      builder: (_, __) => ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 240),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (int i = 0; i < theme.tracks.length; i++)
-              VPress(
-                onTap: () {
-                  final on = p.queueId == theme.id && p.index == i && p.playing;
-                  on ? p.toggle() : p.play(i, list: MusicPlayer.forTheme(theme), id: theme.id);
-                },
-                child: SizedBox(
-                  height: 24,
-                  child: Center(
-                    child: Text(
-                      theme.tracks[i].title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: VType.callout(
-                        color: const Color(0xFFD1D5DB),
-                        weight: p.queueId == theme.id && p.index == i && p.playing ? FontWeight.w600 : FontWeight.w300,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 450),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: AnimatedBuilder(
+        key: ValueKey(t.id),
+        animation: p,
+        builder: (_, __) {
+          final mine = p.queueId == t.id && p.index != null;
+          return _TrackWheel(
+            tracks: t.tracks,
+            selected: (mine ? p.index! : _track).clamp(0, t.tracks.length - 1),
+            onSelect: (i) => _focusTrack(t, i),
+          );
+        },
       ),
     );
   }
 
-  /// Applies the theme; a theme with a price in the catalog is bought first.
+  /// A pack not yet owned shows its price; a tap buys it through the store, and once owned it is applied.
+  /// An owned pack (or one without a price) shows the round check that applies it.
   Widget _apply(WallpaperTheme t) {
     final store = ThemePackStore.instance;
-    final price = t.priceLabel;
+    final price = store.priceFor(t);
     if (price != null && !store.isUnlocked(t.id)) {
       return VPress(
         onTap: () async {
-          if (await store.buyPack(t.id) && mounted) widget.onApplyTheme(t);
+          if (_buying) return;
+          setState(() => _buying = true);
+          final outcome = await store.buy(t);
+          if (!mounted) return;
+          setState(() => _buying = false);
+          await PurchaseNotice.show(context, outcome, bypassed: store.bypass);
+          if (outcome == PurchaseOutcome.purchased && mounted) widget.onApplyTheme(t);
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+        child: AnimatedContainer(
+          duration: VMotion.fast,
+          height: 36,
+          constraints: const BoxConstraints(minWidth: 84),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
           decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
-          child: Text('Buy pack $price', style: VType.callout(color: Colors.white, weight: FontWeight.w600)),
+          child: Center(
+            widthFactor: 1,
+            child: _buying
+                ? const CupertinoActivityIndicator(color: Colors.white, radius: 8)
+                : Text(price, style: VType.callout(color: Colors.white, weight: FontWeight.w600)),
+          ),
         ),
       );
     }
@@ -612,6 +633,149 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
         height: 40,
         decoration: const BoxDecoration(color: Color(0x33FFFFFF), shape: BoxShape.circle),
         child: const Icon(Icons.check_rounded, size: 20, color: Colors.white),
+      ),
+    );
+  }
+}
+
+/// Five rows on a wheel that goes round, so every track of the pack is always in view. The row in focus is sharp and
+/// full size at the centre; each step away is smaller, fainter and more blurred, and the top and bottom edges dissolve.
+/// A tap or a vertical drag brings a row to the centre.
+class _TrackWheel extends StatefulWidget {
+  final List<AmbientTrack> tracks;
+  final int selected;
+  final ValueChanged<int> onSelect;
+  const _TrackWheel({required this.tracks, required this.selected, required this.onSelect});
+
+  @override
+  State<_TrackWheel> createState() => _TrackWheelState();
+}
+
+class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderStateMixin {
+  static const _rowH = 36.0;
+  static const _rows = 5;
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 560));
+  double _from = 0, _to = 0, _drag = 0;
+  bool _dragging = false;
+
+  int get _n => widget.tracks.length;
+  double get _pos => _dragging ? _to - _drag / _rowH : _from + (_to - _from) * Curves.easeOutCubic.transform(_c.value);
+  int _wrap(int i) => ((i % _n) + _n) % _n;
+
+  @override
+  void initState() {
+    super.initState();
+    _from = _to = widget.selected.toDouble();
+    _c.addListener(() => setState(() {}));
+  }
+
+  @override
+  void didUpdateWidget(_TrackWheel old) {
+    super.didUpdateWidget(old);
+    final at = _to.round();
+    if (_wrap(at) != widget.selected && !_dragging) {
+      // the nearest turn of the wheel that puts that track in the centre
+      final k = ((at - widget.selected) / _n).round();
+      _glide(widget.selected + k * _n);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  void _glide(int i) {
+    _from = _pos;
+    _to = i.toDouble();
+    _c.forward(from: 0);
+  }
+
+  void _choose(int i) {
+    _glide(i);
+    if (_wrap(i) != widget.selected) widget.onSelect(_wrap(i));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pos = _pos;
+    final base = VType.callout(color: Colors.white, weight: FontWeight.w400).copyWith(fontSize: 17, height: 1.2);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragStart: (_) => setState(() {
+        _to = pos;
+        _drag = 0;
+        _dragging = true;
+        _c.stop();
+      }),
+      onVerticalDragUpdate: (d) => setState(() => _drag += d.delta.dy),
+      onVerticalDragEnd: (d) {
+        final flung = pos - (d.primaryVelocity ?? 0) / 1800;
+        setState(() => _dragging = false);
+        _from = _to = pos;
+        _choose(flung.round());
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 340),
+        child: SizedBox(
+          height: _rowH * _rows,
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (r) => const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x00FFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
+              stops: [0, 0.3, 0.7, 1],
+            ).createShader(r),
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: [
+                for (int i = 0; i < _n; i++) _row(i, _offset(i, pos), pos, base),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Where track i sits from the centre, going round: within half a turn either way.
+  double _offset(int i, double pos) {
+    final half = _n / 2;
+    return ((i - pos + half) % _n + _n) % _n - half;
+  }
+
+  Widget _row(int i, double offset, double pos, TextStyle base) {
+    final d = offset.abs().clamp(0.0, 2.5);
+    final focus = (1 - d).clamp(0.0, 1.0);
+    Widget text = Text(
+      widget.tracks[i].title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+      style: base.copyWith(
+        fontWeight: FontWeight.lerp(FontWeight.w300, FontWeight.w600, focus),
+        shadows: const [Shadow(color: Color(0x80000000), blurRadius: 8, offset: Offset(0, 2))],
+      ),
+    );
+    if (d > 0.04) {
+      final sigma = 1.6 * d;
+      text = ImageFiltered(imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.decal), child: text);
+    }
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: (_rows - 1) / 2 * _rowH + offset * _rowH,
+      height: _rowH,
+      child: GestureDetector(
+        onTap: () => _choose((pos + offset).round()),
+        child: Center(
+          child: Opacity(
+            opacity: (1 - 0.34 * d).clamp(0.15, 1.0),
+            child: Transform.scale(scale: 1 - 0.1 * d, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: text)),
+          ),
+        ),
       ),
     );
   }

@@ -517,6 +517,10 @@ def _get_json(url, timeout=25):
         return json.load(r)
 
 
+PACK_PRICE = "$4.99"      # shown until the store returns its own, local price
+TRACKS_PER_PACK = 5
+
+
 def themes():
     with _themes_lock:
         if _themes_cache["data"] and time.time() - _themes_cache["at"] < 600:
@@ -537,21 +541,30 @@ def themes():
             continue
         t = parts.setdefault(m.group(1), {"title": m.group(2)})
         t.setdefault(o.get("kind"), o)
+    def kind(tags):
+        """The wallpaper's category tag (cozy, city, abstract...), not its resolution or file type."""
+        return next((x for x in tags or [] if x not in ("live wallpaper", "mp4") and not re.match(r"^\d+p$", x)), "")
+
+    songs = [(int(n), parts[n]["title"], parts[n]["audio"]["url"], kind((parts[n].get("video") or {}).get("tags")))
+             for n in sorted(parts) if parts[n].get("audio")]
     out = []
     for num in sorted(parts):
         t = parts[num]
         v = t.get("video")
         if not v:
             continue
-        song = t.get("audio")
+        k, n = kind(v.get("tags")), int(num)
+        # A pack's preview tracks: its own song first, then the songs of the same kind of wallpaper, then the nearest.
+        picks = sorted(songs, key=lambda s: (s[0] != n, s[3] != k, abs(s[0] - n)))[:TRACKS_PER_PACK]
         out.append({
             "id": num,
             "name": t["title"],
             "video": v["url"],
             "poster": t["image"]["url"] if t.get("image") else None,
             "tags": v.get("tags") or [],
-            "price": None,
-            "tracks": [{"title": t["title"], "url": song["url"]}] if song else [],
+            "price": PACK_PRICE,
+            "productId": "collider.theme." + num,
+            "tracks": [{"title": s[1], "url": s[2]} for s in picks],
         })
     with _themes_lock:
         _themes_cache.update(at=time.time(), data=out)
@@ -591,6 +604,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({"models": ROSTER, "agent": CONSENSUS_AGENT, "search": bool(rows(search=True))})
         if p == "/api/themes":
             return self._json(themes())
+        if p == "/api/store":
+            return self._json({"bypass": bool(CONFIG.get("store_bypass", True))})
         if p.startswith("/api/job/"):
             job = JOBS.get(p.rsplit("/", 1)[-1])
             return self._json(job or {"error": "not found"}, 200 if job else 404)
