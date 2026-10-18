@@ -35,9 +35,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/wallpapers/
     - assets/icons/
     - assets/html/
-    - assets/themes/free/
-    - assets/themes/premium/
-    - assets/themes/premium/tracks/

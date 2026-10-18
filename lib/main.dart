@@ -151,8 +151,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   // Contextual work surface state
   String _smartGenView = 'cards';
   String _smartGenBoardType = 'kanban';
-  String _marketCategory = 'prompts';
-  String _marketSearchQuery = '';
+  String _marketCategory = 'imagine';
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
   String _filesPlace = 'home'; // where Files opens: Home, or Music when the Music Player is asked for
@@ -650,7 +649,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final String? railKey = switch (surface) {
       ActiveWorkSurface.chat => _isMobileSideNavOpen ? _chatSection : null,
       ActiveWorkSurface.smartgen => _smartGenView,
-      ActiveWorkSurface.market => _isMobileSideNavOpen ? 'search' : _marketCategory,
+      ActiveWorkSurface.market => _marketCategory,
       ActiveWorkSurface.themes => _activeDrawer == 'premium' ? 'premium' : 'gallery',
       ActiveWorkSurface.browser => null,
       ActiveWorkSurface.files => _filesCategory,
@@ -686,14 +685,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   if (key != 'new') _smartGenView = key;
                 });
               case ActiveWorkSurface.market:
-                if (key == 'search') {
-                  togglePanel(() {}, true);
-                } else {
-                  setState(() {
-                    _isMobileSideNavOpen = false;
-                    _marketCategory = key;
-                  });
-                }
+                setState(() {
+                  _isMobileSideNavOpen = false;
+                  _marketCategory = key;
+                });
               case ActiveWorkSurface.themes:
                 setState(() {
                   _isMobileSideNavOpen = false;
@@ -746,7 +741,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       onSelectSmartGenBoardType: (b) => setState(() => _smartGenBoardType = b),
       activeMarketCategory: _marketCategory,
       onSelectMarketCategory: (c) => setState(() => _marketCategory = c),
-      onMarketSearch: (q) => setState(() => _marketSearchQuery = q),
       activeThemeSection: _themeSection,
       onSelectThemeSection: (s) {
         setState(() {
@@ -1102,7 +1096,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               bottom: 78,
               child: MarketScreen(
                 onClose: () => _requestSwitchSurface(null),
-                onUsePrompt: (p) => _onSendPrompt(p),
+                view: _marketCategory,
               ),
             ),
 

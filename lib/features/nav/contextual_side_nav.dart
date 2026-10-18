@@ -47,7 +47,6 @@ class ContextualSideNav extends StatefulWidget {
   // Market props
   final String activeMarketCategory;
   final ValueChanged<String>? onSelectMarketCategory;
-  final ValueChanged<String>? onMarketSearch;
 
   // Themes props
   final String activeThemeSection;
@@ -88,9 +87,8 @@ class ContextualSideNav extends StatefulWidget {
     this.activeSmartGenBoardType = 'kanban',
     this.onSelectSmartGenView,
     this.onSelectSmartGenBoardType,
-    this.activeMarketCategory = 'prompts',
+    this.activeMarketCategory = 'imagine',
     this.onSelectMarketCategory,
-    this.onMarketSearch,
     this.activeThemeSection = 'gallery',
     this.onSelectThemeSection,
     this.browserTabs,
@@ -113,12 +111,10 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
   SideNavTab _chatTab = SideNavTab.global;
   final TextEditingController _chatSearchCtrl = TextEditingController();
   String _chatQuery = '';
-  final TextEditingController _marketSearchCtrl = TextEditingController();
 
   @override
   void dispose() {
     _chatSearchCtrl.dispose();
-    _marketSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -381,26 +377,17 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
 
   // ---------------- Market ----------------
   Widget _market() {
-    const categories = ['Prompts', 'Fine-Tunes', 'Agents', 'Workflows', 'Datasets'];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    const views = [('imagine', 'Imagine', Icons.auto_awesome_outlined), ('saved', 'Saved', Icons.favorite_border_rounded)];
+    return ListView(
+      physics: const BouncingScrollPhysics(),
       children: [
-        VSearchField(controller: _marketSearchCtrl, hint: 'Search market items...', height: 34, onChanged: (v) => widget.onMarketSearch?.call(v)),
-        const SizedBox(height: VSpace.xs),
-        Expanded(
-          child: ListView(
-            physics: const BouncingScrollPhysics(),
-            children: [
-              for (final c in categories)
-                VSidebarItem(
-                  icon: Icons.explore_outlined,
-                  label: c,
-                  selected: widget.activeMarketCategory.toLowerCase() == c.toLowerCase(),
-                  onTap: () => widget.onSelectMarketCategory?.call(c.toLowerCase()),
-                ),
-            ],
+        for (final v in views)
+          VSidebarItem(
+            icon: v.$3,
+            label: v.$2,
+            selected: widget.activeMarketCategory == v.$1,
+            onTap: () => widget.onSelectMarketCategory?.call(v.$1),
           ),
-        ),
       ],
     );
   }

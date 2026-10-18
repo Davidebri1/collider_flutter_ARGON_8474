@@ -193,7 +193,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                     style: VType.title().copyWith(fontSize: 20, height: 24 / 20, fontWeight: FontWeight.w700, letterSpacing: 1.2, shadows: _shadow),
                   ),
                 ),
-                if (_previewed.tracks.isNotEmpty) ...[
+                if (WallpaperCatalog.tracksFor(_previewed).isNotEmpty) ...[
                   SizedBox(height: math.max(35 * k, 12)),
                   AnimatedBuilder(animation: _p, builder: (_, __) => _playRow(k)),
                 ],

@@ -13,6 +13,7 @@ The last configuration comes back next time, so usually Enter is all it takes.
 
   Collider.exe                      launch window, then the app
   Collider.exe --host 30111 --go    no window questions: that host, the saved configuration
+  Collider.exe --web <folder>       the same, serving another Collider build's web output (e.g. a newer revision)
 """
 import json
 import os
@@ -36,6 +37,10 @@ import collider_config as ccfg  # noqa: E402
 
 
 def _web_folder():
+    # --web <folder>: serve another Collider build's web output (any revision built against this server)
+    a = sys.argv[1:]
+    if "--web" in a and a.index("--web") + 1 < len(a):
+        return os.path.abspath(a[a.index("--web") + 1])
     for p in (os.path.join(HERE, "build", "web"), os.path.join(BUNDLE, "web")):
         if os.path.isfile(os.path.join(p, "index.html")):
             return p

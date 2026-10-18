@@ -26,12 +26,8 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
           SideRailEntry('new', Icons.add_rounded, 'New Card'),
         ],
       ActiveWorkSurface.market => const [
-          SideRailEntry('search', Icons.search_rounded, 'Search'),
-          SideRailEntry('prompts', Icons.notes_rounded, 'Prompts'),
-          SideRailEntry('visuals', Icons.image_outlined, 'Visuals'),
-          SideRailEntry('video', Icons.movie_outlined, 'Video'),
-          SideRailEntry('audio', Icons.graphic_eq_rounded, 'Audio'),
-          SideRailEntry('gallery', Icons.collections_outlined, 'Gallery'),
+          SideRailEntry('imagine', Icons.auto_awesome_outlined, 'Imagine'),
+          SideRailEntry('saved', Icons.favorite_border_rounded, 'Saved'),
         ],
       ActiveWorkSurface.themes => const [
           SideRailEntry('premium', Icons.workspace_premium_rounded, 'Premium Theme Market'),

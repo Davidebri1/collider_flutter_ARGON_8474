@@ -25,19 +25,11 @@ class MusicPlayer extends ChangeNotifier {
   }
   static final MusicPlayer instance = MusicPlayer._();
 
-  /// The recordings the app ships with. They have no names of their own: every song belongs to a theme.
-  static const _recordings = [
-    'assets/themes/premium/tracks/track1_driftwood.mp3',
-    'assets/themes/premium/tracks/track2_glasswing.mp3',
-    'assets/themes/premium/tracks/track3_lowtide.mp3',
-    'assets/themes/premium/tracks/track4_emberfall.mp3',
-    'assets/themes/premium/tracks/track5_northlight.mp3',
-  ];
-
-  /// A theme's own songs, with the theme's picture as the cover. Songs from the Cloudflare bucket play their own
-  /// recording; the built-in themes' songs play one of the shipped recordings.
+  /// A theme's songs (WallpaperCatalog.tracksFor), with the theme's picture as the cover. Every song is a recording
+  /// in the Cloudflare bucket; the app ships none.
   static List<MusicTrack> forTheme(WallpaperTheme t) => [
-        for (final a in t.tracks) MusicTrack(a.title, t.assetPath, a.audioUrl ?? _recordings[(a.number - 1) % _recordings.length]),
+        for (final a in WallpaperCatalog.tracksFor(t))
+          if (a.audioUrl != null) MusicTrack(a.title, t.assetPath, a.audioUrl!),
       ];
 
   final AudioEngine _engine = AudioEngine();
