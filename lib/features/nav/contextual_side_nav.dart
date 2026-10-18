@@ -87,7 +87,7 @@ class ContextualSideNav extends StatefulWidget {
     this.activeSmartGenBoardType = 'kanban',
     this.onSelectSmartGenView,
     this.onSelectSmartGenBoardType,
-    this.activeMarketCategory = 'imagine',
+    this.activeMarketCategory = 'discover',
     this.onSelectMarketCategory,
     this.activeThemeSection = 'gallery',
     this.onSelectThemeSection,
@@ -377,7 +377,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
 
   // ---------------- Market ----------------
   Widget _market() {
-    const views = [('imagine', 'Imagine', Icons.auto_awesome_outlined), ('saved', 'Saved', Icons.favorite_border_rounded)];
+    const views = [('discover', 'Discover', Icons.explore_outlined), ('gallery', 'My Gallery', Icons.collections_outlined)];
     return ListView(
       physics: const BouncingScrollPhysics(),
       children: [

@@ -317,28 +317,30 @@ class _LivePeekState extends State<_LivePeek> with SingleTickerProviderStateMixi
     // The same card as the free row below, so it reads as one more shelf of the same thing.
     const w = 68.0, gap = 10.0, full = 116.0, rest = 60.0;
     final span = live.length * (w + gap);
-    final copies = (600 / span).ceil() + 1;
     final p = widget.pull;
     final soft = 1.7 * (1 - p);
-    final strip = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var c = 0; c < copies; c++)
-          for (final t in live)
-            Padding(
-              padding: const EdgeInsets.only(right: gap),
+    // Only the cards in view are built, and the softness is one blur over the strip, not one per card
+    // (Claude 2026-10-18: 236 blurred cards redrawn every frame held the gallery near 40 fps).
+    Widget cards(double offset, double width) {
+      final first = (offset / (w + gap)).floor();
+      final n = (width / (w + gap)).ceil() + 2;
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var k = first; k < first + n; k++)
+            Positioned(
+              left: k * (w + gap) - offset,
+              bottom: 0,
+              width: w,
+              height: full,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(7),
-                // out of focus inside a crisp edge
-                child: ImageFiltered(
-                  enabled: soft > 0.05,
-                  imageFilter: ImageFilter.blur(sigmaX: soft, sigmaY: soft, tileMode: TileMode.clamp),
-                  child: Image.asset(t.assetPath, width: w, height: full, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
-                ),
+                child: Image.asset(live[k % live.length].assetPath, width: w, height: full, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
               ),
             ),
-      ],
-    );
+        ],
+      );
+    }
     return GestureDetector(
       onTap: widget.onTap,
       child: SizedBox(
@@ -355,16 +357,16 @@ class _LivePeekState extends State<_LivePeek> with SingleTickerProviderStateMixi
           child: EdgeFadeHorizontal(
             fade: 28,
             child: ClipRect(
-              child: OverflowBox(
-                alignment: Alignment.bottomLeft,
-                minWidth: 0,
-                maxWidth: double.infinity,
-                minHeight: full,
-                maxHeight: full,
-                child: AnimatedBuilder(
-                  animation: _drift,
-                  builder: (_, child) => Transform.translate(offset: Offset(-_drift.value * span, 0), child: child),
-                  child: strip,
+              child: RepaintBoundary(
+                child: ImageFiltered(
+                  enabled: soft > 0.05,
+                  imageFilter: ImageFilter.blur(sigmaX: soft, sigmaY: soft, tileMode: TileMode.decal),
+                  child: LayoutBuilder(
+                    builder: (_, box) => AnimatedBuilder(
+                      animation: _drift,
+                      builder: (_, __) => cards(_drift.value * span, box.maxWidth),
+                    ),
+                  ),
                 ),
               ),
             ),

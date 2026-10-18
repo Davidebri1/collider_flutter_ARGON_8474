@@ -26,8 +26,8 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
           SideRailEntry('new', Icons.add_rounded, 'New Card'),
         ],
       ActiveWorkSurface.market => const [
-          SideRailEntry('imagine', Icons.auto_awesome_outlined, 'Imagine'),
-          SideRailEntry('saved', Icons.favorite_border_rounded, 'Saved'),
+          SideRailEntry('discover', Icons.explore_outlined, 'Discover'),
+          SideRailEntry('gallery', Icons.collections_outlined, 'My Gallery'),
         ],
       ActiveWorkSurface.themes => const [
           SideRailEntry('premium', Icons.workspace_premium_rounded, 'Premium Theme Market'),

@@ -151,7 +151,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   // Contextual work surface state
   String _smartGenView = 'cards';
   String _smartGenBoardType = 'kanban';
-  String _marketCategory = 'imagine';
+  String _marketCategory = 'discover';
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
   String _filesPlace = 'home'; // where Files opens: Home, or Music when the Music Player is asked for

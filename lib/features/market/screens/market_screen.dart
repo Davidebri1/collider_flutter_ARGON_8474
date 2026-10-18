@@ -3,28 +3,27 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:video_player/video_player.dart';
 
 import '../../../core/media/theme_cloud.dart';
+import '../../../core/media/video_window.dart';
 import '../../../core/platform/open_url.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../core/vision/work_surface.dart';
 import '../../../models/theme_def.dart';
 import '../../theme/theme_pack_store.dart';
 
-/// Discover Market. Rebuilt by Claude (2026-10-18) as a copy of Grok's Imagine (Mobbin, Grok iOS):
+/// Discover Market. Rebuilt by Claude (2026-10-18) on the layout of Grok's Imagine feed (Mobbin, Grok iOS):
 ///  - the feed: two or more columns of tall tiles edge to edge, a video tile marked with a small play button;
-///  - a tile opens the viewer: back at the top left, the picture in the middle, play/pause and sound on the left and
-///    save, download and share on the right, the position line, then the title in a bar; a sideways swipe moves to
-///    the next one;
-///  - Saved: the saved ones, from the heart (Grok's Saved view).
+///  - a tile opens Collider's own video player (VideoWindow, Figma row 19); its "more" holds save, download and share;
+///    a sideways swipe moves to the next one;
+///  - the side rail: Discover, and My Gallery for the saved ones.
 /// What it shows: David's live wallpapers from his Cloudflare bucket (ThemeCloud). No prompts anywhere.
-/// It is a pane, like Smart Gen: the side rail switches between Imagine and Saved.
+/// It is a pane, like Smart Gen. The labels are David's: "I'm discover market. so dont copy words."
 class MarketScreen extends StatefulWidget {
   final VoidCallback onClose;
-  final String view; // 'imagine' or 'saved'
+  final String view; // 'discover' or 'gallery'
 
-  const MarketScreen({super.key, required this.onClose, this.view = 'imagine'});
+  const MarketScreen({super.key, required this.onClose, this.view = 'discover'});
 
   @override
   State<MarketScreen> createState() => _MarketScreenState();
@@ -57,7 +56,7 @@ class _MarketScreenState extends State<MarketScreen> {
 
   List<WallpaperTheme> get _items {
     final all = [for (final t in ThemeCloud.instance.themes) if (t.videoPath != null) t];
-    return widget.view == 'saved' ? [for (final t in all) if (_saved.contains(t.id)) t] : all;
+    return widget.view == 'gallery' ? [for (final t in all) if (_saved.contains(t.id)) t] : all;
   }
 
   Future<void> _toggleSave(WallpaperTheme t) async {
@@ -204,6 +203,11 @@ class _ViewerState extends State<_Viewer> {
     if (mounted) _toast('Copied');
   }
 
+  Widget _icon(IconData icon, VoidCallback onTap, {Color color = Colors.white}) => VPress(
+        onTap: onTap,
+        child: SizedBox(width: 36, height: 30, child: Icon(icon, size: 18, color: color)),
+      );
+
   @override
   Widget build(BuildContext context) {
     final rail = MediaQuery.sizeOf(context).width < 768 ? 56.0 : 0.0;
@@ -213,192 +217,40 @@ class _ViewerState extends State<_Viewer> {
         Padding(
           padding: EdgeInsets.only(left: rail),
           child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.sm, VSpace.sm, 0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: VCircleButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onTap: widget.onClose),
-                  ),
-                ),
-                Expanded(
-                  child: PageView.builder(
-                    controller: _pages,
-                    itemCount: widget.items.length,
-                    onPageChanged: (i) => setState(() => _i = i),
-                    itemBuilder: (_, i) => _Page(
-                      key: ValueKey(widget.items[i].id),
-                      theme: widget.items[i],
-                      active: i == _i,
-                      saved: widget.saved.contains(widget.items[i].id),
-                      onSave: () async {
-                        await widget.onSave(widget.items[i]);
+            child: PageView.builder(
+              controller: _pages,
+              itemCount: widget.items.length,
+              onPageChanged: (i) => setState(() => _i = i),
+              itemBuilder: (_, i) {
+                final t = widget.items[i];
+                final saved = widget.saved.contains(t.id);
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: widget.onClose,
+                  child: Padding(
+                  padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.lg, VSpace.md, VSpace.md),
+                  child: VideoWindow(
+                    key: ValueKey(t.id),
+                    url: t.videoPath!,
+                    poster: t.assetPath,
+                    active: i == _i,
+                    onClose: widget.onClose,
+                    actions: [
+                      _icon(saved ? Icons.favorite_rounded : Icons.favorite_border_rounded, () async {
+                        await widget.onSave(t);
                         if (mounted) setState(() {});
-                      },
-                      onDownload: () => _download(widget.items[i]),
-                      onShare: () => _share(widget.items[i]),
-                    ),
+                      }, color: saved ? const Color(0xFFE5484D) : Colors.white),
+                      _icon(Icons.download_rounded, () => _download(t)),
+                      _icon(Icons.ios_share_rounded, () => _share(t)),
+                    ],
                   ),
-                ),
-              ],
+                  ),
+                );
+              },
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _Page extends StatefulWidget {
-  final WallpaperTheme theme;
-  final bool active;
-  final bool saved;
-  final VoidCallback onSave;
-  final VoidCallback onDownload;
-  final VoidCallback onShare;
-  const _Page({super.key, required this.theme, required this.active, required this.saved, required this.onSave, required this.onDownload, required this.onShare});
-
-  @override
-  State<_Page> createState() => _PageState();
-}
-
-class _PageState extends State<_Page> {
-  VideoPlayerController? _c;
-  bool _muted = true;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.active) _start();
-  }
-
-  @override
-  void didUpdateWidget(_Page old) {
-    super.didUpdateWidget(old);
-    if (widget.active && _c == null) _start();
-    if (!widget.active) _c?.pause();
-    if (widget.active && _c != null && _c!.value.isInitialized && !_c!.value.isPlaying) _c!.play();
-  }
-
-  void _start() {
-    final c = _c = VideoPlayerController.networkUrl(Uri.parse(widget.theme.videoPath!));
-    c.addListener(() => mounted ? setState(() {}) : null);
-    c.initialize().then((_) async {
-      await c.setLooping(true);
-      await c.setVolume(0);
-      if (widget.active) await c.play();
-    });
-  }
-
-  @override
-  void dispose() {
-    _c?.dispose();
-    super.dispose();
-  }
-
-  void _seek(double dx, double w) {
-    final c = _c;
-    if (c == null || w <= 0) return;
-    final d = c.value.duration;
-    if (d == Duration.zero) return;
-    c.seekTo(d * (dx / w).clamp(0.0, 1.0));
-  }
-
-  Widget _pill(List<Widget> children) => VGlass(
-        material: VMaterial.elevated,
-        radius: VRadius.full,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        child: Row(mainAxisSize: MainAxisSize.min, children: children),
-      );
-
-  Widget _btn(IconData icon, VoidCallback onTap, {Color color = Colors.white, String? tip}) => VPress(
-        onTap: onTap,
-        tooltip: tip,
-        child: SizedBox(width: 36, height: 32, child: Icon(icon, size: 19, color: color)),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final c = _c;
-    final v = c?.value;
-    final ready = v != null && v.isInitialized;
-    final ar = ready && v.aspectRatio > 0 ? v.aspectRatio : 16 / 9;
-    final d = ready ? v.duration.inMilliseconds : 0;
-    final f = d == 0 ? 0.0 : (v!.position.inMilliseconds / d).clamp(0.0, 1.0);
-    return GestureDetector(
-      onTap: () {}, // taps on the viewer stay in it
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.sm, VSpace.md, VSpace.md),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Flexible(
-                  child: Center(
-                    child: AspectRatio(
-                      aspectRatio: ar,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(VRadius.md),
-                        child: ready ? VideoPlayer(c!) : _Poster(url: widget.theme.assetPath),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: VSpace.sm),
-                Row(
-                  children: [
-                    _pill([
-                      _btn(ready && v.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, () {
-                        if (!ready) return;
-                        v.isPlaying ? c!.pause() : c!.play();
-                      }),
-                      _btn(_muted ? Icons.volume_off_rounded : Icons.volume_up_rounded, () {
-                        setState(() => _muted = !_muted);
-                        c?.setVolume(_muted ? 0 : 1);
-                      }),
-                    ]),
-                    const Spacer(),
-                    _pill([
-                      _btn(widget.saved ? Icons.favorite_rounded : Icons.favorite_border_rounded, widget.onSave,
-                          color: widget.saved ? const Color(0xFFE5484D) : Colors.white),
-                      _btn(Icons.download_rounded, widget.onDownload),
-                      _btn(Icons.ios_share_rounded, widget.onShare),
-                    ]),
-                  ],
-                ),
-                const SizedBox(height: VSpace.xs),
-                LayoutBuilder(
-                  builder: (_, box) => GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (e) => _seek(e.localPosition.dx, box.maxWidth),
-                    onHorizontalDragUpdate: (e) => _seek(e.localPosition.dx, box.maxWidth),
-                    child: SizedBox(
-                      height: 16,
-                      child: Center(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(VRadius.full),
-                          child: LinearProgressIndicator(value: f, minHeight: 3, backgroundColor: VColors.fillCell, valueColor: const AlwaysStoppedAnimation(Colors.white)),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: VSpace.xs),
-                VGlass(
-                  material: VMaterial.elevated,
-                  radius: VRadius.lg,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Text(widget.theme.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.callout(color: Colors.white, weight: FontWeight.w500)),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

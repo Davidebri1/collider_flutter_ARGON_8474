@@ -147,3 +147,5 @@ Flagged so far (not followed; each is David's to confirm or strike):
 - Discover Market (2026-10-18): "NO PROMPT anthing in this app. discover market is exactly the same as grok's imagine market. so lets copy that. mobbin will guide you. discover market is an in app module so it will be in a pane just like smart gen and every other durable surface"
 - Running and size (2026-10-18): "I cant run this without unzipping? and whats up with the file size? we're hosting almost all our assets, right?"
 - Portability (2026-10-18): "are the api keys configurator and host number tools available in a portable way? ... can attach to other, especially newer, collider model revisions ... how can i use the config on every collider flutter app or collidr, especially future buids and agents with folder access"
+- Discover Market labels (2026-10-18): "yes change the labels. I'm discover market. so dont copy words."
+- Video player (2026-10-18): "my app should also have its own built in video player ... there was a figma reference for it. and it should look just like the figma reference."
