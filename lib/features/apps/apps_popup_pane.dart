@@ -185,11 +185,17 @@ class _AppIcon extends StatelessWidget {
               ],
             ),
             const SizedBox(height: VSpace.xs - 2),
-            Text(
-              app.label,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              style: VType.caption(color: VColors.textPrimary, weight: FontWeight.w500).copyWith(shadows: const [Shadow(color: Color(0xB3000000), blurRadius: 8)]),
+            // Every label gets two lines of room. One long name then cannot make its row taller
+            // than the rest and push the grid out of rhythm.
+            SizedBox(
+              height: 29,
+              child: Text(
+                app.label,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: VType.caption(color: VColors.textPrimary, weight: FontWeight.w500).copyWith(shadows: const [Shadow(color: Color(0xB3000000), blurRadius: 8)]),
+              ),
             ),
           ],
         ),

@@ -30,11 +30,23 @@ class VColors {
 
   // Materials per depth plane (spatial_theme.dart)
   // Copied from the Figma Reference Map nodes (see _ds_work/patch_map_kit_1003.py for the sources).
+  //
+  // Apple's glass is a light translucent layer: it lets the colour of what is behind it through
+  // and adapts to it (HIG, Materials: "glass automatically adapts to the luminance of the objects
+  // and colors behind it"). A mid grey at the same density does the opposite, it cancels the hue
+  // and turns every pane into the same neutral card, which is what made the app drab. These are
+  // a cool white at the same density, so the wallpaper's colour survives the glass.
+  // See docs/VISIONOS_DESIGN_SYSTEM.md.
   static const Color glassPrompt = Color(0x1AFFFFFF); // pane: #FFFFFF 10%
   static const Color glassResting = Color(0x1AFFFFFF); // pane: #FFFFFF 10%
-  static const Color glassElevated = Color(0x4D808080); // bars and ornaments: #808080 30%
-  static const Color glassModal = Color(0x4D808080); // alerts and menus: #808080 30%
-  static const Color glassWork = Color(0x4D808080); // windows: #808080 30%
+  static const Color glassElevated = Color(0x4DF2F5F9); // bars and ornaments: a cool white 30%
+  static const Color glassModal = Color(0x4DF2F5F9); // alerts and menus: a cool white 30%
+  static const Color glassWork = Color(0x38F2F5F9); // windows: a cool white 22%, the content layer
+
+  // Apple's thickness scale, used for the job Apple gives each one.
+  static const Color glassThin = Color(0x26FFFFFF); // thin: brings attention to a control or a selected item
+  static const Color glassThick = Color(0x8C0E1118); // thick: a dark element that stays distinct on a regular background
+  static const Color glassUltraThin = Color(0x14FFFFFF); // ultraThin: a full screen view that wants a light scheme
 
   // Cell fills (shipping widgets)
   static const Color fillCell = Color(0x1FFFFFFF); // round controls: #FFFFFF 12%

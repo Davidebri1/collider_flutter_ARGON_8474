@@ -10,6 +10,7 @@ import '../../../core/platform/open_url.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../core/vision/work_surface.dart';
 import '../../../models/theme_def.dart';
+import '../../theme/theme_living_media.dart';
 import '../../theme/theme_pack_store.dart';
 
 /// Discover Market. Rebuilt by Claude (2026-10-18) on the layout of Grok's Imagine feed (Mobbin, Grok iOS):
@@ -31,7 +32,9 @@ class MarketScreen extends StatefulWidget {
 
 class _MarketScreenState extends State<MarketScreen> {
   static const _savedKey = 'market_saved_v1';
-  final Set<String> _saved = {};
+  static final Set<String> _savedCache = {};
+  static bool _savedLoaded = false;
+  final Set<String> _saved = {..._savedCache};
   int? _open; // index into the list on show
 
   @override
@@ -40,10 +43,19 @@ class _MarketScreenState extends State<MarketScreen> {
     ThemeCloud.instance.addListener(_changed);
     ThemeCloud.instance.init();
     ThemePackStore.instance.init();
-    SharedPreferences.getInstance().then((p) {
-      if (!mounted) return;
-      setState(() => _saved.addAll(p.getStringList(_savedKey) ?? const []));
-    });
+    if (!_savedLoaded) {
+      SharedPreferences.getInstance().then((p) {
+        final list = p.getStringList(_savedKey) ?? const [];
+        _savedCache
+          ..clear()
+          ..addAll(list);
+        _savedLoaded = true;
+        if (!mounted) return;
+        setState(() => _saved
+          ..clear()
+          ..addAll(_savedCache));
+      });
+    }
   }
 
   @override
@@ -60,7 +72,15 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   Future<void> _toggleSave(WallpaperTheme t) async {
-    setState(() => _saved.contains(t.id) ? _saved.remove(t.id) : _saved.add(t.id));
+    setState(() {
+      if (_saved.contains(t.id)) {
+        _saved.remove(t.id);
+        _savedCache.remove(t.id);
+      } else {
+        _saved.add(t.id);
+        _savedCache.add(t.id);
+      }
+    });
     (await SharedPreferences.getInstance()).setStringList(_savedKey, _saved.toList()..sort());
   }
 
@@ -124,7 +144,10 @@ class _Tile extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          _Poster(url: theme.assetPath),
+          ThemePosterImage(
+            theme: theme,
+            placeholder: const ColoredBox(color: Color(0xFF111318)),
+          ),
           Positioned(
             right: 8,
             bottom: 8,
@@ -138,22 +161,6 @@ class _Tile extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _Poster extends StatelessWidget {
-  final String url;
-  const _Poster({required this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    const empty = ColoredBox(color: Color(0xFF111318));
-    if (url.isEmpty) return empty;
-    final img = url.startsWith('http')
-        ? Image.network(url, fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => empty,
-            frameBuilder: (_, child, frame, sync) => frame == null && !sync ? empty : child)
-        : Image.asset(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => empty);
-    return img;
   }
 }
 
@@ -213,7 +220,11 @@ class _ViewerState extends State<_Viewer> {
     final rail = MediaQuery.sizeOf(context).width < 768 ? 56.0 : 0.0;
     return Stack(
       children: [
-        VScrim(onTap: widget.onClose),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onClose,
+          child: const ColoredBox(color: Color(0xCC06080E), child: SizedBox.expand()),
+        ),
         Padding(
           padding: EdgeInsets.only(left: rail),
           child: SafeArea(

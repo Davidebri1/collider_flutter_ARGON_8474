@@ -1,10 +1,7 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'core/theme/edge_fade.dart';
-import 'core/theme/living_stardust_overlay.dart';
 import 'core/vision/vision_kit.dart';
 import 'core/api/collider_api.dart';
 import 'features/music/music_widget.dart';
@@ -16,6 +13,7 @@ import 'features/ticker/widgets/model_pill.dart';
 import 'features/ticker/widgets/consensus_row.dart';
 import 'features/ticker/widgets/conversation_view.dart';
 import 'features/ticker/widgets/message_zoom_overlay.dart';
+import 'features/ticker/widgets/research_document.dart';
 import 'features/ticker/widgets/local_history_pane.dart';
 import 'features/prompt/floating_prompt.dart';
 import 'features/nav/permanent_nav_bar.dart';
@@ -23,11 +21,10 @@ import 'features/nav/side_nav_rail.dart';
 import 'features/nav/contextual_side_nav.dart';
 import 'features/apps/apps_popup_pane.dart';
 import 'features/wallpaper/widgets/windowless_theme_scroller.dart';
-import 'features/drawers/wallpaper_drawer.dart';
-import 'features/drawers/history_drawer.dart';
 import 'features/drawers/settings_drawer.dart';
 import 'features/consensus/consensus_webview.dart';
 import 'features/smartgen/screens/smartgen_screen.dart';
+import 'features/smartgen/smartgen_store.dart';
 import 'features/market/screens/market_screen.dart';
 import 'features/upgrade/screens/upgrade_screen.dart';
 import 'features/skills/screens/skills_screen.dart';
@@ -36,6 +33,7 @@ import 'features/browser/models/browser_tab.dart';
 import 'features/browser/screens/in_app_browser_sheet.dart';
 import 'features/theme/premium_theme_market_view.dart';
 import 'features/theme/theme_living_media.dart';
+import 'core/media/theme_blur_cache.dart';
 import 'core/media/theme_cloud.dart';
 import 'features/drawers/history_pane.dart';
 import 'core/media/theme_media_bundle.dart';
@@ -49,6 +47,9 @@ void main() {
     ),
   );
   ThemeCloud.instance.init(); // the live wallpapers from the Cloudflare bucket, read while the app starts
+  ThemeBlurCache.instance.prewarmThemes(WallpaperCatalog.freeThemes);
+  ConsensusWebView.preload();
+  SmartGenStore.instance.load();
   runApp(const ColliderApp());
 }
 
@@ -58,7 +59,7 @@ class ColliderApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: r'C:\Users\D\Documents\collider_flutter__CLAUDE_live-models-consensus_20260927',
+      title: 'Collider',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
@@ -149,7 +150,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   late List<BrowserTab> _browserTabs;
 
   // Contextual work surface state
-  String _smartGenView = 'cards';
+  String _smartGenView = 'boards';
+  int _smartGenNewCardTrigger = 0;
   String _smartGenBoardType = 'kanban';
   String _marketCategory = 'discover';
   String _themeSection = 'gallery';
@@ -175,7 +177,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   @override
   void initState() {
     super.initState();
-    if (Uri.base.queryParameters['drawer'] == 'premium') {
+    ThemeBlurCache.instance.setActiveTheme(_currentTheme);
+    if (Uri.base.queryParameters['drawer'] == 'premium' ||
+        (Uri.base.queryParameters['drawer'] == 'market' && Uri.base.queryParameters['sub'] == 'themes')) {
       _activeDrawer = 'premium'; // the market shows its middle theme as soon as the list is in
     } else if (Uri.base.queryParameters['drawer'] == 'music') {
       // The Music Player is the music bar and the music in Files.
@@ -186,6 +190,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
     if (Uri.base.queryParameters['composer'] == '1') _isComposerSummoned = true;
     if (Uri.base.queryParameters['rail'] == '1') _isMobileSideNavOpen = true;
+    if (Uri.base.queryParameters['view'] != null) _smartGenView = Uri.base.queryParameters['view']!;
     _initializeTickerItems();
     _initializeHistorySessions();
     _initializeBrowserTabs();
@@ -222,6 +227,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   Future<void> _boot() async {
     final ok = await ColliderApi.instance.loadRoster();
     if (!mounted || !ok) return;
+    ColliderApi.instance.files();
+    SmartGenStore.instance.syncAutonomousCards();
     // Default selection: one model per provider, so every card carries a distinct colour.
     final seen = <String>{};
     final live = <String>[
@@ -260,8 +267,26 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
   }
 
-  Future<void> _reloadHistory({bool restoreLatest = false}) async {
-    final hist = await ColliderApi.instance.history();
+  List<TickerMessage> _messagesFromResult(JobState j, String mid, ModelResult r) {
+    if (r.messages.isNotEmpty) {
+      return [
+        for (var i = 0; i < r.messages.length; i++)
+          TickerMessage(
+            id: '${j.id}_${mid}_$i',
+            sender: (r.messages[i]['role'] ?? 'user') == 'user' ? 'user' : 'model',
+            text: r.messages[i]['content'] ?? '',
+            timestamp: j.created.add(Duration(seconds: i)),
+          ),
+      ];
+    }
+    return [
+      TickerMessage(id: '${j.id}_u', sender: 'user', text: j.prompt, timestamp: j.created),
+      if (r.text.isNotEmpty) TickerMessage(id: '${j.id}_$mid', sender: 'model', text: r.text, timestamp: j.created),
+    ];
+  }
+
+  Future<void> _reloadHistory({bool restoreLatest = false, bool forceRefresh = false}) async {
+    final hist = await ColliderApi.instance.history(forceRefresh: forceRefresh);
     if (!mounted) return;
     setState(() {
       for (final j in hist) {
@@ -279,10 +304,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             relativeTime: _ago(j.created),
             timestamp: j.created,
             summary: r.line.isNotEmpty ? r.line : r.essence,
-            messages: [
-              TickerMessage(id: '${j.id}_u', sender: 'user', text: j.prompt, timestamp: j.created),
-              TickerMessage(id: '${j.id}_$mid', sender: 'model', text: r.text, timestamp: j.created),
-            ],
+            messages: _messagesFromResult(j, mid, r),
           ));
         });
       }
@@ -293,6 +315,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   ConversationHistorySession _sessionFromJob(JobState j) {
     final firstEssence = j.results.values.map((r) => r.essence).firstWhere((e) => e.isNotEmpty, orElse: () => '');
+    final firstWithMsgs = j.results.entries.where((e) => e.value.messages.isNotEmpty).firstOrNull;
     return ConversationHistorySession(
       id: j.id,
       title: j.prompt,
@@ -300,10 +323,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       timestamp: j.created,
       summary: j.consensus.line.isNotEmpty ? j.consensus.line : (j.consensus.summary.isNotEmpty ? j.consensus.summary : firstEssence),
       modelIds: j.results.keys.toList(),
-      messages: [
-        TickerMessage(id: '${j.id}_u', sender: 'user', text: j.prompt, timestamp: j.created),
-        if (j.consensus.summary.isNotEmpty) TickerMessage(id: '${j.id}_c', sender: 'model', text: j.consensus.summary, timestamp: j.created),
-      ],
+      messages: firstWithMsgs != null
+          ? _messagesFromResult(j, firstWithMsgs.key, firstWithMsgs.value)
+          : [
+              TickerMessage(id: '${j.id}_u', sender: 'user', text: j.prompt, timestamp: j.created),
+              if (j.consensus.summary.isNotEmpty) TickerMessage(id: '${j.id}_c', sender: 'model', text: j.consensus.summary, timestamp: j.created),
+            ],
     );
   }
 
@@ -322,17 +347,22 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       // rather than showing a cut sentence.
       final noLine = r.status == 'done' && r.line.isEmpty && !_lineFailed.contains(j.id);
       final waiting = r.status == 'pending' || noLine;
+      final serverConv = _messagesFromResult(j, mid, r);
+      final usePrevConv = !restored && prev.isNotEmpty && prev.first.conversation.length > serverConv.length;
+      final conv = usePrevConv
+          ? [
+              ...prev.first.conversation.where((m) => !m.id.startsWith('${j.id}_draft_')),
+              if (r.text.isNotEmpty && (prev.first.conversation.isEmpty || prev.first.conversation.last.sender == 'user'))
+                TickerMessage(id: '${j.id}_draft_$mid', sender: 'model', text: r.text, timestamp: j.created),
+            ]
+          : serverConv;
       items.add(TickerItem(
         modelDef: def,
         relativeTime: restored ? _ago(j.created) : 'just now',
         summary: r.status == 'error' ? 'No answer' : (r.line.isNotEmpty ? r.line : _plain(r.essence)),
         isStreaming: waiting,
-        conversation: prev.isNotEmpty && prev.first.isIsolated
-            ? prev.first.conversation
-            : [
-                TickerMessage(id: '${j.id}_u', sender: 'user', text: j.prompt, timestamp: j.created),
-                if (r.text.isNotEmpty) TickerMessage(id: '${j.id}_$mid', sender: 'model', text: r.text, timestamp: j.created),
-              ],
+        isIsolated: prev.isNotEmpty && prev.first.isIsolated && !restored,
+        conversation: conv,
       ));
     });
     _tickerItems = items;
@@ -460,6 +490,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     setState(() {
       _closeAllPanes();
       _expandedModelIds.clear();
+      _currentJobId = null;
+      _currentPrompt = '';
+      _tickerItems = [];
+      _consensusRatio = 'Consensus';
+      _consensusSummary = '';
+      _isConsensusGenerating = false;
       _isComposerSummoned = true;
     });
   }
@@ -478,35 +514,76 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final idx = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
     if (idx == -1 || text.trim().isEmpty) return;
     final now = DateTime.now();
+    final activeJobId = _currentJobId;
     setState(() {
       final cur = _tickerItems[idx];
       _tickerItems[idx] = cur.copyWith(
         isIsolated: true,
         isStreaming: true,
-        conversation: [...cur.conversation, TickerMessage(id: 'u$now', sender: 'user', text: text, timestamp: now)],
+        conversation: [...cur.conversation, TickerMessage(id: 'u${now.microsecondsSinceEpoch}', sender: 'user', text: text, timestamp: now)],
       );
     });
     final conv = _tickerItems[idx].conversation;
+    // The answer drafts into the conversation as the model writes it and persists to the session (Claude, 2026-10-19).
+    final draftId = 'm${now.microsecondsSinceEpoch}';
     try {
-      final r = await ColliderApi.instance.reply(
+      await for (final d in ColliderApi.instance.replyStream(
         model: modelId,
         mode: _mode,
         attachments: files,
         line: _lineChars,
+        jobId: activeJobId,
         messages: [for (final m in conv) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text}],
-      );
-      if (!mounted) return;
-      setState(() {
-        final i = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
-        if (i == -1) return;
-        final cur = _tickerItems[i];
-        _tickerItems[i] = cur.copyWith(
-          isStreaming: false,
-          relativeTime: 'just now',
-          summary: r.line,
-          conversation: [...cur.conversation, TickerMessage(id: 'm${DateTime.now()}', sender: 'model', text: r.text, timestamp: DateTime.now())],
-        );
-      });
+      )) {
+        if (!mounted) return;
+        setState(() {
+          final i = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
+          if (i == -1) return;
+          final cur = _tickerItems[i];
+          _tickerItems[i] = cur.copyWith(
+            isStreaming: !d.done,
+            relativeTime: d.done ? 'just now' : cur.relativeTime,
+            summary: d.done && d.line.isNotEmpty ? d.line : cur.summary,
+            conversation: [
+              for (final m in cur.conversation)
+                if (m.id != draftId) m,
+              if (d.text.isNotEmpty) TickerMessage(id: draftId, sender: 'model', text: d.text, timestamp: DateTime.now()),
+            ],
+          );
+          if (d.done && activeJobId != null && _jobsById.containsKey(activeJobId)) {
+            final oldJob = _jobsById[activeJobId]!;
+            final oldRes = oldJob.results[modelId];
+            if (oldRes != null) {
+              final updatedResults = Map<String, ModelResult>.from(oldJob.results);
+              updatedResults[modelId] = ModelResult(
+                'done',
+                d.text,
+                d.line.isNotEmpty ? d.line : oldRes.essence,
+                null,
+                d.line.isNotEmpty ? d.line : oldRes.line,
+                d.messages.isNotEmpty
+                    ? d.messages
+                    : [for (final m in _tickerItems[i].conversation) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text}],
+              );
+              _jobsById[activeJobId] = JobState(
+                oldJob.id,
+                oldJob.prompt,
+                oldJob.mode,
+                oldJob.stage,
+                oldJob.done,
+                updatedResults,
+                oldJob.consensus,
+                oldJob.sources,
+                oldJob.created,
+              );
+            }
+          }
+        });
+        if (d.done) {
+          ColliderApi.instance.cachedHistory = null;
+          await _reloadHistory(forceRefresh: true);
+        }
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -523,11 +600,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }).toList();
     if (models.isEmpty) return;
     final now = DateTime.now();
+    // If a conversation is already active on screen, continue that multi-turn session across all models!
+    final continuingSessionId = (_tickerItems.isNotEmpty && _currentJobId != null) ? _currentJobId : null;
+    final prevConvByModel = <String, List<TickerMessage>>{
+      for (final t in _tickerItems) t.modelDef.id: List<TickerMessage>.from(t.conversation),
+    };
     setState(() {
       _busy = true;
       _isComposerSummoned = false;
       _closeAllPanes();
-      _expandedModelIds.clear();
       _currentPrompt = prompt;
       _promptTime = now;
       _isConsensusGenerating = true;
@@ -540,22 +621,37 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             relativeTime: '',
             summary: '',
             isStreaming: true,
-            conversation: [TickerMessage(id: 'u$id', sender: 'user', text: prompt, timestamp: now)],
+            conversation: [
+              if (continuingSessionId != null && prevConvByModel.containsKey(id)) ...prevConvByModel[id]!,
+              TickerMessage(id: 'u_${now.microsecondsSinceEpoch}_$id', sender: 'user', text: prompt, timestamp: now),
+            ],
           ),
       ];
     });
     try {
-      final id = await ColliderApi.instance.ask(prompt: prompt, models: models, mode: _mode, autosave: _autosave, incognito: _incognito, attachments: files, line: _lineChars);
+      final id = await ColliderApi.instance.ask(
+        prompt: prompt,
+        models: models,
+        mode: _mode,
+        autosave: _autosave,
+        incognito: _incognito,
+        attachments: files,
+        line: _lineChars,
+        sessionId: continuingSessionId,
+      );
       await for (final j in ColliderApi.instance.watch(id)) {
         if (!mounted) return;
         setState(() => _applyJob(j));
       }
-      await _reloadHistory();
+      ColliderApi.instance.cachedHistory = null;
+      await _reloadHistory(forceRefresh: true);
+      SmartGenStore.instance.syncAutonomousCards();
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _isConsensusGenerating = false;
-        _consensusSummary = 'Collider is not running';
+        // The same words the model rows use when a model does not answer. No technical reason on screen.
+        _consensusSummary = 'No answer';
         _tickerItems = [for (final t in _tickerItems) t.copyWith(isStreaming: false, summary: 'No answer')];
       });
     } finally {
@@ -572,7 +668,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         _tickerItems = [];
         _applyJob(_jobsById[jobId]!, restored: true);
         _expandedModelIds.clear();
-        if (session.targetModelId != null) _expandedModelIds.add(session.targetModelId!);
+        final targetId = session.targetModelId ?? (_tickerItems.isNotEmpty ? _tickerItems.first.modelDef.id : null);
+        if (targetId != null) {
+          final targetDef = ModelRoster.byId(targetId);
+          if (targetDef != null && !targetDef.categories.contains(_activeCategory) && targetDef.categories.isNotEmpty) {
+            _activeCategory = targetDef.categories.first;
+          }
+          _expandedModelIds.add(targetId);
+        }
       });
       return;
     }
@@ -611,6 +714,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   bool _browserOpen = false;
 
+  /// The web sources of the conversation on screen, numbered as its answers cite them.
+  List<Map<String, dynamic>> get _currentSources => _jobsById[_currentJobId]?.sources ?? const [];
+
   void _openBrowserForTab(String tabId) {
     setState(() {
       _activeDrawer = null;
@@ -647,7 +753,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     // the screen edge; the contextual panel content opens beside it when summoned.
     final surface = _currentActiveSurface;
     final String? railKey = switch (surface) {
-      ActiveWorkSurface.chat => _isMobileSideNavOpen ? _chatSection : null,
+      ActiveWorkSurface.chat => _activeDrawer == 'history' ? 'history' : (_isMobileSideNavOpen ? _chatSection : null),
       ActiveWorkSurface.smartgen => _smartGenView,
       ActiveWorkSurface.market => _marketCategory,
       ActiveWorkSurface.themes => _activeDrawer == 'premium' ? 'premium' : 'gallery',
@@ -674,15 +780,20 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             switch (surface) {
               case ActiveWorkSurface.chat:
                 if (key == 'new') {
-                  setState(() => _isMobileSideNavOpen = false);
-                  _openHomeComposer();
+                  _newConversation();
+                } else if (key == 'history') {
+                  _openDrawer('history');
                 } else {
                   togglePanel(() => _chatSection = key, key == _chatSection);
                 }
               case ActiveWorkSurface.smartgen:
                 setState(() {
                   _isMobileSideNavOpen = false;
-                  if (key != 'new') _smartGenView = key;
+                  if (key == 'new') {
+                    _smartGenNewCardTrigger++;
+                  } else {
+                    _smartGenView = key;
+                  }
                 });
               case ActiveWorkSurface.market:
                 setState(() {
@@ -734,7 +845,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       },
       onSelectSession: (sess) => _loadAndExpandSession(sess),
       onOpenConsensus: () => _requestSwitchSurface('consensus'),
-      onNewConversation: _openHomeComposer,
+      onNewConversation: _newConversation,
       activeSmartGenView: _smartGenView,
       activeSmartGenBoardType: _smartGenBoardType,
       onSelectSmartGenView: (v) => setState(() => _smartGenView = v),
@@ -852,46 +963,31 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             onOpenLocalHistory: () => setState(() => _localHistoryModel = openItem.modelDef),
           );
 
+    if (ThemeBlurCache.instance.activeAssetPath != _currentTheme.assetPath) {
+      ThemeBlurCache.instance.setActiveTheme(_currentTheme);
+    }
+    final desktopSurfaceLeft = isMobile ? 0.0 : (_isMobileSideNavOpen ? 340.0 : 0.0);
+
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ================= PLANE 0: BACKGROUND WALLPAPER & AMBIENT PARTICLES =================
+          // ================= PLANE 0: BACKGROUND WALLPAPER =================
           Positioned.fill(
             child: ThemeLivingBackdrop(
-              key: ValueKey('live-${_currentTheme.id}-${_currentTheme.videoPath ?? _currentTheme.assetPath}-${_activeDrawer == 'premium' ? 'ambient' : 'live'}'),
               theme: _currentTheme,
-              // Asset-swap: live loop + Builder BackgroundVideo filter when Premium Market
-              // (supersedes prior H6 sharp-tint / preferVideo:false)
+              // Asset-swap: live loop + cached ambient frame when Premium Market
               preferVideo: true,
               builderAmbient: _activeDrawer == 'premium',
             ),
           ),
 
-          // Ambient drifting stardust particles in Plane 0
-          const Positioned.fill(
-            child: IgnorePointer(
-              child: LivingStardustOverlay(),
-            ),
-          ),
-
-          // Base ambient dim. Overlays and work surfaces bring their own VScrim
-          // (kit overlay 0.35 + medium blur) so the wallpaper stays visible;
-          // the theme gallery keeps a light tint; the theme detail keeps its prior treatment.
-          Positioned.fill(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              color: Colors.black.withOpacity(
-                _activeDrawer == 'themes' ? 0.22 : 0.0,
-              ),
-            ),
-          ),
-          // Theme Gallery (69:1926): the room behind the picture is blurred (frame: layer blur 33).
+          // Theme Gallery (69:1926): the room behind the picture uses pre-rendered cached blur (0 shader regeneration).
           if (_activeDrawer == 'themes')
             Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                child: const SizedBox.expand(),
+              child: CachedThemeSurface(
+                assetPath: _currentTheme.assetPath,
+                preset: ThemeBlurPreset.galleryRoom,
               ),
             ),
           // ================= PLANE 1: RESTING WORKSPACE =================
@@ -947,6 +1043,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         onMode: (m) => setState(() => _mode = m),
                         onIncognito: (v) => setState(() => _incognito = v),
                         onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
+                        continuingTitle: (_tickerItems.isNotEmpty && _currentJobId != null) ? _currentPrompt : null,
+                        onNewConversation: _newConversation,
                         onSummon: () => setState(() {
                           _closeAllPanes();
                           _isComposerSummoned = true;
@@ -991,7 +1089,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           // ================= PLANE 4: MESSAGE ZOOM OVERLAY =================
           // Dimmed/blurred backdrop, no visible window, faded edges, bottom actions
-          if (_zoomedMessage != null && _zoomedModelDef != null)
+          // An answer that drew on the web opens as a document with its sources (Claude, 2026-10-20).
+          if (_zoomedMessage != null && _zoomedModelDef != null && _zoomedMessage!.sender == 'model' && _currentSources.isNotEmpty)
+            Positioned.fill(
+              child: ResearchDocument(
+                message: _zoomedMessage!,
+                modelName: _zoomedModelDef!.label,
+                sources: _currentSources,
+                onOpenSource: (i) => _openBrowserForTab('src_$i'),
+                onClose: () => setState(() => _zoomedMessage = null),
+              ),
+            )
+          else if (_zoomedMessage != null && _zoomedModelDef != null)
             Positioned.fill(
               child: MessageZoomOverlay(
                 message: _zoomedMessage!,
@@ -1009,6 +1118,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 job: (id) => _jobsById[id],
                 onLoad: (sess) => _loadAndExpandSession(sess),
                 onClose: () => setState(() => _activeDrawer = null),
+                onUpdated: () => _reloadHistory(forceRefresh: true),
               ),
             ),
 
@@ -1073,24 +1183,27 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
 
-          // Durable work surfaces sit over one shared scrim (kit overlay + medium blur).
+          // Durable work surfaces sit over one shared scrim (kit overlay + cached blur).
           if (_activeDrawer == 'smartgen' || _activeDrawer == 'market' || _activeDrawer == 'files')
             const Positioned.fill(child: VScrim()),
 
           if (_activeDrawer == 'smartgen')
             Positioned(
-              left: isMobile ? 0 : 360,
+              left: desktopSurfaceLeft,
               right: 0,
               top: 0,
               bottom: 78,
               child: SmartGenScreen(
                 onClose: () => _requestSwitchSurface(null),
+                viewMode: _smartGenView,
+                onViewModeChanged: (v) => setState(() => _smartGenView = v),
+                newCardTrigger: _smartGenNewCardTrigger,
               ),
             ),
 
           if (_activeDrawer == 'market')
             Positioned(
-              left: isMobile ? 0 : 360,
+              left: desktopSurfaceLeft,
               right: 0,
               top: 0,
               bottom: 78,
@@ -1116,7 +1229,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           if (_activeDrawer == 'files')
             Positioned(
-              left: isMobile ? 0 : 360,
+              left: desktopSurfaceLeft,
               right: 0,
               top: 0,
               bottom: 78,
@@ -1135,12 +1248,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
 
-          // The browser opens over the room; the room goes out of focus behind it (David: "overlays must blur
-          // the background"). The blur sits under the dock, so the dock stays as it is.
+          // The browser opens over the room; the room goes out of focus behind it via cached blur.
           if (_browserOpen)
             Positioned.fill(
               child: IgnorePointer(
-                child: BackdropFilter(filter: ImageFilter.blur(sigmaX: VBlur.medium, sigmaY: VBlur.medium), child: const SizedBox.expand()),
+                child: CachedThemeSurface(
+                  assetPath: _currentTheme.assetPath,
+                  preset: ThemeBlurPreset.scrim,
+                ),
               ),
             ),
 

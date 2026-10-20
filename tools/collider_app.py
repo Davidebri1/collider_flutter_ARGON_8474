@@ -1,5 +1,5 @@
 """Collider. Made by Claude.
-Folder: C:\\Users\\D\\Documents\\collider_flutter__CLAUDE_live-models-consensus_20260927
+Every path is taken from where this file (or Collider.exe) sits, so the folder can be renamed or moved.
 
 The one thing to open. A launch window comes up first (rebuilt 2026-10-17 on David's request):
   - the host number at the top, a free random one each time, typed over to choose another;
@@ -108,8 +108,11 @@ def initial():
     except Exception as e:
         _log("uses:", repr(e))
         uses = ["" for _ in cfg["providers"]]
+    import collider_server as cs
+    cs.apply_settings(cfg)  # every setting line, filled with its starting value where the file has none yet
     return {"host": random_host(), "providers": cfg["providers"], "themes": cfg.get("themes") or ccfg.THEMES,
-            "bypass": bool(cfg.get("store_bypass", True)), "uses": uses}
+            "bypass": bool(cfg.get("store_bypass", True)), "uses": uses,
+            "settings": {k: cfg[k] for k in cs.SETTINGS}}
 
 
 class Api:
@@ -123,10 +126,12 @@ class Api:
                 return {"error": "host"}
             if not (1024 <= port <= 65535) or not free(port):
                 return {"error": "host"}
-            cfg = {"host": port,
-                   "providers": [r for r in form.get("providers", []) if any((r.get(k) or "").strip() for k in ("name", "endpoint", "key"))],
-                   "themes": (form.get("themes") or "").strip() or ccfg.THEMES,
-                   "store_bypass": bool(form.get("bypass", True))}
+            cfg = ccfg.load(DATA)  # lines the form does not show are kept
+            cfg.update({"host": port,
+                        "providers": [r for r in form.get("providers", []) if any((r.get(k) or "").strip() for k in ("name", "endpoint", "key"))],
+                        "themes": (form.get("themes") or "").strip() or ccfg.THEMES,
+                        "store_bypass": bool(form.get("bypass", True))})
+            cfg.update(form.get("settings") or {})
             ccfg.save(DATA, cfg)
             url = start_server(port, cfg)
             threading.Thread(target=_open, args=(url,), daemon=True).start()
@@ -174,15 +179,25 @@ input.f:focus{border-color:#3B82F6}
 .sw input{width:34px;height:20px;accent-color:#0A84FF}
 .go{margin-top:14px;width:100%;padding:9px;border:0;border-radius:9px;background:#0A84FF;color:#fff;font-weight:600;cursor:pointer}
 .where{color:#5E6474;font-size:11px;margin-top:8px;word-break:break-all}
+textarea.f{width:100%;min-height:64px;resize:vertical;background:#0E1118;border:1px solid #232836;border-radius:6px;color:#E9EBF0;padding:5px 7px;font:12px "Cascadia Mono",Consolas,monospace;outline:none;user-select:text}
+.kv{display:grid;grid-template-columns:160px 1fr;gap:6px;align-items:center;margin-bottom:6px}
+.kv:last-child{margin-bottom:0}
+.kv span{color:#8B90A0;font-size:11px}
+.m{display:grid;grid-template-columns:1.6fr 1fr .5fr .7fr .7fr .7fr .5fr 22px;gap:6px;margin-bottom:6px}
+.mw{padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid #1F2430}
+.mw textarea.f{min-height:30px}
 </style></head><body>
 <form id="f" autocomplete="off">
   <div class="host"><label for="host">Host</label><input id="host" inputmode="numeric" autofocus></div>
+  <div id="agents"></div>
   <h2>Providers</h2>
   <div id="rows"></div>
   <button type="button" class="add" id="add" title="Add provider">+</button>
+  <div id="answers"></div>
   <h2>Themes</h2>
   <div class="row"><input class="f" id="themes"></div>
   <h2>Purchases</h2>
+  <div id="buy"></div>
   <div class="row sw"><label for="bypass">Bypass</label><input type="checkbox" id="bypass"></div>
   <button class="go" type="submit">Launch</button>
   <div class="where" id="where"></div>
@@ -190,6 +205,23 @@ input.f:focus{border-color:#3B82F6}
 <script>
 const C=INITIAL;let rows=C.providers.map(r=>Object.assign({name:'',endpoint:'',key:'',models:''},r));
 const R=document.getElementById('rows'),H=document.getElementById('host');
+const S=JSON.parse(JSON.stringify(C.settings));
+const N={consensus_agent:'Consensus agent',agent_chain:'Agent chain',agent_prompt:'Consensus agent instruction',lines_prompt:'One-line agent instruction',essence_prompt:'Essence instruction',plan_prompt:'Search planning instruction',models:'Models',depth:'Answer instruction by mode',line_rule:'One-line rule',line_length:'Line length',search:'Search',plan_queries:'Planned searches',source_chars:'Source length',max_tokens:'Max tokens',deadline:'Deadline',silence:'Silence',tuning:'Tuning',pack_price:'Pack price',tracks_per_pack:'Tracks per pack'};
+function inp(v,set){const long=typeof v==='string'&&(v.length>70||v.includes('\n'));const e=document.createElement(long?'textarea':'input');e.className='f';e.value=Array.isArray(v)?v.join(', '):v;if(long)e.rows=Math.min(14,v.split('\n').length+1);e.addEventListener('input',()=>set(e.value));return e;}
+function typed(old,s){if(typeof old==='number'){const n=Number(s);return isNaN(n)?old:n;}if(Array.isArray(old))return s.split(',').map(x=>x.trim()).filter(Boolean).map((x,i)=>typeof old[i]==='number'?Number(x):x);return s;}
+const MF=['id','label','short','provider','via','color','temperature'];
+function drawModels(box){box.innerHTML='';S.models.forEach((m,i)=>{const w=document.createElement('div');w.className='mw';const r=document.createElement('div');r.className='m';MF.forEach(f=>{const e=inp(m[f]===undefined||m[f]===null?'':String(m[f]),s=>{m[f]=f==='temperature'&&s.trim()!==''&&!isNaN(Number(s))?Number(s):s;});e.placeholder=f;r.appendChild(e);});
+const x=document.createElement('button');x.type='button';x.className='x';x.textContent='×';x.onclick=()=>{S.models.splice(i,1);drawModels(box);};r.appendChild(x);w.appendChild(r);
+const sy=document.createElement('textarea');sy.className='f';sy.placeholder='system';sy.rows=Math.max(1,Math.min(8,(m.system||'').split('\n').length));sy.value=m.system||'';sy.addEventListener('input',()=>{m.system=sy.value;});w.appendChild(sy);box.appendChild(w);});
+const a=document.createElement('button');a.type='button';a.className='add';a.textContent='+';a.onclick=()=>{S.models.push({id:'',label:'',short:'',provider:'',via:'NVIDIA',color:'#8B90A0',temperature:'',system:''});drawModels(box);};box.appendChild(a);}
+function section(k,host){const h=document.createElement('h2');h.textContent=N[k];host.appendChild(h);const box=document.createElement('div');box.className='row';const v=S[k];
+if(k==='models')drawModels(box);
+else if(v&&typeof v==='object'&&!Array.isArray(v))Object.keys(v).forEach(sk=>{const r=document.createElement('div');r.className='kv';const l=document.createElement('span');l.textContent=sk;r.appendChild(l);r.appendChild(inp(v[sk],s=>{v[sk]=typed(C.settings[k][sk],s);}));box.appendChild(r);});
+else box.appendChild(inp(v,s=>{S[k]=typed(C.settings[k],s);}));
+host.appendChild(box);}
+['consensus_agent','agent_chain','agent_prompt','lines_prompt','essence_prompt','plan_prompt','models'].forEach(k=>section(k,document.getElementById('agents')));
+['depth','line_rule','line_length','search','plan_queries','source_chars','max_tokens','deadline','silence','tuning'].forEach(k=>section(k,document.getElementById('answers')));
+['pack_price','tracks_per_pack'].forEach(k=>section(k,document.getElementById('buy')));
 function draw(){R.innerHTML='';rows.forEach((r,i)=>{const d=document.createElement('div');d.className='row';
 d.innerHTML=`<div class="grid"><input class="f" data-k="name" placeholder="Name"><input class="f" data-k="key" placeholder="Key"><button type="button" class="x" title="Remove">×</button></div>
 <div class="grid2"><input class="f" data-k="endpoint" placeholder="Address"><input class="f" data-k="models" placeholder="Models"></div><div class="uses"></div>`;
@@ -203,7 +235,7 @@ document.getElementById('where').textContent='Saved to '+WHERE;draw();H.focus();
 H.addEventListener('input',()=>H.classList.remove('bad'));
 let busy=false;
 document.getElementById('f').onsubmit=async e=>{e.preventDefault();if(busy||!window.pywebview)return;busy=true;
-try{const r=await pywebview.api.launch({host:H.value,providers:rows,themes:document.getElementById('themes').value,bypass:document.getElementById('bypass').checked});
+try{const r=await pywebview.api.launch({host:H.value,providers:rows,themes:document.getElementById('themes').value,bypass:document.getElementById('bypass').checked,settings:S});
 if(r&&r.error){H.classList.add('bad');H.focus();H.select();}}finally{busy=false;}};
 </script></body></html>"""
 
@@ -232,7 +264,7 @@ def _launch_window():
         global _WIN
         html = FORM.replace("WHERE", json.dumps(ccfg.path(DATA))).replace("INITIAL", json.dumps(initial()))
         left, top, area_w, area_h, scale = _screen()
-        width, height = 520, min(720, int(area_h / scale))
+        width, height = min(760, int(area_w / scale)), min(860, int(area_h / scale))
         x = int((left + (area_w - width * scale) / 2) / scale)
         y = int((top + (area_h - height * scale) / 2) / scale)
         _WIN = webview.create_window("Collider", html=html, js_api=Api(), width=width, height=height, x=x, y=y,

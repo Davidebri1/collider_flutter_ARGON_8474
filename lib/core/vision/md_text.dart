@@ -6,11 +6,45 @@ import 'vision_tokens.dart';
 class MdText extends StatelessWidget {
   final String text;
   final TextStyle? style;
-  const MdText(this.text, {super.key, this.style});
+
+  /// When given, a citation like [3] or [2, 5] becomes a small mark that opens that source (Claude, 2026-10-20).
+  final void Function(int n)? onCite;
+  const MdText(this.text, {super.key, this.style, this.onCite});
 
   static final _bold = RegExp(r'\*\*(.+?)\*\*|__(.+?)__|(?<![\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![\w*])');
+  static final _cite = RegExp(r'\[(\d+(?:\s*[,–-]\s*\d+)*)\]');
 
   List<InlineSpan> _inline(String s, TextStyle base) {
+    if (onCite == null) return _styled(s, base);
+    final spans = <InlineSpan>[];
+    var i = 0;
+    for (final m in _cite.allMatches(s)) {
+      if (m.start > i) spans.addAll(_styled(s.substring(i, m.start), base));
+      for (final n in RegExp(r'\d+').allMatches(m.group(1)!)) {
+        final k = int.parse(n.group(0)!);
+        spans.add(WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: GestureDetector(
+            onTap: () => onCite!(k),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(VRadius.full)),
+                child: Text('$k', style: base.copyWith(fontSize: (base.fontSize ?? 13) * 0.72, height: 1.2, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ),
+        ));
+      }
+      i = m.end;
+    }
+    if (i < s.length) spans.addAll(_styled(s.substring(i), base));
+    return spans;
+  }
+
+  List<InlineSpan> _styled(String s, TextStyle base) {
     final spans = <InlineSpan>[];
     var i = 0;
     for (final m in _bold.allMatches(s)) {

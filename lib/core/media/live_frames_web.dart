@@ -6,8 +6,53 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 
+import 'theme_blur_cache.dart';
+
+/// Pooled, reference-counted live video frame extractor and ambient-blur cache.
+/// Shares a single decoded <video> element and GPU texture between CoverFlow covers
+/// and the background wallpaper, keeping recent instances warm in an LRU pool
+/// so revisiting a theme or cover never re-downloads or re-initializes the video.
 class LiveFrames {
-  LiveFrames(String url, {this.width = 480, int fps = 20}) {
+  static final Map<String, LiveFrames> _pool = {};
+  static const int _maxPoolSize = 14;
+
+  factory LiveFrames(String url, {int width = 480, int fps = 20, bool wantAmbient = false}) {
+    final existing = _pool.remove(url);
+    if (existing != null) {
+      _pool[url] = existing; // mark MRU
+      existing._refs++;
+      if (wantAmbient) {
+        existing._ambientRefs++;
+        if (existing.ambientFrame.value == null && existing.frame.value != null) {
+          existing._updateAmbient(existing.frame.value!);
+        }
+      }
+      existing.play();
+      return existing;
+    }
+
+    // Evict oldest unused (refs <= 0) entry if pool exceeds capacity
+    if (_pool.length >= _maxPoolSize) {
+      String? victimKey;
+      for (final k in _pool.keys) {
+        if ((_pool[k]?._refs ?? 0) <= 0) {
+          victimKey = k;
+          break;
+        }
+      }
+      if (victimKey != null) {
+        _pool.remove(victimKey)?._destroy();
+      }
+    }
+
+    final created = LiveFrames._internal(url, width: width, fps: fps, wantAmbient: wantAmbient);
+    _pool[url] = created;
+    return created;
+  }
+
+  LiveFrames._internal(this.url, {this.width = 480, int fps = 20, bool wantAmbient = false})
+      : _fps = fps,
+        _ambientRefs = wantAmbient ? 1 : 0 {
     final v = web.document.createElement('video') as web.HTMLVideoElement;
     v.muted = true;
     v.defaultMuted = true;
@@ -18,7 +63,6 @@ class LiveFrames {
     v.setAttribute('playsinline', '');
     v.crossOrigin = 'anonymous';
     v.preload = 'auto';
-    // Kept in the page (some browsers only decode attached videos), invisible and out of the way.
     final s = v.style;
     s.position = 'fixed';
     s.left = '0';
@@ -32,16 +76,27 @@ class LiveFrames {
     web.document.body?.append(v);
     v.play().toDart.catchError((_) => null);
     _v = v;
-    _tick = Timer.periodic(Duration(milliseconds: 1000 ~/ fps), (_) => _grab());
+    _startTimer();
   }
 
-  /// Width of the copied frames; height follows the video's shape.
+  final String url;
   final int width;
+  final int _fps;
+  int _refs = 1;
+  int _ambientRefs;
+
   final ValueNotifier<ui.Image?> frame = ValueNotifier(null);
+  final ValueNotifier<ui.Image?> ambientFrame = ValueNotifier(null);
   web.HTMLVideoElement? _v;
   Timer? _tick;
   bool _busy = false;
+  bool _ambientBusy = false;
   bool _paused = false;
+
+  void _startTimer() {
+    _tick?.cancel();
+    _tick = Timer.periodic(Duration(milliseconds: 1000 ~/ _fps), (_) => _grab());
+  }
 
   Future<void> _grab() async {
     final v = _v;
@@ -49,8 +104,9 @@ class LiveFrames {
     if (_paused && frame.value != null) return;
     _busy = true;
     try {
-      final w = width < v.videoWidth ? width : v.videoWidth;
-      final h = (v.videoHeight * w / v.videoWidth).round();
+      // The video's own size (Claude, 2026-10-20: frames were cut down to 360 or 480 px wide).
+      final w = v.videoWidth;
+      final h = v.videoHeight;
       final img = await ui_web.createImageFromTextureSource(v, width: w, height: h);
       if (_v == null) {
         img.dispose();
@@ -59,15 +115,39 @@ class LiveFrames {
       final old = frame.value;
       frame.value = img;
       old?.dispose();
+      if (_ambientRefs > 0 && !_ambientBusy) {
+        _updateAmbient(img);
+      }
     } catch (_) {
-      // No frame yet (or the host refuses to share it): the poster stays.
+      // Poster fallback stays active until video frame is ready.
     } finally {
       _busy = false;
     }
   }
 
+  Future<void> _updateAmbient(ui.Image src) async {
+    if (_ambientBusy || _v == null) return;
+    _ambientBusy = true;
+    try {
+      final blurred = await ThemeBlurCache.rasterizeFrameAmbient(src);
+      if (_v == null) {
+        blurred?.dispose();
+        return;
+      }
+      if (blurred != null) {
+        final oldAmb = ambientFrame.value;
+        ambientFrame.value = blurred;
+        oldAmb?.dispose();
+      }
+    } catch (_) {
+    } finally {
+      _ambientBusy = false;
+    }
+  }
+
   void play() {
     _paused = false;
+    if (_tick == null || !_tick!.isActive) _startTimer();
     _v?.play().toDart.catchError((_) => null);
   }
 
@@ -76,8 +156,23 @@ class LiveFrames {
     _v?.pause();
   }
 
-  void dispose() {
+  /// Releases one consumer reference; keeps the <video> and last frame warm in the pool.
+  void release({bool wantAmbient = false}) {
+    if (wantAmbient && _ambientRefs > 0) _ambientRefs--;
+    if (_refs > 0) _refs--;
+    if (_refs <= 0) {
+      pause();
+      _tick?.cancel();
+      _tick = null;
+    }
+  }
+
+  /// Backward-compatible alias for [release] so existing callers don't destroy cached frames.
+  void dispose() => release();
+
+  void _destroy() {
     _tick?.cancel();
+    _tick = null;
     final v = _v;
     _v = null;
     if (v != null) {
@@ -88,5 +183,7 @@ class LiveFrames {
     }
     frame.value?.dispose();
     frame.dispose();
+    ambientFrame.value?.dispose();
+    ambientFrame.dispose();
   }
 }

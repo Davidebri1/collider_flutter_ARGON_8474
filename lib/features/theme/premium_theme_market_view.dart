@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/audio/music_player.dart';
 import '../../core/media/live_frames.dart';
+import '../../core/media/theme_blur_cache.dart';
 import '../../core/media/theme_cloud.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../models/theme_def.dart';
@@ -104,6 +105,31 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
 
   // ---------------------------------------------------------------- App.tsx: loading and search
 
+  /// The list could not be read. It says so in plain words and offers another try, rather than
+  /// leaving a spinner running for ever with nothing behind it.
+  Widget _empty() {
+    if (!ThemeCloud.instance.failed) {
+      return const Center(
+        child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF9CA3AF))),
+      );
+    }
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('The wallpapers could not be loaded.', textAlign: TextAlign.center, style: VType.callout(color: VColors.textSecondary)),
+        const SizedBox(height: 14),
+        VPress(
+          onTap: () => ThemeCloud.instance.reload(),
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
+            child: Center(child: Text('Try again', style: VType.callout(color: Colors.white, weight: FontWeight.w600))),
+          ),
+        ),
+      ]),
+    );
+  }
+
   void _reload() {
     final all = WallpaperCatalog.premiumThemes;
     ThemePackStore.instance.loadPrices(all);
@@ -156,6 +182,8 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     _track = 0;
     _dropFrames();
     final t = _selected!;
+    ThemeBlurCache.instance.setActiveTheme(t);
+    ThemeBlurCache.instance.prewarmThemes([_at(i - 2), _at(i - 1), t, _at(i + 1), _at(i + 2)]);
     widget.onPreviewTheme(t);
     if (PremiumAmbient.playing.value) _playSong(t);
   }
@@ -257,7 +285,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
   /// The centre cover and its two neighbours play; the rest show their posters.
   ValueNotifier<ui.Image?>? _framesFor(int i, WallpaperTheme t) {
     if ((i - _index).abs() > 1 || t.videoPath == null) return null;
-    return (_live[i] ??= LiveFrames(themeMediaUrl(t.videoPath!), width: 480, fps: 20)).frame;
+    return (_live[i] ??= LiveFrames(themeMediaUrl(t.videoPath!), fps: 20)).frame;
   }
 
   void _dropFrames() {
@@ -306,36 +334,51 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                   child: Center(child: _SearchBar(onSearch: _onSearch, onClear: _clearSearch)),
                 ),
                 Expanded(
                   child: _shown.isEmpty
-                      ? const Center(child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF9CA3AF))))
-                      : SingleChildScrollView(
-                          physics: const BouncingScrollPhysics(),
-                          padding: EdgeInsets.fromLTRB(isMobile ? 16 : 32, 0, isMobile ? 16 : 32, 64),
-                          child: Column(
-                            children: [
-                              _coverFlow(isMobile, size.width),
-                              if (t != null) ...[
-                                const SizedBox(height: 32),
-                                Text(t.name,
-                                    textAlign: TextAlign.center,
-                                    style: VType.title2(color: Colors.white).copyWith(
-                                      fontWeight: FontWeight.w300,
-                                      shadows: const [Shadow(color: Color(0x80000000), blurRadius: 8, offset: Offset(0, 2))],
-                                    )),
-                                const SizedBox(height: 16),
-                                _player(t),
-                                if (t.tracks.isNotEmpty) ...[const SizedBox(height: 20), _tracks(t)],
-                                const SizedBox(height: 16),
-                                _apply(t),
-                              ],
-                            ],
-                          ),
+                      ? _empty()
+                      : LayoutBuilder(
+                          builder: (context, box) {
+                            final availH = box.maxHeight;
+                            final compactH = availH < 780;
+                            final coverH = (availH * 0.42).clamp(220.0, 340.0);
+                            final gapTitle = (availH * 0.025).clamp(10.0, 24.0);
+                            final gapPlayer = (availH * 0.018).clamp(8.0, 16.0);
+                            final gapTracks = (availH * 0.02).clamp(10.0, 18.0);
+                            return SingleChildScrollView(
+                              physics: const BouncingScrollPhysics(),
+                              padding: EdgeInsets.fromLTRB(isMobile ? 16 : 32, 0, isMobile ? 16 : 32, 20),
+                              child: Column(
+                                children: [
+                                  _coverFlow(isMobile, size.width, coverH: coverH, compactH: compactH),
+                                  if (t != null) ...[
+                                    SizedBox(height: gapTitle),
+                                    Text(t.name,
+                                        textAlign: TextAlign.center,
+                                        style: VType.title2(color: Colors.white).copyWith(
+                                          fontWeight: FontWeight.w300,
+                                          shadows: const [Shadow(color: Color(0x80000000), blurRadius: 8, offset: Offset(0, 2))],
+                                        )),
+                                    SizedBox(height: gapPlayer),
+                                    _player(t, compactH: compactH),
+                                    if (t.tracks.isNotEmpty) ...[SizedBox(height: gapTracks), _tracks(t, compactH: compactH)],
+                                  ],
+                                ],
+                              ),
+                            );
+                          },
                         ),
                 ),
+                // The price is the only way to buy the pack, so it stands at the bottom of the screen
+                // and is never left below the fold by the covers and the tracks.
+                if (t != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Center(child: _apply(t)),
+                  ),
               ],
             ),
           ),
@@ -346,8 +389,8 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
 
   // ---------------------------------------------------------------- CoverFlow.tsx: drawing
 
-  Widget _coverFlow(bool isMobile, double width) {
-    final albumSize = isMobile ? 170.0 : 200.0;
+  Widget _coverFlow(bool isMobile, double width, {double coverH = 340, bool compactH = false}) {
+    final albumSize = isMobile ? 160.0 : (compactH ? 180.0 : 200.0);
     final spacing = isMobile ? 120.0 : 160.0;
     final drag = _dragging ? _dragOffset / 100 : 0.0;
     final pos = _pos - drag;
@@ -355,7 +398,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     final reach = math.min(math.min(4, (width / spacing / 2).ceil() + 1), (_shown.length - 1) ~/ 2);
     final order = [for (int k = -reach; k <= reach; k++) _index + k]..sort((a, b) => (b - pos).abs().compareTo((a - pos).abs()));
     return SizedBox(
-      height: 384, // h-96
+      height: coverH,
       width: double.infinity,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -537,22 +580,23 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
 
   // ---------------------------------------------------------------- Player.tsx: drawing
 
-  Widget _player(WallpaperTheme t) {
+  Widget _player(WallpaperTheme t, {bool compactH = false}) {
     final playing = PremiumAmbient.playing.value;
+    final btnSize = compactH ? 64.0 : 80.0;
     Widget side(IconData icon, VoidCallback onTap) => VPress(
           onTap: onTap,
-          child: SizedBox(width: 48, height: 48, child: Icon(icon, size: 32, color: const Color(0xCCFFFFFF))),
+          child: SizedBox(width: 48, height: 48, child: Icon(icon, size: compactH ? 28 : 32, color: const Color(0xCCFFFFFF))),
         );
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         side(Icons.skip_previous_rounded, () => _select(_index - 1)),
-        const SizedBox(width: 32),
+        SizedBox(width: compactH ? 24 : 32),
         VPress(
           onTap: _togglePlay,
           child: Container(
-            width: 80,
-            height: 80,
+            width: btnSize,
+            height: btnSize,
             decoration: const BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
@@ -563,18 +607,18 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
             ),
             child: Padding(
               padding: EdgeInsets.only(left: playing ? 0 : 4),
-              child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 32, color: Colors.black),
+              child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: compactH ? 28 : 32, color: Colors.black),
             ),
           ),
         ),
-        const SizedBox(width: 32),
+        SizedBox(width: compactH ? 24 : 32),
         side(Icons.skip_next_rounded, () => _select(_index + 1)),
       ],
     );
   }
 
   /// The pack's preview tracks. The one playing (or chosen) sits in focus; changing pack fades one set into the next.
-  Widget _tracks(WallpaperTheme t) {
+  Widget _tracks(WallpaperTheme t, {bool compactH = false}) {
     final p = MusicPlayer.instance;
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 450),
@@ -589,6 +633,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
             tracks: t.tracks,
             selected: (mine ? p.index! : _track).clamp(0, t.tracks.length - 1),
             onSelect: (i) => _focusTrack(t, i),
+            compactH: compactH,
           );
         },
       ),
@@ -645,15 +690,16 @@ class _TrackWheel extends StatefulWidget {
   final List<AmbientTrack> tracks;
   final int selected;
   final ValueChanged<int> onSelect;
-  const _TrackWheel({required this.tracks, required this.selected, required this.onSelect});
+  final bool compactH;
+  const _TrackWheel({required this.tracks, required this.selected, required this.onSelect, this.compactH = false});
 
   @override
   State<_TrackWheel> createState() => _TrackWheelState();
 }
 
 class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderStateMixin {
-  static const _rowH = 36.0;
-  static const _rows = 5;
+  double get _rowH => widget.compactH ? 28.0 : 36.0;
+  int get _rows => widget.compactH ? 3 : 5;
   late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 560));
   double _from = 0, _to = 0, _drag = 0;
   bool _dragging = false;
@@ -700,7 +746,7 @@ class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderState
   @override
   Widget build(BuildContext context) {
     final pos = _pos;
-    final base = VType.callout(color: Colors.white, weight: FontWeight.w400).copyWith(fontSize: 17, height: 1.2);
+    final base = VType.callout(color: Colors.white, weight: FontWeight.w400).copyWith(fontSize: widget.compactH ? 15 : 17, height: 1.2);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onVerticalDragStart: (_) => setState(() {
@@ -781,7 +827,7 @@ class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderState
   }
 }
 
-/// A theme's poster from the bucket; until it arrives, the source's dark placeholder.
+/// A theme's poster from the bucket or pre-decoded cache; until it arrives, the source's dark placeholder.
 class _Poster extends StatelessWidget {
   final WallpaperTheme theme;
   const _Poster({required this.theme});
@@ -792,13 +838,27 @@ class _Poster extends StatelessWidget {
       decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF030712), Colors.black])),
     );
     if (theme.assetPath.isEmpty) return empty;
-    return Image.asset(
-      theme.assetPath,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.medium,
-      gaplessPlayback: true,
-      frameBuilder: (_, child, frame, sync) => frame == null && !sync ? empty : child,
-      errorBuilder: (_, __, ___) => empty,
+    return ListenableBuilder(
+      listenable: ThemeBlurCache.instance,
+      builder: (context, _) {
+        final cached = ThemeBlurCache.instance.posterOf(theme.assetPath);
+        if (cached != null) {
+          return RawImage(
+            image: cached,
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.medium,
+          );
+        }
+        ThemeBlurCache.instance.ensureAllPresets(theme.assetPath);
+        return Image.asset(
+          theme.assetPath,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+          frameBuilder: (_, child, frame, sync) => frame == null && !sync ? empty : child,
+          errorBuilder: (_, __, ___) => empty,
+        );
+      },
     );
   }
 }

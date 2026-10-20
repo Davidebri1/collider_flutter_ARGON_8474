@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/api/collider_api.dart';
 
 class SgCard {
   final String id;
@@ -21,32 +22,73 @@ class SmartGenStore extends ChangeNotifier {
   static final SmartGenStore instance = SmartGenStore._();
 
   static const _key = 'smartgen_board_v1';
+  static const _dismissedKey = 'smartgen_dismissed_v1';
   final Map<String, List<SgCard>> _lists = {};
+  final Set<String> _dismissedIds = {};
   bool _loaded = false;
 
   List<SgCard> list(String name) => _lists.putIfAbsent(name, () => []);
 
   Future<void> load() async {
-    if (_loaded) return;
+    if (_loaded) {
+      unawaited(syncAutonomousCards());
+      return;
+    }
     _loaded = true;
     try {
-      final raw = (await SharedPreferences.getInstance()).getString(_key);
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_key);
       if (raw != null) {
         final j = jsonDecode(raw) as Map<String, dynamic>;
         for (final e in j.entries) {
           _lists[e.key] = [for (final c in (e.value as List)) SgCard.fromJson((c as Map).cast<String, dynamic>())];
         }
       }
+      final dis = prefs.getStringList(_dismissedKey);
+      if (dis != null) _dismissedIds.addAll(dis);
     } catch (e) {
       debugPrint('SmartGenStore: $e');
     }
     notifyListeners();
+    await syncAutonomousCards();
+  }
+
+  /// Syncs autonomous cards extracted from real Collider conversation history (/api/smartgen).
+  Future<void> syncAutonomousCards() async {
+    try {
+      final remote = await ColliderApi.instance.smartgenCards();
+      if (remote.isEmpty) return;
+      final existingIds = <String>{
+        ..._dismissedIds,
+        for (final l in _lists.values)
+          for (final c in l) c.id,
+      };
+      final existingTitles = <String>{
+        for (final l in _lists.values)
+          for (final c in l) c.title.toLowerCase().trim(),
+      };
+      var added = false;
+      for (final item in remote) {
+        final id = '${item['id'] ?? ''}'.trim();
+        final listName = '${item['list'] ?? 'Medium'}'.trim();
+        final title = '${item['title'] ?? ''}'.trim();
+        if (id.isEmpty || title.isEmpty) continue;
+        if (existingIds.contains(id) || existingTitles.contains(title.toLowerCase())) continue;
+        list(listName).add(SgCard(id: id, title: title, done: item['done'] == true));
+        existingIds.add(id);
+        existingTitles.add(title.toLowerCase());
+        added = true;
+      }
+      if (added) await _save();
+    } catch (_) {}
   }
 
   Future<void> _save() async {
     notifyListeners();
     try {
-      (await SharedPreferences.getInstance()).setString(_key, jsonEncode({for (final e in _lists.entries) e.key: [for (final c in e.value) c.toJson()]}));
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key, jsonEncode({for (final e in _lists.entries) e.key: [for (final c in e.value) c.toJson()]}));
+      await prefs.setStringList(_dismissedKey, _dismissedIds.toList());
     } catch (_) {}
   }
 
@@ -64,6 +106,7 @@ class SmartGenStore extends ChangeNotifier {
   }
 
   void remove(SgCard c) {
+    _dismissedIds.add(c.id);
     for (final l in _lists.values) {
       l.remove(c);
     }
@@ -90,3 +133,5 @@ class SmartGenStore extends ChangeNotifier {
     _save();
   }
 }
+
+void unawaited(Future<void> f) {}

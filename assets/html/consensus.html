@@ -15,22 +15,9 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:2px}
-@keyframes aurora1{0%{transform:translate(-8%,-4%) scale(1)}50%{transform:translate(6%,5%) scale(1.15)}100%{transform:translate(-8%,-4%) scale(1)}}
-@keyframes aurora2{0%{transform:translate(6%,8%) scale(1.1)}50%{transform:translate(-5%,-6%) scale(0.95)}100%{transform:translate(6%,8%) scale(1.1)}}
-@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-@keyframes floaty2{0%,100%{transform:translateY(0)}50%{transform:translateY(7px)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-@keyframes twinkle{0%,100%{opacity:.12}50%{opacity:.65}}
-@keyframes breathe{0%,100%{opacity:.35;filter:brightness(1)}50%{opacity:.9;filter:brightness(1.6)}}
-.star{position:absolute;width:2px;height:2px;border-radius:1px;background:#dfe7f2;pointer-events:none;animation:twinkle var(--dur) ease-in-out infinite;animation-delay:var(--delay)}
 .ambient{position:absolute;inset:-20%;pointer-events:none;z-index:0}
-.ambient-1{background:radial-gradient(60% 50% at 30% 20%,rgba(60,80,140,0.28) 0%,transparent 70%);animation:aurora1 26s ease-in-out infinite}
-.ambient-2{background:radial-gradient(50% 45% at 75% 75%,rgba(70,90,130,0.22) 0%,transparent 70%);animation:aurora2 34s ease-in-out infinite}
-/* Collider Flutter: aurora drift layers disabled (no aurora visuals) */
-.ambient-1,.ambient-2{display:none}
-/* Collider Flutter: keep each sphere centred on its point. The inline float
-   animation replaces .node's transform, which dropped translate(-50%,-50%)
-   and pushed every sphere and label right/down past the phone edge. */
+/* Collider Flutter: keep each sphere centred on its point. */
 .node{transform:none;translate:-50% -50%}
 .ambient-3{inset:0;background:radial-gradient(120% 90% at 50% 110%,rgba(0,0,0,0.55) 0%,transparent 55%)}
 .screen{position:absolute;inset:0;display:none;flex-direction:column;z-index:1;overflow:hidden}
@@ -66,7 +53,7 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
    orbit it, so the centre stays the centre. Leaving it at 44% while the field
    moved down would float it above its own orbit. */
 .node-center{position:absolute;left:50%;top:59.5%;transform:translate(-50%,-50%)}
-.node-center-bob{animation:floaty 7s ease-in-out infinite}
+.node-center-bob{position:relative}
 /* ── The sphere is lit, not filled ──────────────────────────────────────────
    What was here was one radial ramp (white -> hue -> near-black) plus, on the
    nucleus, a 1.5px white border. That border is the "goofy cartoon outline":
@@ -105,7 +92,6 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
 .dissenter-text{font-size:11px;line-height:1.5;color:var(--text-secondary)}
 .consensus-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;padding:20px;text-align:center;color:var(--text-tertiary);font-size:11.5px;line-height:1.55;z-index:2}
 .consensus-empty .title{font-family:var(--font-mono);font-size:9px;letter-spacing:2px}
-.stars-host{position:absolute;inset:8px 12px;pointer-events:none;z-index:0;overflow:hidden;border-radius:20px}
 @media (max-width:380px){.consensus-summary{margin:12px 20px 0}}
 </style>
 </head>
@@ -120,7 +106,7 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
     <div class="consensus-score-num" id="consensusScoreNum">&ndash;/&ndash;</div>
     <div class="consensus-score-sub">SHARE THIS READING</div>
   </div>
-  <div class="consensus-summary empty" id="consensusSummary">Send a prompt to collide minds.</div>
+  <div class="consensus-summary empty" id="consensusSummary">Ask a question to compare model readings.</div>
   <div class="map-tabs">
     <button class="map-tab on" id="tabDissent" data-tab="dissent">DISSENT</button>
     <button class="map-tab" id="tabTotal" data-tab="total">TOTAL</button>
@@ -131,10 +117,7 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
   <div class="dissenters" id="dissentersList"></div>
 </div>
 
-<div class="ambient ambient-1"></div>
-<div class="ambient ambient-2"></div>
 <div class="ambient ambient-3"></div>
-<div class="stars-host" id="starsContainer"></div>
 
 <script>
 (function(){
@@ -309,17 +292,6 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
   // shares (Framework v3 §6) — and arrives here as x/y percentages. Re-solving
   // it here would have been a second, disagreeing answer to the same question.
 
-  function renderStars() {
-    var c = document.getElementById('starsContainer');
-    if (!c) return;
-    var seed = function(n){ var x = Math.sin(n*999)*10000; return x - Math.floor(x); };
-    var h = '';
-    for (var i = 0; i < 26; i++) {
-      h += '<div class="star" style="left:'+(seed(i)*100).toFixed(1)+'%;top:'+(42+seed(i+40)*58).toFixed(1)+'%;--dur:'+(3+seed(i+80)*5).toFixed(1)+'s;--delay:'+(seed(i+120)*4).toFixed(1)+'s"></div>';
-    }
-    c.innerHTML = h;
-  }
-
   function computePositions(models, tab) {
     if (!models.length) return [];
     var nodes = tab === 'dissent'
@@ -393,7 +365,7 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
         summary.textContent = state.summary;
         summary.classList.remove('empty');
       } else {
-        summary.textContent = hasRun ? 'Reading the replies\u2026' : 'Send a prompt to collide minds.';
+        summary.textContent = hasRun ? 'Reading the replies\u2026' : 'Ask a question to compare model readings.';
         summary.classList.toggle('empty', !hasRun);
       }
     }
@@ -408,7 +380,7 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
       // are claims to agree.
       var emptyTitle = !hasRun ? 'NO DATA' : (state.activeTab === 'dissent' ? 'NO DISSENT' : 'NO MODELS');
       var emptyBody = !hasRun
-        ? 'Send a prompt to collide minds.'
+        ? 'Ask a question to compare model readings.'
         : (state.activeTab === 'dissent' ? 'One reading. Nothing sits outside it.' : 'Waiting for replies.');
       h = '<div class="consensus-empty"><div class="title">'+emptyTitle+'</div><div>'+emptyBody+'</div></div>';
     } else {
@@ -428,17 +400,7 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
       });
 
       // Nucleus — Framework v2 §4: sized by max chain depth, luminance by ratio.
-      //
-      // The ratio used to be spent on a border's opacity, which is the worst
-      // available channel for it: a stroke asserts an edge the object does not
-      // have, and its width does not change with agreement, so the reading was
-      // "outlined" long before it was "aligned". It now drives emittance —
-      // gain on the bloom. More agreement means the nucleus puts more light
-      // into the field, which is the same claim made physically.
       var nucGain = 0.55 + consensusRatio * 1.15;
-      // The fused sphere keeps both hues: a blue body with red counter-light
-      // from the lower right, exactly as the design reference has it, but as a
-      // second light source rather than a flat screened smear.
       var counter = 'radial-gradient(circle ' + (nucleusPx * 0.62).toFixed(1) + 'px at 72% 78%,'
         + 'rgba(255,120,96,' + (0.34 + consensusRatio * 0.30).toFixed(2) + ') 0%,'
         + 'rgba(255,90,77,' + (0.20 + consensusRatio * 0.22).toFixed(2) + ') 26%,'
@@ -450,16 +412,11 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
       h += '<div class="node-center-label">CONSENSUS</div>';
       h += '</div></div>';
 
-      // Model spheres — Framework v2 §5: each sized by own chain depth
-      points.forEach(function(p, i){
-        var anim = i % 2 ? 'floaty2' : 'floaty';
-        var dur = (6 + i * 1.3).toFixed(1) + 's';
+      // Model spheres — Framework v2 §5: each sized by own chain depth, anchored at solved coordinates
+      points.forEach(function(p){
         var size = Math.round(sphereSize(p.model.chainDepth || 0) * (state.sizeScale || 1));
-        // A deeper chain is a brighter source as well as a bigger one — the
-        // same quantity read twice, which is how the eye separates them at a
-        // glance without a legend.
         var gain = 0.85 + Math.min(1.2, (p.model.chainDepth || 0) * 0.16);
-        h += '<div class="node" style="left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%;animation:'+anim+' '+dur+' ease-in-out infinite">';
+        h += '<div class="node" style="left:'+p.x.toFixed(2)+'%;top:'+p.y.toFixed(2)+'%">';
         h += '<div class="node-orb orb" style="width:'+size+'px;height:'+size+'px">'+orbHtml(size, p.model.color, { gain: gain })+'</div>';
         h += '<div class="node-label">'+escapeHtml(p.model.short || p.model.id)+'</div>';
         if (state.labels && p.model.view) {
@@ -473,10 +430,8 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
     if (diss) {
       var dissModels = state.models.filter(function(m){ return !m.agree; });
       if (dissModels.length === 0) {
-        // Same rule as the map's empty state: "full consensus achieved" is a
-        // result, and an empty board has not achieved one.
         diss.innerHTML = !hasRun
-          ? '<div style="color:var(--text-tertiary);font-size:11px;padding:6px 4px;font-style:italic">Nothing has been collided yet.</div>'
+          ? '<div style="color:var(--text-tertiary);font-size:11px;padding:6px 4px;font-style:italic">No active session.</div>'
           : '<div style="color:var(--text-tertiary);font-size:11px;padding:6px 4px;font-style:italic">One reading. Nothing sits outside it.</div>';
       } else {
         diss.innerHTML = dissModels.map(function(m){
@@ -560,7 +515,6 @@ body{font-family:var(--font-sans);background:var(--bg-deep);color:var(--text-pri
     });
   }
 
-  renderStars();
   bind();
   render();
 })();

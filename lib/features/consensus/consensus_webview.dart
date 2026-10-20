@@ -34,6 +34,15 @@ class ConsensusWebView extends StatefulWidget {
     this.job,
   });
 
+  static String? _cachedHtml;
+  static Future<String?> preload() async {
+    if (_cachedHtml != null) return _cachedHtml;
+    try {
+      _cachedHtml = await rootBundle.loadString('assets/html/consensus.html');
+    } catch (_) {}
+    return _cachedHtml;
+  }
+
   @override
   State<ConsensusWebView> createState() => _ConsensusWebViewState();
 }
@@ -48,6 +57,7 @@ class _DemoModel {
 
 class _ConsensusWebViewState extends State<ConsensusWebView> {
   static String _hex(Color c) => '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+  static final Map<String, String> _payloadMemo = {};
 
   /// Models of the live session; none before anything has been asked.
   List<_DemoModel> get _models {
@@ -86,16 +96,23 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
   @override
   void initState() {
     super.initState();
-    rootBundle.loadString('assets/html/consensus.html').then((html) {
-      if (!mounted) return;
-      setState(() {
-        _html = html;
-        if (kIsWeb) _isLoading = false;
+    if (ConsensusWebView._cachedHtml != null) {
+      _html = ConsensusWebView._cachedHtml;
+      if (kIsWeb) _isLoading = false;
+      if (!kIsWeb) _initNative(_html!);
+    } else {
+      ConsensusWebView.preload().then((html) {
+        if (!mounted || html == null) {
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        }
+        setState(() {
+          _html = html;
+          if (kIsWeb) _isLoading = false;
+        });
+        if (!kIsWeb) _initNative(html);
       });
-      if (!kIsWeb) _initNative(html);
-    }).catchError((_) {
-      if (mounted) setState(() => _isLoading = false);
-    });
+    }
   }
 
   void _initNative(String html) {
@@ -154,6 +171,12 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
 
   /// Scene payload, built as ConsensusDrawer.tsx builds `scenePayload`.
   String _buildPayload(double fieldW, double fieldH) {
+    final j = widget.job;
+    final doneSig = _models.map((m) => '${m.id}:${m.view.hashCode}').join(',');
+    final memoKey = '${j?.id ?? "none"}|${j?.consensus.summary.hashCode}|$doneSig|${fieldW.round()}x${fieldH.round()}|$_labels|$_tab';
+    final cached = _payloadMemo[memoKey];
+    if (cached != null) return cached;
+
     final derived = deriveConsensus(_result)!;
     final mapScale = math.max(1.0, math.min(2.6, fieldH / 190));
     int scaled(num px) => (px * mapScale).round();
@@ -276,7 +299,7 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
       });
     }
 
-    return jsonEncode({
+    final encoded = jsonEncode({
       'models': models,
       'ratioN': derived.ratioN,
       'ratioM': derived.ratioM,
@@ -290,6 +313,9 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
       'labels': _labels,
       'activeTab': _tab,
     });
+    if (_payloadMemo.length > 32) _payloadMemo.remove(_payloadMemo.keys.first);
+    _payloadMemo[memoKey] = encoded;
+    return encoded;
   }
 
   Widget _scene(BoxConstraints c) {

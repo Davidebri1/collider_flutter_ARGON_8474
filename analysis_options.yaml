@@ -20,6 +20,11 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    - _archive/**
+    - _backup_consensus_20260924/**
+    - _backup_unsaved_20260927/**
+    - _ds_work/**
+    - audits/**
 
 linter:
   # The lint rules applied to this project can be customized in the

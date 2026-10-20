@@ -80,7 +80,7 @@ class _ModelPillState extends State<ModelPill> {
             AnimatedSwitcher(
               duration: VMotion.base,
               layoutBuilder: (cur, prev) => Stack(alignment: Alignment.topLeft, children: [...prev, if (cur != null) cur]),
-              child: waiting ? _SkeletonLines(key: const ValueKey('wait'), color: c) : VOneLine(key: ValueKey(item.summary), text: item.summary),
+              child: waiting && item.summary.isEmpty ? _SkeletonLines(key: const ValueKey('wait'), color: c) : VOneLine(key: ValueKey(item.summary), text: item.summary),
             ),
             if (item.mediaUrls != null && item.mediaUrls!.isNotEmpty) ...[
               const SizedBox(height: VSpace.xs),

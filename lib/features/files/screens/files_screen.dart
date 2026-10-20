@@ -17,17 +17,21 @@ import '../../../core/vision/vision_kit.dart';
 import '../../../models/theme_def.dart';
 import '../../theme/theme_pack_store.dart';
 
-/// Colours taken from the Figma frame.
+/// Colours for this surface. The frame this was built from is a light one, and carrying that light
+/// palette in made Files an opaque panel that hid the room around it, which is the opposite of
+/// what a window is for (HIG, Windows: "using an opaque background obscures people's surroundings
+/// and can make a window feel constricting and heavy"). The frame's relationships stay in the type
+/// sizes and the layout. The colour comes from the glass and from the source gradients.
 class _N {
-  static const titleBar = Color(0xFFFFFFFF);
-  static const body = Color(0xFFE1E8EB);
-  static const card = Color(0xFFF2F5F7);
-  static const chip = Color(0xFFEFEFF2);
-  static const chipOn = Color(0xFF363940);
-  static const title = Color(0xFF464652);
-  static const label = Color(0xFF373A44);
-  static const count = Color(0xFFB3B3B3);
-  static const hint = Color(0xFF7F7F7F);
+  static const titleBar = VColors.glassResting;
+  static const body = Color(0x00000000); // the glass shows the wallpaper through
+  static const card = VColors.fillCell;
+  static const chip = VColors.fillCell;
+  static const chipOn = VColors.fillActive;
+  static const title = VColors.textPrimary;
+  static const label = VColors.textSecondary;
+  static const count = VColors.textTertiary;
+  static const hint = VColors.textTertiary;
 
   static TextStyle text(double size, FontWeight w, Color c, {double? height}) =>
       GoogleFonts.inter(fontSize: size, fontWeight: w, color: c, height: height, decoration: TextDecoration.none);
@@ -109,6 +113,7 @@ class _FilesScreenState extends State<FilesScreen> {
   @override
   void initState() {
     super.initState();
+    _populateSync();
     _load();
   }
 
@@ -118,24 +123,38 @@ class _FilesScreenState extends State<FilesScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    final server = await _api.files();
-    await ThemePackStore.instance.init();
+  List<ColliderFile> _buildPurchased() {
     final owned = ThemePackStore.instance.unlocked;
     final never = DateTime.fromMillisecondsSinceEpoch(0);
     final purchased = <ColliderFile>[];
     _songs.clear();
     for (final t in WallpaperCatalog.premiumThemes) {
-      // Bought, or free (the bucket's live wallpapers carry no price).
       if (!owned.contains(t.id) && t.priceLabel != null) continue;
       final songs = MusicPlayer.forTheme(t);
       for (int i = 0; i < songs.length; i++) {
-        // A song goes by its title; it is not a file the user named.
         final f = ColliderFile(songs[i].title, 'purchased', 0, never, 'audio', songs[i].file, asset: true);
         purchased.add(f);
         _songs[f] = (t, i);
       }
     }
+    return purchased;
+  }
+
+  void _populateSync() {
+    final cached = _api.cachedFiles;
+    final purchased = _buildPurchased();
+    _files = {
+      'uploaded': cached?['uploaded'] ?? const [],
+      'generated': cached?['generated'] ?? const [],
+      'purchased': purchased,
+      'downloaded': cached?['downloaded'] ?? const [],
+    };
+  }
+
+  Future<void> _load({bool forceRefresh = false}) async {
+    final server = await _api.files(forceRefresh: forceRefresh);
+    await ThemePackStore.instance.init();
+    final purchased = _buildPurchased();
     if (!mounted) return;
     setState(() => _files = {
           'uploaded': server['uploaded'] ?? const [],
@@ -167,7 +186,7 @@ class _FilesScreenState extends State<FilesScreen> {
       for (final f in res.files) {
         if (f.bytes != null) await _api.uploadFile(f.name, f.bytes!);
       }
-      await _load();
+      await _load(forceRefresh: true);
     } catch (_) {
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -241,12 +260,9 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Widget _window(bool compact) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Color(0x4D000000), blurRadius: 30, offset: Offset(0, 14))],
-      ),
+    return VGlass(
+      material: VMaterial.work,
+      radius: 20,
       child: Column(
         children: [
           _titleBar(compact),
@@ -287,10 +303,10 @@ class _FilesScreenState extends State<FilesScreen> {
       const SizedBox(width: 6),
       _SquareButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose),
     ]);
-    final search = Container(
+    final search = VRecessed(
       height: 32,
+      radius: 16,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(color: const Color(0x0F000000), borderRadius: BorderRadius.circular(16)),
       child: Row(children: [
         const Icon(Icons.search_rounded, size: 17, color: _N.hint),
         const SizedBox(width: 6),
@@ -302,7 +318,7 @@ class _FilesScreenState extends State<FilesScreen> {
             style: _N.text(13, FontWeight.w400, _N.title),
             decoration: InputDecoration(
               hintText: 'Search',
-              hintStyle: _N.text(13, FontWeight.w400, _N.hint.withValues(alpha: 0.6)),
+              hintStyle: _N.text(13, FontWeight.w400, VColors.textTertiary),
               border: InputBorder.none,
               isDense: true,
               contentPadding: EdgeInsets.zero,
@@ -356,7 +372,7 @@ class _FilesScreenState extends State<FilesScreen> {
             SizedBox(height: 30 * _u),
             // The frame's line and heading stand over a list; with nothing to list they are left out.
             if (list.isNotEmpty) ...[
-              Container(height: 1, color: Colors.white),
+              Container(height: 1, color: VColors.borderLight),
               SizedBox(height: 30 * _u),
               Text('Recents', style: _N.text(17, FontWeight.w600, _N.title)),
               SizedBox(height: 30 * _u),
@@ -430,15 +446,13 @@ class _FilesScreenState extends State<FilesScreen> {
   // ---------------- side menu: Home and the kinds of file ----------------
   Widget _sideMenu() {
     final active = _view.source;
-    return Container(
+    return SizedBox(
       width: 44,
-      padding: EdgeInsets.symmetric(vertical: 20 * _u),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [BoxShadow(color: Color(0x4D000000), blurRadius: 14, offset: Offset(0, 8))],
-      ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      child: VGlass(
+        material: VMaterial.elevated,
+        radius: 22,
+        padding: EdgeInsets.symmetric(vertical: 20 * _u),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
         for (final s in [_home, ..._kinds]) ...[
           if (s.key != 'home') SizedBox(height: 16 * _u),
           VPress(
@@ -456,6 +470,7 @@ class _FilesScreenState extends State<FilesScreen> {
           ),
         ],
       ]),
+      ),
     );
   }
 }
@@ -533,7 +548,7 @@ class _SourceCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: _N.card,
             borderRadius: BorderRadius.circular(20 * u),
-            boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 10, offset: Offset(0, 7))],
+            boxShadow: VShadow.subtle,
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _GradientIcon(source.icon, source.colors, 38 * u),
@@ -592,7 +607,7 @@ class _FileCell extends StatelessWidget {
   List<Widget> _name() {
     final dot = file.name.lastIndexOf('.');
     final hasEnding = dot > 0 && file.name.length - dot <= 6;
-    final style = _N.text(11, FontWeight.w400, Colors.black, height: 1.27);
+    final style = _N.text(11, FontWeight.w400, _N.label, height: 1.27);
     return [
       Text(hasEnding ? file.name.substring(0, dot) : file.name,
           maxLines: hasEnding ? 1 : 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: style),

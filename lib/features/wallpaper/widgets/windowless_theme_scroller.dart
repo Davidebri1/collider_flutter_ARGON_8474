@@ -3,7 +3,9 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import '../../../models/theme_def.dart';
 import '../../../core/audio/music_player.dart';
+import '../../../core/media/theme_blur_cache.dart';
 import '../../../core/vision/vision_kit.dart';
+import '../../theme/theme_living_media.dart';
 import '../../theme/theme_pack_store.dart';
 
 /// Theme Gallery, from Vision Pro Spatial UI Kit 69:1926 ("Photos - Memories", a 1920 x 1080 frame).
@@ -63,8 +65,12 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   void initState() {
     super.initState();
     _previewed = widget.currentTheme;
+    ThemeBlurCache.instance.prewarmThemes(_themes);
     ThemePackStore.instance.init().then((_) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        ThemeBlurCache.instance.prewarmThemes(_themes);
+        setState(() {});
+      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final i = _themes.indexWhere((t) => t.id == _previewed.id);
@@ -80,6 +86,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
 
   void _select(WallpaperTheme t) {
     if (t.id == _previewed.id) return;
+    ThemeBlurCache.instance.setActiveTheme(t);
     setState(() => _previewed = t);
     widget.onLivePreview(t);
     final i = _themes.indexWhere((x) => x.id == t.id);
@@ -141,7 +148,7 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
         duration: VMotion.base,
         child: SizedBox.expand(
           key: ValueKey(_previewed.assetPath),
-          child: Image.asset(_previewed.assetPath, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+          child: ThemePosterImage(theme: _previewed, filterQuality: FilterQuality.medium),
         ),
       ),
     );
@@ -154,11 +161,23 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // the picture's own colour, blurred, behind it (frame: the same picture with a layer blur of 80)
-          Positioned.fill(
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 40 * k, sigmaY: 40 * k, tileMode: TileMode.decal),
-              child: Opacity(opacity: 0.85, child: image),
+          // the picture's own colour, blurred, behind it — pulled from ThemeBlurCache (galleryGlow preset)
+          Positioned(
+            left: -24 * k,
+            right: -24 * k,
+            top: -24 * k,
+            bottom: -24 * k,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 0.85,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(radius + 16),
+                  child: CachedThemeSurface(
+                    assetPath: _previewed.assetPath,
+                    preset: ThemeBlurPreset.galleryGlow,
+                  ),
+                ),
+              ),
             ),
           ),
           Positioned.fill(child: image),

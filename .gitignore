@@ -1,6 +1,8 @@
 # Made by Claude. This folder is the repository: only the app's own source is tracked.
-# Collider.exe and _internal go to GitHub as a release download (_ds_work\push_github.ps1).
+# Collider.exe goes to GitHub as a release download (dev\publish.py).
 /*
+!/dev/
+/dev/.venv-build/
 !/lib/
 !/tools/
 !/web/

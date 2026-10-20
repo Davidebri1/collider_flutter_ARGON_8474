@@ -50,24 +50,6 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
         ),
       );
 
-  /// Fades a pane out over its outer 10 px on every side.
-  static Widget _feather(Widget child) {
-    Widget mask(Widget c, bool h) => ShaderMask(
-          blendMode: BlendMode.dstIn,
-          shaderCallback: (r) {
-            final f = (10 / (h ? r.width : r.height)).clamp(0.0, 0.3);
-            return LinearGradient(
-              begin: h ? Alignment.centerLeft : Alignment.topCenter,
-              end: h ? Alignment.centerRight : Alignment.bottomCenter,
-              colors: const [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],
-              stops: [0, f, 1 - f, 1],
-            ).createShader(r);
-          },
-          child: c,
-        );
-    return mask(mask(child, true), false);
-  }
-
   Widget _tabs() => Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: Row(children: [
@@ -111,40 +93,36 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
               child: IntrinsicWidth(
                 child: GestureDetector(
                   onTap: () {},
-                  // Row 26 (VisionOS Autolayout Menu 0-1): "faded edges would look great". The pane dissolves into the
-                  // room at its edges instead of ending on a hard line.
-                  child: _feather(
-                    VGlass(
-                      material: VMaterial.modal,
-                      radius: 22,
-                      padding: const EdgeInsets.fromLTRB(20, 10, 14, 10),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _tabs(),
-                          // Both tabs keep the pane's size: the larger of the two sets it.
-                          Stack(children: [
-                            Visibility(
-                              visible: _tab == 0,
-                              maintainSize: true,
-                              maintainAnimation: true,
-                              maintainState: true,
-                              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                                _row('Incognito', VToggle(value: w.incognito, onChanged: w.onIncognito)),
-                                _row('Save to History', VToggle(value: w.autosave, onChanged: w.incognito ? null : w.onAutosave)),
+                  child: VGlass(
+                    material: VMaterial.modal,
+                    radius: 22,
+                    padding: const EdgeInsets.fromLTRB(20, 10, 14, 10),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _tabs(),
+                        // Both tabs keep the pane's size: the larger of the two sets it.
+                        Stack(children: [
+                          Visibility(
+                            visible: _tab == 0,
+                            maintainSize: true,
+                            maintainAnimation: true,
+                            maintainState: true,
+                            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                              _row('Incognito', VToggle(value: w.incognito, onChanged: w.onIncognito)),
+                              _row('Save to History', VToggle(value: w.autosave, onChanged: w.incognito ? null : w.onAutosave)),
+                            ]),
+                          ),
+                          if (_tab == 1)
+                            Positioned.fill(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                _link('Purchased', w.onOpenPurchased),
+                                _link('Upgrade', w.onOpenUpgrade),
                               ]),
                             ),
-                            if (_tab == 1)
-                              Positioned.fill(
-                                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                                  _link('Purchased', w.onOpenPurchased),
-                                  _link('Upgrade', w.onOpenUpgrade),
-                                ]),
-                              ),
-                          ]),
-                        ],
-                      ),
+                        ]),
+                      ],
                     ),
                   ),
                 ),

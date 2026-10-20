@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/theme_def.dart';
+import 'theme_blur_cache.dart';
 
 class ThemeCloud extends ChangeNotifier {
   ThemeCloud._();
@@ -16,6 +17,10 @@ class ThemeCloud extends ChangeNotifier {
   static const _prefsKey = 'theme_cloud_v1';
   List<WallpaperTheme> _themes = const [];
   bool _started = false;
+
+  /// True when the list could not be read. The market says so in plain words instead of waiting.
+  bool _failed = false;
+  bool get failed => _failed;
 
   /// The live wallpapers, empty until the first list has been read.
   List<WallpaperTheme> get themes => _themes;
@@ -28,22 +33,47 @@ class ThemeCloud extends ChangeNotifier {
       final cached = prefs.getString(_prefsKey);
       if (cached != null) _set(_parse(cached));
     } catch (_) {}
+    await _fetch();
+  }
+
+  /// Reads the list again. The market calls this when the reader asks for it.
+  Future<void> reload() async {
+    _failed = false;
+    notifyListeners();
+    await _fetch();
+  }
+
+  Future<void> _fetch() async {
     try {
       final r = await Dio().get<String>('${Uri.base.origin}/api/themes', options: Options(responseType: ResponseType.plain));
       final body = r.data ?? '';
       final fresh = _parse(body);
       if (fresh.isNotEmpty) {
+        _failed = false;
         _set(fresh);
         (await SharedPreferences.getInstance()).setString(_prefsKey, body);
+      } else {
+        _failed = true;
+        notifyListeners();
       }
     } catch (e) {
+      _failed = true;
       debugPrint('ThemeCloud: $e');
+      notifyListeners();
     }
   }
 
   void _set(List<WallpaperTheme> t) {
     if (t.isEmpty) return;
     _themes = t;
+    // Pre-warm the middle CoverFlow neighborhood and initial themes in ThemeBlurCache
+    final mid = t.length ~/ 2;
+    final warm = <WallpaperTheme>{
+      ...t.take(6),
+      for (int i = mid - 3; i <= mid + 3; i++)
+        if (i >= 0 && i < t.length) t[i],
+    };
+    ThemeBlurCache.instance.prewarmThemes(warm);
     notifyListeners();
   }
 

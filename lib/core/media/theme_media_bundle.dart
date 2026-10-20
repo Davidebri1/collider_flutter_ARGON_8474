@@ -3,14 +3,11 @@ import 'dart:typed_data';
 import 'dart:ui' show ImmutableBuffer;
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// Asset bundle that also resolves absolute http(s) keys over the network.
-/// Taken from Grok's build (core/media/theme_media_bundle.dart) by Claude, 2026-10-17.
-///
-/// Theme posters now come from David's Cloudflare bucket, and many places draw a theme with
-/// `Image.asset(theme.assetPath)`. Installed as the app's DefaultAssetBundle, this lets them load
-/// those posters unchanged. Non-URL keys go to [rootBundle].
+/// Asset bundle that resolves absolute http(s) keys and caches resolved [ByteData] in memory.
+/// Eliminates redundant network fetches when covers, reflections, and galleries reference the same theme asset.
 class ThemeMediaAssetBundle extends AssetBundle {
   ThemeMediaAssetBundle(this._fallback);
 
@@ -23,24 +20,35 @@ class ThemeMediaAssetBundle extends AssetBundle {
     receiveTimeout: const Duration(seconds: 30),
   ));
 
-  // In-flight / recent network loads, so the face + reflection of one cover
-  // share a single request. Bounded; decoded images live in ImageCache.
-  final Map<String, Future<ByteData>> _recent = {};
-  static const int _maxRecent = 48;
+  // Resolved ByteData cache + in-flight requests so all 46+ themes stay cached in memory.
+  final Map<String, ByteData> _resolved = {};
+  final Map<String, Future<ByteData>> _inflight = {};
+  static const int _maxCached = 256;
 
   static bool isNetworkKey(String key) => key.startsWith('https://') || key.startsWith('http://');
 
+  /// Synchronous lookup if already loaded.
+  ByteData? getSynchronously(String key) => _resolved[key];
+
   @override
   Future<ByteData> load(String key) {
-    if (!isNetworkKey(key)) return _fallback.load(key);
-    final existing = _recent[key];
-    if (existing != null) return existing;
-    final f = _fetch(key);
-    _recent[key] = f;
-    if (_recent.length > _maxRecent) _recent.remove(_recent.keys.first);
-    f.catchError((Object _) {
-      _recent.remove(key);
-      return ByteData(0);
+    final hit = _resolved[key];
+    if (hit != null) return SynchronousFuture<ByteData>(hit);
+    final pending = _inflight[key];
+    if (pending != null) return pending;
+
+    final Future<ByteData> f = isNetworkKey(key) ? _fetch(key) : _fallback.load(key);
+    _inflight[key] = f;
+    f.then((data) {
+      _inflight.remove(key);
+      if (data.lengthInBytes > 0) {
+        if (_resolved.length >= _maxCached) {
+          _resolved.remove(_resolved.keys.first);
+        }
+        _resolved[key] = data;
+      }
+    }).catchError((Object _) {
+      _inflight.remove(key);
     });
     return f;
   }
@@ -57,7 +65,7 @@ class ThemeMediaAssetBundle extends AssetBundle {
 
   @override
   Future<ImmutableBuffer> loadBuffer(String key) async {
-    if (!isNetworkKey(key)) return _fallback.loadBuffer(key);
+    if (!isNetworkKey(key) && !_resolved.containsKey(key)) return _fallback.loadBuffer(key);
     final d = await load(key);
     return ImmutableBuffer.fromUint8List(d.buffer.asUint8List(d.offsetInBytes, d.lengthInBytes));
   }
@@ -76,13 +84,15 @@ class ThemeMediaAssetBundle extends AssetBundle {
 
   @override
   void evict(String key) {
-    _recent.remove(key);
+    _resolved.remove(key);
+    _inflight.remove(key);
     _fallback.evict(key);
   }
 
   @override
   void clear() {
-    _recent.clear();
+    _resolved.clear();
+    _inflight.clear();
     _fallback.clear();
   }
 }

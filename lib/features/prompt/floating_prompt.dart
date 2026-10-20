@@ -21,6 +21,8 @@ class FloatingPrompt extends StatefulWidget {
   final void Function(String prompt, List<String> attachments) onSubmitPrompt;
   final VoidCallback onSummon;
   final VoidCallback onTuck;
+  final String? continuingTitle;
+  final VoidCallback? onNewConversation;
 
   const FloatingPrompt({
     super.key,
@@ -33,6 +35,8 @@ class FloatingPrompt extends StatefulWidget {
     required this.onSummon,
     required this.onTuck,
     this.busy = false,
+    this.continuingTitle,
+    this.onNewConversation,
   });
 
   @override
@@ -130,8 +134,15 @@ class _FloatingPromptState extends State<FloatingPrompt> {
   }
 
   Widget _open() {
+    final cont = widget.continuingTitle?.trim() ?? '';
     // What has been chosen stays in sight as a chip; tapping a chip takes it off again.
     final chosen = <Widget>[
+      if (cont.isNotEmpty && widget.onNewConversation != null)
+        VChip(
+          label: 'Continuing: ${cont.length > 22 ? "${cont.substring(0, 21)}…" : cont}  ×',
+          selected: true,
+          onTap: widget.onNewConversation!,
+        ),
       if (widget.mode != AskMode.chat) VChip(label: widget.mode.label, selected: true, onTap: () => widget.onMode(AskMode.chat)),
       if (widget.incognito) VChip(label: 'Private', selected: true, onTap: () => widget.onIncognito(false)),
       for (final f in _files) VChip(label: f.length > 22 ? '${f.substring(0, 21)}…' : f, selected: true, onTap: () => setState(() => _files.remove(f))),
@@ -224,11 +235,21 @@ class _FloatingPromptState extends State<FloatingPrompt> {
 
   /// Behind the plus: attachments, how deep the answer goes, private mode.
   Widget _optionRows() {
+    final cont = widget.continuingTitle?.trim() ?? '';
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (cont.isNotEmpty && widget.onNewConversation != null)
+            _Option(
+              icon: Icons.add_comment_outlined,
+              label: 'New Conversation',
+              onTap: () {
+                setState(() => _options = false);
+                widget.onNewConversation?.call();
+              },
+            ),
           _Option(icon: Icons.attach_file_rounded, label: 'Attach', onTap: _attach),
           for (final m in AskMode.values.where((m) => m != AskMode.chat))
             _Option(icon: m.icon, label: m.label, on: widget.mode == m, onTap: () => widget.onMode(widget.mode == m ? AskMode.chat : m)),

@@ -9,8 +9,17 @@ import '../smartgen_store.dart';
 /// in-place editing (row 25). Cards are his own, saved on this device (SmartGenStore); none are made up.
 class SmartGenScreen extends StatefulWidget {
   final VoidCallback onClose;
+  final String viewMode;
+  final ValueChanged<String>? onViewModeChanged;
+  final int newCardTrigger;
 
-  const SmartGenScreen({super.key, required this.onClose});
+  const SmartGenScreen({
+    super.key,
+    required this.onClose,
+    this.viewMode = 'boards',
+    this.onViewModeChanged,
+    this.newCardTrigger = 0,
+  });
 
   @override
   State<SmartGenScreen> createState() => _SmartGenScreenState();
@@ -21,6 +30,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   final SmartGenStore _store = SmartGenStore.instance;
   String _q = '';
   int _tab = 0;
+  late String _mode = widget.viewMode;
 
   static const _tabs = ['Tasks & Kanban', 'Projects', 'Reminders', 'Memory Items', 'Artifacts'];
 
@@ -38,6 +48,23 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
     super.initState();
     _store.addListener(_changed);
     _store.load();
+  }
+
+  @override
+  void didUpdateWidget(covariant SmartGenScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.viewMode != oldWidget.viewMode) {
+      _mode = widget.viewMode;
+    }
+    if (widget.newCardTrigger != oldWidget.newCardTrigger) {
+      final defaultList = _boards[_tab].first;
+      _store.add(defaultList, 'New ${_tabs[_tab].split(' ').first} item');
+    }
+  }
+
+  void _setMode(String m) {
+    setState(() => _mode = m);
+    widget.onViewModeChanged?.call(m);
   }
 
   void _changed() {
@@ -79,13 +106,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
                       children: [
                         _tabsRow(),
                         Expanded(
-                          child: _Board(
-                            key: ValueKey(_tab),
-                            lists: _boards[_tab],
-                            store: _store,
-                            query: _q,
-                            checks: _tab == 2,
-                          ),
+                          child: _buildModeBody(),
                         ),
                         _searchBar(isMobile),
                       ],
@@ -100,14 +121,76 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
     );
   }
 
-  /// Row 23's navbar: a capsule of its own above the window. The title sits left; close sits at the right end, tinted.
+  Widget _buildModeBody() {
+    if (_mode == 'cards') {
+      return _CardsView(
+        key: ValueKey('cards-$_tab'),
+        lists: _boards[_tab],
+        store: _store,
+        query: _q,
+        checks: _tab == 2,
+      );
+    }
+    if (_mode == 'canvas') {
+      return _CanvasView(
+        key: ValueKey('canvas-$_tab'),
+        lists: _boards[_tab],
+        store: _store,
+        query: _q,
+      );
+    }
+    if (_mode == 'genie') {
+      return _GenieView(
+        key: ValueKey('genie-$_tab'),
+        store: _store,
+        query: _q,
+      );
+    }
+    return _Board(
+      key: ValueKey('board-$_tab'),
+      lists: _boards[_tab],
+      store: _store,
+      query: _q,
+      checks: _tab == 2,
+    );
+  }
+
+  /// Row 23's navbar: a capsule of its own above the window. The title sits left; view mode pills in the middle; close sits at the right end, tinted.
   Widget _navbar() => VGlass(
         material: VMaterial.elevated,
         radius: VRadius.full,
         padding: const EdgeInsets.fromLTRB(16, 5, 5, 5),
         child: Row(
           children: [
-            Expanded(child: Text('Smart Gen', maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.callout(weight: FontWeight.w600))),
+            Expanded(child: Text('Smart Gen', maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.callout(weight: FontWeight.w600))),
+            for (final (id, label) in const [
+              ('boards', 'Boards'),
+              ('cards', 'Cards'),
+              ('canvas', 'Canvas'),
+              ('genie', 'Genie'),
+            ])
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: VPress(
+                  onTap: () => _setMode(id),
+                  child: AnimatedContainer(
+                    duration: VMotion.fast,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _mode == id ? VColors.fillActive : Colors.transparent,
+                      borderRadius: BorderRadius.circular(VRadius.full),
+                    ),
+                    child: Text(
+                      label,
+                      style: VType.caption(
+                        color: _mode == id ? VColors.textPrimary : VColors.textSecondary,
+                        weight: _mode == id ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(width: 4),
             VPress(
               onTap: widget.onClose,
               tooltip: 'Close',
@@ -311,7 +394,7 @@ class _BoardState extends State<_Board> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.callout(color: _cardInk, weight: FontWeight.w600)),
+                child: Text(name, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.callout(color: _cardInk, weight: FontWeight.w600)),
               ),
               Flexible(
                 child: _Fade(
@@ -580,4 +663,282 @@ class _FadeState extends State<_Fade> {
     );
   }
 }
+
+class _CardsView extends StatelessWidget {
+  final List<String> lists;
+  final SmartGenStore store;
+  final String query;
+  final bool checks;
+  const _CardsView({super.key, required this.lists, required this.store, required this.query, required this.checks});
+
+  @override
+  Widget build(BuildContext context) {
+    final q = query.toLowerCase();
+    final items = <(String, SgCard)>[
+      for (final l in lists)
+        for (final c in store.list(l))
+          if (q.isEmpty || c.title.toLowerCase().contains(q)) (l, c),
+    ];
+    return VFadeScroll(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 36),
+              child: Text('No cards match this filter.', textAlign: TextAlign.center, style: VType.callout(color: VColors.textTertiary)),
+            ),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final (listName, card) in items)
+                SizedBox(
+                  width: 240,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _cardFill,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: VColors.borderLight, width: 0.5),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(color: VColors.fillActive, borderRadius: BorderRadius.circular(VRadius.full)),
+                              child: Text(listName, style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600).copyWith(fontSize: 10)),
+                            ),
+                            const Spacer(),
+                            VPress(
+                              onTap: () => store.update(card, done: !card.done),
+                              child: Icon(
+                                card.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                size: 16,
+                                color: card.done ? VColors.accentGreen : _faint,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            VPress(
+                              onTap: () => store.remove(card),
+                              child: const Icon(Icons.close_rounded, size: 15, color: _faint),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          card.title,
+                          style: VType.callout(color: card.done ? _faint : _cardInk, weight: FontWeight.w400).copyWith(
+                            fontSize: 13.5,
+                            height: 1.35,
+                            decoration: card.done ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CanvasView extends StatelessWidget {
+  final List<String> lists;
+  final SmartGenStore store;
+  final String query;
+  const _CanvasView({super.key, required this.lists, required this.store, required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    final q = query.toLowerCase();
+    final items = <(String, SgCard)>[
+      for (final l in lists)
+        for (final c in store.list(l))
+          if (q.isEmpty || c.title.toLowerCase().contains(q)) (l, c),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0x22000000),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: VColors.borderLight, width: 0.5),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(painter: _CanvasGridPainter()),
+            VFadeScroll(
+              padding: const EdgeInsets.all(16),
+              child: Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: [
+                  for (final (idx, (listName, card)) in items.indexed)
+                    Transform.rotate(
+                      angle: (idx.isEven ? -0.012 : 0.012),
+                      child: SizedBox(
+                        width: 210,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xE622272B),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: idx % 3 == 0 ? VColors.accentBlue.withValues(alpha: 0.45) : VColors.borderLight, width: 0.75),
+                            boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 12, offset: Offset(0, 5))],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(listName.toUpperCase(), style: VType.caption(color: VColors.textTertiary, weight: FontWeight.w600).copyWith(fontSize: 10)),
+                                  const Spacer(),
+                                  if (lists.length > 1)
+                                    VPress(
+                                      onTap: () {
+                                        final nextIdx = (lists.indexOf(listName) + 1) % lists.length;
+                                        store.move(card, lists[nextIdx], null);
+                                      },
+                                      tooltip: 'Cycle list',
+                                      child: const Icon(Icons.swap_horiz_rounded, size: 15, color: _faint),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(card.title, style: VType.callout(color: _cardInk, weight: FontWeight.w500).copyWith(fontSize: 13, height: 1.38)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CanvasGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..color = const Color(0x18FFFFFF);
+    const step = 24.0;
+    for (double x = 16; x < size.width; x += step) {
+      for (double y = 16; y < size.height; y += step) {
+        canvas.drawCircle(Offset(x, y), 1.0, p);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _GenieView extends StatelessWidget {
+  final SmartGenStore store;
+  final String query;
+  const _GenieView({super.key, required this.store, required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    const allLists = ['High', 'Medium', 'Low', 'Projects', 'Reminders', 'Memory Items', 'Artifacts'];
+    final q = query.toLowerCase();
+    final items = <(String, SgCard)>[
+      for (final l in allLists)
+        for (final c in store.list(l))
+          if (q.isEmpty || c.title.toLowerCase().contains(q)) (l, c),
+    ];
+    return VFadeScroll(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: VColors.fillRow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: VColors.borderLight, width: 0.5),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.auto_awesome_rounded, size: 17, color: VColors.accentBlue),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Autonomous synthesis from your Collider sessions (${items.length} active items)',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.fade,
+                    style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                VPress(
+                  onTap: () => store.syncAutonomousCards(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(color: VColors.fillActive, borderRadius: BorderRadius.circular(VRadius.full)),
+                    child: Text('Sync', style: VType.caption(color: Colors.white, weight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (final (listName, card) in items)
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: _cardFill,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: VColors.fillRow, borderRadius: BorderRadius.circular(VRadius.full)),
+                    child: Text(listName, style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600).copyWith(fontSize: 10)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      card.title,
+                      maxLines: 2,
+                      softWrap: true,
+                      overflow: TextOverflow.fade,
+                      style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 13),
+                    ),
+                  ),
+                  if (listName != 'High')
+                    VPress(
+                      onTap: () => store.move(card, 'High', 0),
+                      tooltip: 'Promote to High',
+                      child: const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: Icon(Icons.arrow_upward_rounded, size: 16, color: VColors.accentBlue),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 

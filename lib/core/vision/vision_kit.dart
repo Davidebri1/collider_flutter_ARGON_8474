@@ -2,8 +2,8 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../media/theme_blur_cache.dart';
 import '../theme/edge_fade.dart';
-import '../theme/specular_border.dart';
 import 'vision_tokens.dart';
 
 export 'vision_tokens.dart';
@@ -181,10 +181,29 @@ class VScrim extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dim = Container(color: soft ? const Color(0x14000000) : VOverlay.scrim);
+    if (!blur || soft) {
+      return GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: dim,
+      );
+    }
+    final cachedBlur = ThemeBlurCache.instance.activeBlurred(ThemeBlurPreset.scrim);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: blur && !soft ? BackdropFilter(filter: ImageFilter.blur(sigmaX: VBlur.medium, sigmaY: VBlur.medium), child: dim) : dim,
+      child: cachedBlur != null
+          ? RawImage(
+              image: cachedBlur,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              filterQuality: FilterQuality.high,
+            )
+          : BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: VBlur.medium, sigmaY: VBlur.medium),
+              child: dim,
+            ),
     );
   }
 }

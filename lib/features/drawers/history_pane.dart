@@ -17,8 +17,16 @@ class HistoryPane extends StatefulWidget {
   final JobState? Function(String id) job;
   final ValueChanged<ConversationHistorySession> onLoad;
   final VoidCallback onClose;
+  final VoidCallback? onUpdated;
 
-  const HistoryPane({super.key, required this.sessions, required this.job, required this.onLoad, required this.onClose});
+  const HistoryPane({
+    super.key,
+    required this.sessions,
+    required this.job,
+    required this.onLoad,
+    required this.onClose,
+    this.onUpdated,
+  });
 
   @override
   State<HistoryPane> createState() => _HistoryPaneState();
@@ -28,11 +36,22 @@ class _HistoryPaneState extends State<HistoryPane> {
   final _search = TextEditingController();
   String _q = '';
   ConversationHistorySession? _open;
+  bool _previewInitDone = false;
 
   @override
   void dispose() {
     _search.dispose();
     super.dispose();
+  }
+
+  void _syncPreviewParam(List<ConversationHistorySession> sessions) {
+    if (_previewInitDone || sessions.isEmpty) return;
+    final p = Uri.base.queryParameters['preview'];
+    if (p != null) {
+      _previewInitDone = true;
+      final idx = int.tryParse(p) ?? 0;
+      _open = sessions[idx.clamp(0, sessions.length - 1)];
+    }
   }
 
   @override
@@ -44,6 +63,7 @@ class _HistoryPaneState extends State<HistoryPane> {
     final h = (size.height * (wide ? 0.66 : 0.62)).clamp(320.0, 720.0);
     final q = _q.toLowerCase();
     final sessions = widget.sessions.where((s) => q.isEmpty || s.title.toLowerCase().contains(q) || s.summary.toLowerCase().contains(q)).toList();
+    _syncPreviewParam(sessions);
     final open = _open;
 
     final list = SizedBox(
@@ -86,7 +106,17 @@ class _HistoryPaneState extends State<HistoryPane> {
               ? const SizedBox(height: 0)
               : Row(mainAxisSize: MainAxisSize.min, children: [
                   Container(width: 0.5, height: h, color: VColors.borderLight),
-                  SizedBox(width: previewW, height: h, child: _Preview(key: ValueKey(open.id), session: open, job: widget.job(open.id), onLoad: () => widget.onLoad(open))),
+                  SizedBox(
+                    width: previewW,
+                    height: h,
+                    child: _Preview(
+                      key: ValueKey(open.id),
+                      session: open,
+                      job: widget.job(open.id),
+                      onLoad: () => widget.onLoad(open),
+                      onUpdated: widget.onUpdated,
+                    ),
+                  ),
                 ]),
         ),
       ]);
@@ -94,12 +124,18 @@ class _HistoryPaneState extends State<HistoryPane> {
       pane = AnimatedSwitcher(
         duration: VMotion.base,
         child: open == null
-            ? KeyedSubtree(key: const ValueKey('list'), child: list)
+             ? KeyedSubtree(key: const ValueKey('list'), child: list)
             : SizedBox(
                 key: ValueKey(open.id),
                 width: listW,
                 height: h,
-                child: _Preview(session: open, job: widget.job(open.id), onLoad: () => widget.onLoad(open), onBack: () => setState(() => _open = null)),
+                child: _Preview(
+                  session: open,
+                  job: widget.job(open.id),
+                  onLoad: () => widget.onLoad(open),
+                  onBack: () => setState(() => _open = null),
+                  onUpdated: widget.onUpdated,
+                ),
               ),
       );
     }
@@ -129,7 +165,8 @@ class _Preview extends StatefulWidget {
   final JobState? job;
   final VoidCallback onLoad;
   final VoidCallback? onBack;
-  const _Preview({super.key, required this.session, required this.job, required this.onLoad, this.onBack});
+  final VoidCallback? onUpdated;
+  const _Preview({super.key, required this.session, required this.job, required this.onLoad, this.onBack, this.onUpdated});
 
   @override
   State<_Preview> createState() => _PreviewState();
@@ -164,20 +201,30 @@ class _PreviewState extends State<_Preview> {
       if (e.value.status != 'done') continue;
       final mid = e.key;
       turn.answers[mid] = null;
+      final baseHistory = e.value.messages.isNotEmpty
+          ? [for (final m in e.value.messages) {'role': m['role'] ?? 'user', 'content': m['content'] ?? ''}]
+          : <Map<String, String>>[
+              {'role': 'user', 'content': job.prompt},
+              {'role': 'assistant', 'content': e.value.text},
+            ];
       final messages = <Map<String, String>>[
-        {'role': 'user', 'content': job.prompt},
-        {'role': 'assistant', 'content': e.value.text},
+        ...baseHistory,
         for (final t in _turns.where((t) => t != turn)) ...[
           {'role': 'user', 'content': t.question},
           if (t.answers[mid] != null) {'role': 'assistant', 'content': t.answers[mid]!},
         ],
         {'role': 'user', 'content': text},
       ];
-      ColliderApi.instance.reply(model: mid, messages: messages, mode: mode).then((r) {
-        if (mounted) setState(() => turn.answers[mid] = r.text);
-      }).catchError((Object _) {
+      // Each answer drafts in place as the model writes it and persists to the session (Claude, 2026-10-19).
+      ColliderApi.instance.replyStream(model: mid, messages: messages, mode: mode, jobId: job.id).listen((d) {
+        if (mounted && d.text.isNotEmpty) setState(() => turn.answers[mid] = d.text);
+        if (d.done) {
+          ColliderApi.instance.cachedHistory = null;
+          widget.onUpdated?.call();
+        }
+      }, onError: (Object _) {
         if (mounted) setState(() => turn.answers.remove(mid));
-      });
+      }, cancelOnError: true);
     }
   }
 
@@ -211,11 +258,34 @@ class _PreviewState extends State<_Preview> {
         ),
       );
 
+  /// Extracts any persisted follow-up turns beyond the initial question so the preview shows the full thread.
+  List<_Turn> _persistedFollowUps(JobState? job) {
+    if (job == null) return const [];
+    final out = <_Turn>[];
+    for (final e in job.results.entries) {
+      final msgs = e.value.messages;
+      if (msgs.length <= 2) continue;
+      var turnIdx = 0;
+      for (var i = 2; i < msgs.length; i++) {
+        final role = msgs[i]['role'] ?? 'user';
+        final content = msgs[i]['content'] ?? '';
+        if (role == 'user') {
+          if (turnIdx >= out.length) out.add(_Turn(content));
+          turnIdx++;
+        } else if (role == 'assistant' && turnIdx > 0 && turnIdx <= out.length) {
+          out[turnIdx - 1].answers[e.key] = content;
+        }
+      }
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
     final job = widget.job;
     final s = widget.session;
     final consensus = job?.consensus.summary ?? '';
+    final persistedTurns = _persistedFollowUps(job);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -223,7 +293,7 @@ class _PreviewState extends State<_Preview> {
           padding: const EdgeInsets.fromLTRB(VSpace.xs, VSpace.sm, VSpace.sm, VSpace.xs),
           child: Row(children: [
             if (widget.onBack != null) ...[VCircleButton(icon: Icons.chevron_left_rounded, size: 30, onTap: widget.onBack), const SizedBox(width: 6)] else const SizedBox(width: 8),
-            Expanded(child: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.callout(weight: FontWeight.w600))),
+            Expanded(child: Text(s.title, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.callout(weight: FontWeight.w600))),
             const SizedBox(width: 8),
             VPress(
               onTap: widget.onLoad,
@@ -249,7 +319,17 @@ class _PreviewState extends State<_Preview> {
                 ),
               if (job != null)
                 for (final e in job.results.entries)
-                  if (e.value.status == 'done' && e.value.text.isNotEmpty) _answer(e.key, e.value.text),
+                  if (e.value.status == 'done' && e.value.text.isNotEmpty)
+                    _answer(
+                      e.key,
+                      e.value.messages.length >= 2 && (e.value.messages[1]['role'] == 'assistant')
+                          ? e.value.messages[1]['content']
+                          : e.value.text,
+                    ),
+              for (final t in persistedTurns) ...[
+                _question(t.question),
+                for (final e in t.answers.entries) _answer(e.key, e.value),
+              ],
               for (final t in _turns) ...[
                 _question(t.question),
                 for (final e in t.answers.entries) _answer(e.key, e.value),

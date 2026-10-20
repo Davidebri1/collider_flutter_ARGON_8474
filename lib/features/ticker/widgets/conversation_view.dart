@@ -39,12 +39,38 @@ class _ConversationViewState extends State<ConversationView> {
   bool _searching = false;
   String _filter = '';
   final List<String> _files = [];
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.item.conversation.length > 2) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      });
+    }
+  }
 
   @override
   void dispose() {
     _reply.dispose();
     _search.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  /// While an answer drafts, the newest words stay in view (unless the reader has scrolled up to read).
+  @override
+  void didUpdateWidget(ConversationView old) {
+    super.didUpdateWidget(old);
+    final a = old.item.conversation, b = widget.item.conversation;
+    final grew = b.length != a.length || (b.isNotEmpty && a.isNotEmpty && b.last.text.length != a.last.text.length) || widget.item.isStreaming != old.item.isStreaming;
+    if (!grew || !_scroll.hasClients) return;
+    final p = _scroll.position;
+    if (p.maxScrollExtent - p.pixels > 120 && b.length == a.length) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    });
   }
 
   void _toast(String text) {
@@ -120,6 +146,8 @@ class _ConversationViewState extends State<ConversationView> {
       for (final m in item.conversation)
         if (_filter.isEmpty || m.text.toLowerCase().contains(_filter)) m,
     ];
+    // The model is writing and nothing of its answer has arrived yet: its bubble shows that it is drafting.
+    final drafting = item.isStreaming && (item.conversation.isEmpty || item.conversation.last.sender == 'user');
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -146,11 +174,15 @@ class _ConversationViewState extends State<ConversationView> {
           child: EdgeFade(
             fadeHeight: 16,
             child: ListView.builder(
+              controller: _scroll,
               shrinkWrap: true,
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(vertical: 6),
-              itemCount: shown.length,
+              itemCount: shown.length + (drafting ? 1 : 0),
               itemBuilder: (_, i) {
+                if (i == shown.length) {
+                  return const Align(alignment: Alignment.centerLeft, child: _Bubble(isUser: false, child: _Drafting()));
+                }
                 final m = shown[i];
                 final isUser = m.sender == 'user';
                 final t = m.timestamp;
@@ -169,7 +201,7 @@ class _ConversationViewState extends State<ConversationView> {
                           children: [
                             isUser
                                 ? Text(m.text, style: VType.callout(weight: FontWeight.w400).copyWith(height: 1.4))
-                                : MdText(m.text.length > 1400 ? '${m.text.substring(0, 1400)}…' : m.text),
+                                : MdText(m.text),
                             const SizedBox(height: 3),
                             Text(time, style: VType.caption(color: VColors.textTertiary).copyWith(fontSize: 10, height: 12 / 10)),
                           ],
@@ -224,6 +256,43 @@ class _ConversationViewState extends State<ConversationView> {
       ],
     );
   }
+}
+
+/// Three dots that brighten in turn while the model drafts, as in Messages (Claude, 2026-10-19).
+class _Drafting extends StatefulWidget {
+  const _Drafting();
+  @override
+  State<_Drafting> createState() => _DraftingState();
+}
+
+class _DraftingState extends State<_Drafting> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 18,
+        child: AnimatedBuilder(
+          animation: _c,
+          builder: (_, __) => Row(mainAxisSize: MainAxisSize.min, children: [
+            for (var i = 0; i < 3; i++)
+              Container(
+                width: 7,
+                height: 7,
+                margin: EdgeInsets.only(right: i < 2 ? 5 : 0),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.3 + 0.6 * (1 - ((_c.value * 3 - i) % 3).clamp(0.0, 1.0))),
+                ),
+              ),
+          ]),
+        ),
+      );
 }
 
 /// Speech bubble, WeChat visionOS 0:639: one small corner on the speaker's side.
