@@ -46,7 +46,7 @@ class MessageZoomOverlay extends StatelessWidget {
   /// Saves the message as a file in Files > Generated.
   Future<void> _save(BuildContext context) async {
     final words = message.text.replaceAll(RegExp(r'[#*_`>\[\]\n]'), ' ').trim().split(RegExp(r'\s+')).take(6).join(' ');
-    final name = await ColliderApi.instance.saveGenerated('$modelName - $words.md', message.text);
+    final name = await ColliderApi.instance.saveGenerated('$modelName - $words.md', message.text, model: modelName);
     if (context.mounted) _toast(context, name == null ? 'Not saved' : 'Saved to Files');
   }
 

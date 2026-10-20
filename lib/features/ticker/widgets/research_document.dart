@@ -145,7 +145,7 @@ class ResearchDocument extends StatelessWidget {
                           tooltip: 'Save',
                           onTap: () async {
                             final words = message.text.replaceAll(RegExp(r'[#*_`>\[\]\n]'), ' ').trim().split(RegExp(r'\s+')).take(6).join(' ');
-                            final name = await ColliderApi.instance.saveGenerated('$modelName - $words.md', _document);
+                            final name = await ColliderApi.instance.saveGenerated('$modelName - $words.md', _document, model: modelName);
                             if (context.mounted) _toast(context, name == null ? 'Not saved' : 'Saved to Files');
                           },
                         ),

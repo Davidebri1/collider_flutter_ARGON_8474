@@ -26,3 +26,4 @@ __pycache__/
 /dev/probe_out/
 /dev/*.log
 /dev/build_log.txt
+/dev/test_app/

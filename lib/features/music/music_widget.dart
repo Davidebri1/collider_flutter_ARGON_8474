@@ -62,7 +62,15 @@ class MusicBar extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: Image.asset(track.art, width: 28, height: 28, fit: BoxFit.cover),
+                    // A song from Files has no theme picture: the music colour with a note (Claude, 2026-10-20).
+                    child: track.art.isEmpty
+                        ? Container(
+                            width: 28,
+                            height: 28,
+                            decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFF7A95), Color(0xFFD0105C)])),
+                            child: const Icon(Icons.music_note_rounded, size: 16, color: Colors.white),
+                          )
+                        : Image.asset(track.art, width: 28, height: 28, fit: BoxFit.cover),
                   ),
                   const SizedBox(width: 7),
                   Expanded(

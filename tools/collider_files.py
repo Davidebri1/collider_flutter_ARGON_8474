@@ -51,17 +51,48 @@ class Files:
                 return k
         return "text" if ext in TEXT_EXT else "file"
 
-    def listing(self):
+    # Which model made each generated file, kept beside the folders (not in them) so it is never listed.
+    def _models_path(self):
+        return os.path.join(self.root, ".models.json")
+
+    def _models(self):
+        try:
+            return json.load(open(self._models_path(), encoding="utf-8"))
+        except Exception:
+            return {}
+
+    def _remember(self, name, model):
+        if not model:
+            return
+        m = self._models()
+        m[name] = model
+        tmp = self._models_path() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(m, f, indent=1)
+        os.replace(tmp, self._models_path())
+
+    @staticmethod
+    def _guess(name, labels):
+        """Files saved before the model was recorded carry its name: \"<model> - ...\" or \"... - <model>.md\"."""
+        stem = os.path.splitext(name)[0]
+        for lab in sorted(labels, key=len, reverse=True):
+            if stem.startswith(lab + " - ") or stem.endswith(" - " + lab):
+                return lab
+        return ""
+
+    def listing(self, labels=()):
         out = {}
+        made_by = self._models()
         for s in SOURCES:
             d = os.path.join(self.root, s)
             rows = []
             for n in os.listdir(d):
                 p = os.path.join(d, n)
-                if os.path.isfile(p):
+                if os.path.isfile(p) and not n.startswith(".") and n.lower() != "desktop.ini":
                     st = os.stat(p)
                     rows.append({"name": n, "source": s, "size": st.st_size, "modified": st.st_mtime,
-                                 "kind": self.kind(n), "url": f"/files/{s}/{urllib.request.quote(n)}"})
+                                 "kind": self.kind(n), "url": f"/files/{s}/{urllib.request.quote(n)}",
+                                 "model": (made_by.get(n) or self._guess(n, labels)) if s == "generated" else ""})
             out[s] = sorted(rows, key=lambda r: -r["modified"])
         return out
 
@@ -77,10 +108,11 @@ class Files:
             f.write(base64.b64decode(b64))
         return os.path.basename(p)
 
-    def save_generated(self, name, text):
+    def save_generated(self, name, text, model=""):
         p = self.unique_path("generated", name)
         with open(p, "w", encoding="utf-8") as f:
             f.write(text)
+        self._remember(os.path.basename(p), model)
         return os.path.basename(p)
 
     def _target(self, name, replace):
@@ -92,13 +124,14 @@ class Files:
                 return p
         return self.unique_path("generated", name)
 
-    def save_bytes(self, name, b64, replace=""):
+    def save_bytes(self, name, b64, replace="", model=""):
         p = self._target(name, replace)
         with open(p, "wb") as f:
             f.write(base64.b64decode(b64))
+        self._remember(os.path.basename(p), model)
         return os.path.basename(p)
 
-    def print_pdf(self, name, html, replace=""):
+    def print_pdf(self, name, html, replace="", model=""):
         """Writes a document as PDF with Microsoft Edge (part of Windows), which keeps the text real and sharp."""
         import shutil, subprocess, tempfile
         edge = shutil.which("msedge") or next((p for p in (
@@ -120,6 +153,7 @@ class Files:
                 return None
             p = self._target(name, replace)
             shutil.copyfile(out, p)
+        self._remember(os.path.basename(p), model)
         return os.path.basename(p)
 
     def save_download(self, name, data):

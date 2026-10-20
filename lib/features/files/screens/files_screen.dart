@@ -12,6 +12,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../core/api/collider_api.dart';
 import '../../../core/audio/music_player.dart';
+import '../../../core/media/video_window.dart';
 import '../../../core/platform/open_url.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../models/theme_def.dart';
@@ -70,11 +71,20 @@ bool _isKind(String place, ColliderFile f) => switch (place) {
       _ => true,
     };
 
-/// One place in the browser: Home, a source, or an opened file.
+/// One place in the browser (Claude, 2026-10-20): where files came from (Home: everywhere), which kind (null: every
+/// kind), in Generated which model made them (null: All), and an opened file.
+/// David: "segregated by file type/category, file origin (uploaded vs generated), and for generated we need a per
+/// model segregation (and All)".
 class _View {
   final String source;
+  final String? kind;
+  final String? model;
   final ColliderFile? file;
-  const _View(this.source, [this.file]);
+  const _View(this.source, {this.kind, this.model, this.file});
+
+  static _View start(String place) => _kinds.any((k) => k.key == place) ? _View('home', kind: place) : _View(place);
+
+  bool same(_View o) => o.source == source && o.kind == kind && o.model == model && o.file == null && file == null;
 }
 
 class FilesScreen extends StatefulWidget {
@@ -95,7 +105,7 @@ class _FilesScreenState extends State<FilesScreen> {
   final _api = ColliderApi.instance;
   final _search = TextEditingController();
   Map<String, List<ColliderFile>> _files = {for (final s in _sources) s.key: const []};
-  late final List<_View> _history = [_View(widget.initialPlace)];
+  late final List<_View> _history = [_View.start(widget.initialPlace)];
 
   /// Purchased songs: which theme each belongs to and where it stands in that theme's list.
   final Map<ColliderFile, (WallpaperTheme, int)> _songs = {};
@@ -111,7 +121,7 @@ class _FilesScreenState extends State<FilesScreen> {
   _View get _view => _history[_at];
 
   /// Music and Purchased hold songs: a song list is rows of titles, whatever the grid button says elsewhere.
-  bool get _songsOnly => _view.file == null && (_view.source == 'music' || _view.source == 'purchased');
+  bool get _songsOnly => _view.file == null && (_view.kind == 'music' || _view.source == 'purchased');
 
   @override
   void initState() {
@@ -167,6 +177,8 @@ class _FilesScreenState extends State<FilesScreen> {
         });
   }
 
+  void _open(ColliderFile f) => _go(_View(_view.source, kind: _view.kind, model: _view.model, file: f));
+
   void _go(_View v) {
     // A purchased song plays in the music bar; it does not open as a page.
     final song = v.file == null ? null : _songs[v.file!];
@@ -178,6 +190,15 @@ class _FilesScreenState extends State<FilesScreen> {
     if (f != null && !f.asset && widget.onOpenDocument != null &&
         RegExp(r'\.(docx|pdf|md|markdown|html?|txt)$', caseSensitive: false).hasMatch(f.name)) {
       widget.onOpenDocument!(f.url, f.name);
+      return;
+    }
+    // An uploaded, generated or downloaded song plays in the music bar, with the songs listed beside it.
+    if (f != null && !f.asset && f.kind == 'audio') {
+      final songs = _shown().where((x) => x.kind == 'audio' && !x.asset).toList();
+      final at = songs.indexOf(f);
+      MusicPlayer.instance.play(at < 0 ? 0 : at,
+          list: [for (final s in (at < 0 ? [f] : songs)) MusicTrack(s.name.replaceFirst(RegExp(r'\.[^.]+$'), ''), '', _api.fileUrl(s))],
+          id: 'files-${_view.source}');
       return;
     }
     setState(() {
@@ -202,12 +223,15 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
+  /// The models (and Documents) that made the generated files, by name.
+  List<String> get _models => {for (final f in _files['generated'] ?? const <ColliderFile>[]) if (f.model.isNotEmpty) f.model}.toList()..sort();
+
   List<ColliderFile> _shown() {
     final v = _view;
     final all = [for (final s in _sources) ...?_files[s.key]];
-    var list = v.source == 'home'
-        ? all
-        : (_kinds.any((k) => k.key == v.source) ? all.where((f) => _isKind(v.source, f)).toList() : [...?_files[v.source]]);
+    var list = v.source == 'home' ? all : [...?_files[v.source]];
+    if (v.kind != null) list = list.where((f) => _isKind(v.kind!, f)).toList();
+    if (v.source == 'generated' && v.model != null) list = list.where((f) => f.model == v.model).toList();
     if (_q.isNotEmpty) list = list.where((f) => f.name.toLowerCase().contains(_q)).toList();
     if (_byName) {
       list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -282,7 +306,7 @@ class _FilesScreenState extends State<FilesScreen> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 child: KeyedSubtree(
-                  key: ValueKey('${_view.source}|${_view.file?.url}|${_grid && !_songsOnly}'),
+                  key: ValueKey('${_view.source}|${_view.kind}|${_view.model}|${_view.file?.url}|${_grid && !_songsOnly}'),
                   child: _view.file != null ? _preview(_view.file!) : _browse(),
                 ),
               ),
@@ -295,7 +319,7 @@ class _FilesScreenState extends State<FilesScreen> {
 
   // ---------------- title bar ----------------
   Widget _titleBar(bool compact) {
-    final title = _view.file?.name ?? _sourceOf(_view.source).label;
+    final title = _view.file?.name ?? _sourceOf(_view.source == 'home' && _view.kind != null ? _view.kind! : _view.source).label;
     final nav = Row(mainAxisSize: MainAxisSize.min, children: [
       _RoundButton(icon: Icons.chevron_left_rounded, enabled: _at > 0, tooltip: 'Back', onTap: () => setState(() => _at--)),
       const SizedBox(width: 6),
@@ -375,7 +399,7 @@ class _FilesScreenState extends State<FilesScreen> {
             Row(children: [
               for (int i = 0; i < _sources.length; i++) ...[
                 if (i > 0) SizedBox(width: 20 * _u),
-                Expanded(child: _SourceCard(u: _u, source: _sources[i], onTap: () => _go(_View(_sources[i].key)))),
+                Expanded(child: _SourceCard(u: _u, source: _sources[i], onTap: () => _go(_View(_sources[i].key, kind: _view.kind)))),
               ],
             ]),
             SizedBox(height: 30 * _u),
@@ -387,6 +411,14 @@ class _FilesScreenState extends State<FilesScreen> {
               SizedBox(height: 30 * _u),
             ],
           ],
+          if (_view.source == 'generated' && _models.isNotEmpty) ...[
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              VChip(label: 'All', selected: _view.model == null, onTap: () => _go(_View('generated', kind: _view.kind))),
+              for (final m in _models)
+                VChip(label: m, selected: _view.model == m, onTap: () => _go(_View('generated', kind: _view.kind, model: m))),
+            ]),
+            SizedBox(height: 24 * _u),
+          ],
           if (_grid && !_songsOnly)
             LayoutBuilder(builder: (context, c) {
               // frame: cells 68 wide, 50 apart; here the cell follows the type (68 x 0.79) and the gap takes the rest
@@ -394,16 +426,16 @@ class _FilesScreenState extends State<FilesScreen> {
               final w = c.maxWidth / cols;
               return Wrap(
                 runSpacing: 30 * _u,
-                children: [for (final f in list) SizedBox(width: w, child: _FileCell(file: f, api: _api, onTap: () => _go(_View(_view.source, f))))],
+                children: [for (final f in list) SizedBox(width: w, child: _FileCell(file: f, api: _api, onTap: () => _open(f)))],
               );
             })
           else
             Column(children: [
               for (final f in list)
                 if (_songs[f] case final song?)
-                  _SongRow(title: f.name, theme: song.$1, index: song.$2, onTap: () => _go(_View(_view.source, f)))
+                  _SongRow(title: f.name, theme: song.$1, index: song.$2, onTap: () => _open(f))
                 else
-                  _FileRow(file: f, api: _api, onTap: () => _go(_View(_view.source, f))),
+                  _FileRow(file: f, api: _api, onTap: () => _open(f)),
             ]),
         ],
       ),
@@ -412,6 +444,9 @@ class _FilesScreenState extends State<FilesScreen> {
 
   // ---------------- an opened file ----------------
   Widget _preview(ColliderFile f) {
+    if (f.kind == 'video' && !f.asset) {
+      return VideoWindow(key: ValueKey(f.url), url: _api.fileUrl(f), onClose: () => setState(() => _at--));
+    }
     if (f.kind == 'image') {
       return Padding(
         padding: const EdgeInsets.all(14),
@@ -454,7 +489,6 @@ class _FilesScreenState extends State<FilesScreen> {
 
   // ---------------- side menu: Home and the kinds of file ----------------
   Widget _sideMenu() {
-    final active = _view.source;
     return SizedBox(
       width: 44,
       child: VGlass(
@@ -467,13 +501,14 @@ class _FilesScreenState extends State<FilesScreen> {
           VPress(
             tooltip: s.label,
             onTap: () {
-              if (_view.source != s.key || _view.file != null) _go(_View(s.key));
+              final next = s.key == 'home' ? const _View('home') : _View(_view.source, kind: _view.kind == s.key ? null : s.key, model: _view.model);
+              if (!next.same(_view)) _go(next);
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               width: 30,
               height: 30,
-              decoration: BoxDecoration(color: active == s.key ? _N.chip : Colors.transparent, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: (s.key == 'home' ? _view.source == 'home' && _view.kind == null : _view.kind == s.key) ? _N.chip : Colors.transparent, shape: BoxShape.circle),
               child: Center(child: _GradientIcon(s.icon, s.colors, 19)),
             ),
           ),
@@ -575,20 +610,53 @@ class _Thumb extends StatelessWidget {
   final double width;
   const _Thumb({required this.file, required this.api, required this.width});
 
-  static const _icons = {
-    'audio': (Icons.music_note_rounded, [Color(0xFFD65983), Color(0xFFD8789F)]),
-    'video': (Icons.videocam_rounded, [Color(0xFF7C56C7), Color(0xFFAF83DF)]),
-    'pdf': (Icons.picture_as_pdf_rounded, [Color(0xFF338C97), Color(0xFF4AC3DA)]),
-    'text': (Icons.description_rounded, [Color(0xFF338C97), Color(0xFF4AC3DA)]),
-    'file': (Icons.insert_drive_file_rounded, [Color(0xFF90942F), Color(0xFFC7D148)]),
+  // Each kind of file its own glyph and its own colour (Apple's system colours), the same everywhere (Claude, 2026-10-20).
+  static const _word = (Icons.description_rounded, [Color(0xFF6CC8FF), Color(0xFF0A63F0)]);
+  static const _pdf = (Icons.picture_as_pdf_rounded, [Color(0xFFFF7A70), Color(0xFFE0221B)]);
+  static const _note = (Icons.notes_rounded, [Color(0xFFD1D1D6), Color(0xFF8E8E93)]);
+  static const _web = (Icons.html_rounded, [Color(0xFFFFB15C), Color(0xFFFF6A00)]);
+  static const _code = (Icons.code_rounded, [Color(0xFF46E6CF), Color(0xFF0087A8)]);
+  static const _data = (Icons.data_object_rounded, [Color(0xFFFFD95A), Color(0xFFFF9F0A)]);
+  static const _sheet = (Icons.table_chart_rounded, [Color(0xFF9BE564), Color(0xFF22A84A)]);
+  static const _slides = (Icons.slideshow_rounded, [Color(0xFFFFAA4D), Color(0xFFFF2D6A)]);
+  static const _zip = (Icons.folder_zip_rounded, [Color(0xFFD2A679), Color(0xFF8B5E3C)]);
+  static const _app = (Icons.install_desktop_rounded, [Color(0xFF8A93FF), Color(0xFF4C36D6)]);
+  static const _song = (Icons.music_note_rounded, [Color(0xFFFF7A95), Color(0xFFD0105C)]);
+  static const _film = (Icons.movie_rounded, [Color(0xFFE26BFF), Color(0xFF6E34E8)]);
+  static const _picture = (Icons.image_rounded, [Color(0xFFFFD95A), Color(0xFFFF8A00)]);
+  static const _other = (Icons.insert_drive_file_rounded, [Color(0xFFD1D1D6), Color(0xFF8E8E93)]);
+  static const _byEnding = {
+    'docx': _word, 'doc': _word, 'rtf': _word, 'odt': _word, 'pages': _word,
+    'pdf': _pdf,
+    'md': _note, 'markdown': _note, 'txt': _note, 'log': _note,
+    'html': _web, 'htm': _web,
+    'py': _code, 'dart': _code, 'js': _code, 'ts': _code, 'css': _code, 'sh': _code, 'bat': _code, 'ps1': _code,
+    'c': _code, 'cpp': _code, 'h': _code, 'java': _code, 'go': _code, 'rs': _code, 'sql': _code,
+    'json': _data, 'xml': _data, 'yaml': _data, 'yml': _data, 'toml': _data, 'ini': _data,
+    'csv': _sheet, 'xlsx': _sheet, 'xls': _sheet, 'ods': _sheet, 'numbers': _sheet,
+    'pptx': _slides, 'ppt': _slides, 'key': _slides, 'odp': _slides,
+    'zip': _zip, '7z': _zip, 'rar': _zip, 'gz': _zip, 'tar': _zip,
+    'exe': _app, 'msi': _app, 'apk': _app, 'dmg': _app,
   };
+  static (IconData, List<Color>) iconFor(ColliderFile f) {
+    final dot = f.name.lastIndexOf('.');
+    final ending = dot < 0 ? '' : f.name.substring(dot + 1).toLowerCase();
+    return _byEnding[ending] ??
+        switch (f.kind) { 'audio' => _song, 'video' => _film, 'image' => _picture, 'pdf' => _pdf, 'text' => _note, _ => _other };
+  }
 
   @override
   Widget build(BuildContext context) {
     final h = width * 48 / 68;
     Widget tile() {
-      final (icon, colors) = _icons[file.kind] ?? _icons['file']!;
-      return Container(color: _N.card, child: Center(child: _GradientIcon(icon, colors, h * 0.52)));
+      // The tile carries the kind's colour and the glyph sits white on it, as the app icons do.
+      final (icon, colors) = iconFor(file);
+      return Container(
+        decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: colors)),
+        child: Center(
+          child: Icon(icon, size: h * 0.56, color: Colors.white, shadows: const [Shadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))]),
+        ),
+      );
     }
 
     return ClipRRect(
@@ -696,7 +764,7 @@ class _FileRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final when = file.modified.millisecondsSinceEpoch == 0 ? '' : DateFormat('d MMM, HH:mm').format(file.modified);
-    final meta = [_size(file.size), when].where((s) => s.isNotEmpty).join('  ·  ');
+    final meta = [file.model, _size(file.size), when].where((s) => s.isNotEmpty).join('  ·  ');
     return VPress(
       onTap: onTap,
       child: Padding(

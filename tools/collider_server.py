@@ -912,7 +912,7 @@ def save_reports(job):
         if r.get("status") != "done" or not r.get("text"):
             continue
         try:
-            r["file"] = FILES.save_generated(f"{kind} - {words} - {LABEL.get(mid, mid)}.md", report_text(r["text"], job.get("sources")))
+            r["file"] = FILES.save_generated(f"{kind} - {words} - {LABEL.get(mid, mid)}.md", report_text(r["text"], job.get("sources")), LABEL.get(mid, mid))
         except Exception as e:
             print("report save failed", mid, e)
 
@@ -1286,7 +1286,7 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/fetch":
             return self._fetch()
         if p == "/api/files":
-            return self._json(FILES.listing())
+            return self._json(FILES.listing(list(LABEL.values())))
         if p.startswith("/files/"):
             return self._file(p)
         static = self.translate_path(self.path)
@@ -1407,16 +1407,16 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"name": FILES.save_upload(b.get("name", "file"), b.get("b64", ""))})
             if p == "/api/files/generated":
                 b = self._body()
-                return self._json({"name": FILES.save_generated(b.get("name", "note.md"), b.get("text", ""))})
+                return self._json({"name": FILES.save_generated(b.get("name", "note.md"), b.get("text", ""), b.get("model", ""))})
             if p == "/api/transcribe":
                 b = self._body()
                 return self._json({"text": transcribe(base64.b64decode(b.get("b64", "")), b.get("mime", "audio/webm"))})
             if p == "/api/files/save":
                 b = self._body()
-                return self._json({"name": FILES.save_bytes(b.get("name", "document.docx"), b.get("b64", ""), b.get("replace", ""))})
+                return self._json({"name": FILES.save_bytes(b.get("name", "document.docx"), b.get("b64", ""), b.get("replace", ""), "Documents")})
             if p == "/api/files/pdf":
                 b = self._body()
-                name = FILES.print_pdf(b.get("name", "document.pdf"), b.get("html", ""), b.get("replace", ""))
+                name = FILES.print_pdf(b.get("name", "document.pdf"), b.get("html", ""), b.get("replace", ""), "Documents")
                 return self._json({"name": name} if name else {"error": "pdf"}, 200 if name else 500)
             if p == "/api/files/download":
                 url = self._body().get("url", "")

@@ -141,7 +141,8 @@ class ColliderFile {
   final String kind; // image | audio | video | pdf | text | file
   final String url; // server path, or a bundled asset path when [asset] is true
   final bool asset;
-  const ColliderFile(this.name, this.source, this.size, this.modified, this.kind, this.url, {this.asset = false});
+  final String model; // in Generated: the model (or Documents) that made it; '' when not known
+  const ColliderFile(this.name, this.source, this.size, this.modified, this.kind, this.url, {this.asset = false, this.model = ''});
   factory ColliderFile.fromJson(Map<String, dynamic> j) => ColliderFile(
         j['name'] as String,
         j['source'] as String,
@@ -149,6 +150,7 @@ class ColliderFile {
         DateTime.fromMillisecondsSinceEpoch((((j['modified'] as num?) ?? 0) * 1000).toInt()),
         j['kind'] as String? ?? 'file',
         j['url'] as String,
+        model: '${j['model'] ?? ''}',
       );
 }
 
@@ -246,9 +248,9 @@ class ColliderApi {
   }
 
   /// Saves model output as a file in Files > Generated.
-  Future<String?> saveGenerated(String name, String text) async {
+  Future<String?> saveGenerated(String name, String text, {String model = ''}) async {
     try {
-      final r = await _dio.post('$_base/api/files/generated', data: {'name': name, 'text': text});
+      final r = await _dio.post('$_base/api/files/generated', data: {'name': name, 'text': text, 'model': model});
       cachedFiles = null;
       return r.data['name'] as String?;
     } catch (_) {

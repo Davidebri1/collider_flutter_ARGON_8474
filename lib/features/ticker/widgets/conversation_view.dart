@@ -107,7 +107,7 @@ class _ConversationViewState extends State<ConversationView> {
 
   Future<void> _save(TickerMessage m) async {
     final words = m.text.replaceAll(RegExp(r'[#*_`>\[\]\n]'), ' ').trim().split(RegExp(r'\s+')).take(6).join(' ');
-    final name = await ColliderApi.instance.saveGenerated('${widget.item.modelDef.label} - $words.md', m.text);
+    final name = await ColliderApi.instance.saveGenerated('${widget.item.modelDef.label} - $words.md', m.text, model: widget.item.modelDef.label);
     if (mounted) _toast(name == null ? 'Not saved' : 'Saved to Files');
   }
 
