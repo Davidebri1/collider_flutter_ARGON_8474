@@ -5,7 +5,7 @@ data\\collider_config.json, which the launch window shows and saves (collider_co
 leave this computer and the app only talks to this server.
 Run:  python tools/collider_server.py   (asks nothing; uses the saved host number, or a free one)
 """
-import json, mimetypes, os, re, sys, threading, time, uuid, urllib.request, urllib.error, webbrowser
+import base64, json, mimetypes, os, re, sys, threading, time, uuid, urllib.request, urllib.error, webbrowser
 import concurrent.futures as cf
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
@@ -187,6 +187,8 @@ def _extend_roster():
     del ROSTER[_BUILT_IN:]
     known = {m["id"] for m in ROSTER}
     for r in rows(search=False):
+        if ccfg.is_speech(r):
+            continue
         for mid in ccfg.models_of(r):
             if mid in known:
                 continue
@@ -197,8 +199,32 @@ def _extend_roster():
             LABEL[mid] = label
 
 
+def transcribe(audio, mime):
+    """Voice chat: speech to text with the speech provider in the configuration (Claude, 2026-10-20)."""
+    ok = [r for r in rows() if ccfg.is_speech(r)]
+    if not ok or not audio:
+        return ""
+    with _turn_lock:
+        _turn["speech"] = (_turn.get("speech", -1) + 1) % len(ok)
+        row = ok[_turn["speech"]]
+    ext = {"audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a", "audio/wav": "wav", "audio/mpeg": "mp3"}.get(mime.split(";")[0], "webm")
+    bnd = "----collider" + uuid.uuid4().hex
+    model = (ccfg.models_of(row) or [ccfg.SPEECH_MODEL])[0]
+    body = (f"--{bnd}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n{model}\r\n"
+            f"--{bnd}\r\nContent-Disposition: form-data; name=\"response_format\"\r\n\r\njson\r\n"
+            f"--{bnd}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.{ext}\"\r\n"
+            f"Content-Type: {mime.split(';')[0]}\r\n\r\n").encode() + audio + f"\r\n--{bnd}--\r\n".encode()
+    req = urllib.request.Request(row["endpoint"], data=body, headers={
+        "Authorization": "Bearer " + row["key"].strip(), "Content-Type": "multipart/form-data; boundary=" + bnd,
+        "Accept": "application/json", "User-Agent": "Collider/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return (json.loads(r.read()).get("text") or "").strip()
+
+
 def uses(row):
     """Where in the app a provider row is read, for the launch window."""
+    if ccfg.is_speech(row):
+        return "Voice chat: what is said, turned into text (/api/transcribe)"
     if ccfg.is_search(row):
         return "Web sources for Internet, Research and Deep Research (/api/ask); search answers in the browser (/api/page)"
     name = (row.get("name") or "").strip()
@@ -1382,6 +1408,16 @@ class Handler(SimpleHTTPRequestHandler):
             if p == "/api/files/generated":
                 b = self._body()
                 return self._json({"name": FILES.save_generated(b.get("name", "note.md"), b.get("text", ""))})
+            if p == "/api/transcribe":
+                b = self._body()
+                return self._json({"text": transcribe(base64.b64decode(b.get("b64", "")), b.get("mime", "audio/webm"))})
+            if p == "/api/files/save":
+                b = self._body()
+                return self._json({"name": FILES.save_bytes(b.get("name", "document.docx"), b.get("b64", ""), b.get("replace", ""))})
+            if p == "/api/files/pdf":
+                b = self._body()
+                name = FILES.print_pdf(b.get("name", "document.pdf"), b.get("html", ""), b.get("replace", ""))
+                return self._json({"name": name} if name else {"error": "pdf"}, 200 if name else 500)
             if p == "/api/files/download":
                 url = self._body().get("url", "")
                 code, final, headers, data = cfiles.fetch(url)

@@ -29,6 +29,8 @@ import 'features/market/screens/market_screen.dart';
 import 'features/upgrade/screens/upgrade_screen.dart';
 import 'features/skills/screens/skills_screen.dart';
 import 'features/files/screens/files_screen.dart';
+import 'features/documents/documents_screen.dart';
+import 'core/voice/voice.dart';
 import 'features/browser/models/browser_tab.dart';
 import 'features/browser/screens/in_app_browser_sheet.dart';
 import 'features/theme/premium_theme_market_view.dart';
@@ -157,6 +159,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
   String _filesPlace = 'home'; // where Files opens: Home, or Music when the Music Player is asked for
+  String? _docUrl; // the file Documents opens (Claude, 2026-10-20); null for a new document
+  bool _voiceChat = false; // Voice Chat (Claude, 2026-10-20): speak, the models answer, the answer is read aloud
+  String _voicePhase = ''; // listening, thinking, speaking, or '' waiting for a tap
+  String? _docName;
   String _chatSection = 'history';
 
   /// The rail ornament shows on the resting canvas and durable work surfaces only.
@@ -464,6 +470,63 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     _requestSwitchSurface(drawer);
   }
 
+  /// Documents: a new document, or [url] (as the server serves it) opened for editing.
+  void _openDocument([String? url, String? name]) {
+    _docUrl = url;
+    _docName = name;
+    _requestSwitchSurface('documents');
+  }
+
+  /// Voice Chat on or off. On, it listens at once.
+  void _setVoiceChat(bool on) {
+    setState(() {
+      _voiceChat = on;
+      _voicePhase = '';
+    });
+    if (on) {
+      _voiceTurn();
+    } else {
+      Voice.instance.cancelListening();
+      Voice.instance.stopSpeaking();
+    }
+  }
+
+  /// One turn: listen until the speaker stops, ask every model, read the consensus aloud, then listen again.
+  /// When nothing is said it waits for a tap on the microphone.
+  Future<void> _voiceTurn() async {
+    if (!_voiceChat || _voicePhase.isNotEmpty || _busy) return;
+    setState(() => _voicePhase = 'listening');
+    final said = await Voice.instance.listen();
+    if (!mounted || !_voiceChat) return;
+    if (said == null) {
+      setState(() => _voicePhase = '');
+      return;
+    }
+    setState(() => _voicePhase = 'thinking');
+    await _onSendPrompt(said);
+    if (!mounted || !_voiceChat) return;
+    final j = _currentJobId == null ? null : _jobsById[_currentJobId];
+    final answer = (j?.consensus.summary.isNotEmpty ?? false) ? j!.consensus.summary : _consensusSummary;
+    if (answer.isNotEmpty && answer != 'No answer') {
+      setState(() => _voicePhase = 'speaking');
+      await Voice.instance.speak(answer);
+    }
+    if (!mounted || !_voiceChat) return;
+    setState(() => _voicePhase = '');
+    _voiceTurn();
+  }
+
+  void _onMic() {
+    switch (_voicePhase) {
+      case 'listening':
+        Voice.instance.finishListening();
+      case 'speaking':
+        Voice.instance.stopSpeaking();
+      case '':
+        _voiceTurn();
+    }
+  }
+
   /// The Music Player: the music in Files, played by the music bar.
   void _openMusic() {
     _filesPlace = 'music';
@@ -607,7 +670,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     };
     setState(() {
       _busy = true;
-      _isComposerSummoned = false;
+      _isComposerSummoned = _voiceChat; // in Voice Chat the composer stays, its button is the microphone
       _closeAllPanes();
       _currentPrompt = prompt;
       _promptTime = now;
@@ -1043,6 +1106,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         onMode: (m) => setState(() => _mode = m),
                         onIncognito: (v) => setState(() => _incognito = v),
                         onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
+                        voice: _voiceChat ? _voicePhase : null,
+                        onVoiceChat: _setVoiceChat,
+                        onMic: _onMic,
                         continuingTitle: (_tickerItems.isNotEmpty && _currentJobId != null) ? _currentPrompt : null,
                         onNewConversation: _newConversation,
                         onSummon: () => setState(() {
@@ -1070,6 +1136,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 onOpenThemeGallery: () => _requestSwitchSurface('themes'),
                 onOpenPremiumMarketplace: () => _requestSwitchSurface('premium'),
                 onOpenFiles: () => _openDrawer('files'),
+                onOpenDocuments: () => _openDocument(),
                 onOpenMusicPlayer: _openMusic,
                 onOpenBrowser: () => _openBrowserForTab('user_default'),
               ),
@@ -1184,7 +1251,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
 
           // Durable work surfaces sit over one shared scrim (kit overlay + cached blur).
-          if (_activeDrawer == 'smartgen' || _activeDrawer == 'market' || _activeDrawer == 'files')
+          if (_activeDrawer == 'smartgen' || _activeDrawer == 'market' || _activeDrawer == 'files' || _activeDrawer == 'documents')
             const Positioned.fill(child: VScrim()),
 
           if (_activeDrawer == 'smartgen')
@@ -1236,6 +1303,21 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               child: FilesScreen(
                 key: ValueKey('files-$_filesPlace'),
                 initialPlace: _filesPlace,
+                onClose: () => _requestSwitchSurface(null),
+                onOpenDocument: (url, name) => _openDocument(url, name),
+              ),
+            ),
+
+          if (_activeDrawer == 'documents')
+            Positioned(
+              left: desktopSurfaceLeft,
+              right: 0,
+              top: 0,
+              bottom: 78,
+              child: DocumentsScreen(
+                key: ValueKey('documents-$_docUrl'),
+                fileUrl: _docUrl,
+                fileName: _docName,
                 onClose: () => _requestSwitchSurface(null),
               ),
             ),

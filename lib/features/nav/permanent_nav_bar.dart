@@ -34,7 +34,8 @@ class PermanentNavBar extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(shape: BoxShape.circle, color: selected ? const Color(0x29FFFFFF) : Colors.transparent),
             alignment: Alignment.center,
-            child: Icon(icon, size: 22, color: selected ? const Color(0xF5FFFFFF) : const Color(0x99FFFFFF)),
+            // each in its own colour (Claude, 2026-10-20), full when it is the current one
+            child: Icon(icon, size: 22, color: (vHueFor(icon) ?? Colors.white).withValues(alpha: selected ? 1.0 : 0.78)),
           ),
         ),
       );

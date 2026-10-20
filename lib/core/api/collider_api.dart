@@ -234,6 +234,17 @@ class ColliderApi {
     }
   }
 
+  /// Voice chat (Claude, 2026-10-20): recorded speech in, its words out.
+  Future<String?> transcribe(List<int> bytes, String mime) async {
+    try {
+      final r = await _dio.post('$_base/api/transcribe', data: {'b64': base64Encode(bytes), 'mime': mime});
+      final t = r.data['text'];
+      return t is String ? t.trim() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Saves model output as a file in Files > Generated.
   Future<String?> saveGenerated(String name, String text) async {
     try {

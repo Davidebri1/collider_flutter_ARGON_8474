@@ -82,7 +82,10 @@ class FilesScreen extends StatefulWidget {
 
   /// Where it opens: 'home', or 'music' when the Music Player is asked for.
   final String initialPlace;
-  const FilesScreen({super.key, required this.onClose, this.initialPlace = 'home'});
+
+  /// A Word, PDF, Markdown, web page or text file opens in Documents for editing (Claude, 2026-10-20).
+  final void Function(String url, String name)? onOpenDocument;
+  const FilesScreen({super.key, required this.onClose, this.initialPlace = 'home', this.onOpenDocument});
 
   @override
   State<FilesScreen> createState() => _FilesScreenState();
@@ -169,6 +172,12 @@ class _FilesScreenState extends State<FilesScreen> {
     final song = v.file == null ? null : _songs[v.file!];
     if (song != null) {
       MusicPlayer.instance.play(song.$2, list: MusicPlayer.forTheme(song.$1), id: song.$1.id);
+      return;
+    }
+    final f = v.file;
+    if (f != null && !f.asset && widget.onOpenDocument != null &&
+        RegExp(r'\.(docx|pdf|md|markdown|html?|txt)$', caseSensitive: false).hasMatch(f.name)) {
+      widget.onOpenDocument!(f.url, f.name);
       return;
     }
     setState(() {

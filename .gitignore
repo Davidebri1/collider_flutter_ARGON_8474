@@ -18,3 +18,11 @@
 !/README_CLAUDE.md
 __pycache__/
 *.log
+/dev/editor/node_modules/
+/dev/editor/test_out/
+/dev/editor/*.log
+/dev/editor/src/pdf_worker_source.js
+/dev/editor/src/symbols_font.js
+/dev/probe_out/
+/dev/*.log
+/dev/build_log.txt

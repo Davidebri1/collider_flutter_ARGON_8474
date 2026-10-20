@@ -269,7 +269,15 @@ def _launch_window():
         y = int((top + (area_h - height * scale) / 2) / scale)
         _WIN = webview.create_window("Collider", html=html, js_api=Api(), width=width, height=height, x=x, y=y,
                                            min_size=(360, 480), background_color="#0B0D12")
-        webview.start(private_mode=False, storage_path=os.path.join(DATA, "window"))
+        # The right-click menu is on so a misspelt word in Documents shows its suggestions (Claude, 2026-10-20);
+        # the developer tools stay closed.
+        debug = False
+        try:
+            webview.settings["OPEN_DEVTOOLS_IN_DEBUG"] = False
+            debug = True
+        except Exception:
+            pass
+        webview.start(private_mode=False, storage_path=os.path.join(DATA, "window"), debug=debug)
         return True
     except Exception as e:
         _log("window:", repr(e))

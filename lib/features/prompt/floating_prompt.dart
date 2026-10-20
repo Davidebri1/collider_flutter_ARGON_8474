@@ -10,6 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../core/api/collider_api.dart';
 import '../../core/vision/vision_kit.dart';
+import '../../core/voice/voice.dart';
 
 class FloatingPrompt extends StatefulWidget {
   final bool summoned;
@@ -24,6 +25,11 @@ class FloatingPrompt extends StatefulWidget {
   final String? continuingTitle;
   final VoidCallback? onNewConversation;
 
+  /// Voice chat (Claude, 2026-10-20): null when it is off, else 'listening', 'thinking', 'speaking' or '' (waiting).
+  final String? voice;
+  final ValueChanged<bool>? onVoiceChat;
+  final VoidCallback? onMic;
+
   const FloatingPrompt({
     super.key,
     required this.summoned,
@@ -37,6 +43,9 @@ class FloatingPrompt extends StatefulWidget {
     this.busy = false,
     this.continuingTitle,
     this.onNewConversation,
+    this.voice,
+    this.onVoiceChat,
+    this.onMic,
   });
 
   @override
@@ -144,6 +153,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
           onTap: widget.onNewConversation!,
         ),
       if (widget.mode != AskMode.chat) VChip(label: widget.mode.label, selected: true, onTap: () => widget.onMode(AskMode.chat)),
+      if (widget.voice != null) VChip(label: 'Voice Chat', selected: true, onTap: () => widget.onVoiceChat?.call(false)),
       if (widget.incognito) VChip(label: 'Private', selected: true, onTap: () => widget.onIncognito(false)),
       for (final f in _files) VChip(label: f.length > 22 ? '${f.substring(0, 21)}…' : f, selected: true, onTap: () => setState(() => _files.remove(f))),
     ];
@@ -221,7 +231,12 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: _SendButton(busy: widget.busy, onTap: _submit)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: widget.voice != null && widget.onMic != null
+                            ? _MicButton(phase: widget.voice!, busy: widget.busy, onTap: () => _ctrl.text.trim().isEmpty ? widget.onMic!() : _submit())
+                            : _SendButton(busy: widget.busy, onTap: _submit),
+                      ),
                     ],
                   ),
                 ),
@@ -253,6 +268,16 @@ class _FloatingPromptState extends State<FloatingPrompt> {
           _Option(icon: Icons.attach_file_rounded, label: 'Attach', onTap: _attach),
           for (final m in AskMode.values.where((m) => m != AskMode.chat))
             _Option(icon: m.icon, label: m.label, on: widget.mode == m, onTap: () => widget.onMode(widget.mode == m ? AskMode.chat : m)),
+          if (widget.onVoiceChat != null && Voice.instance.supported)
+            _Option(
+              icon: Icons.mic_rounded,
+              label: 'Voice Chat',
+              on: widget.voice != null,
+              onTap: () {
+                setState(() => _options = false);
+                widget.onVoiceChat!(widget.voice == null);
+              },
+            ),
           _Option(icon: Icons.visibility_off_outlined, label: 'Private', on: widget.incognito, onTap: () => widget.onIncognito(!widget.incognito)),
         ],
       ),
@@ -281,11 +306,56 @@ class _Option extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, size: 16, color: on ? VColors.textPrimary : VColors.textSecondary),
+            Icon(icon, size: 16, color: vHueFor(icon) ?? (on ? VColors.textPrimary : VColors.textSecondary)),
             const SizedBox(width: 10),
             Expanded(child: Text(label, maxLines: 1, style: VType.callout(weight: FontWeight.w500))),
             if (on) const Icon(Icons.check_rounded, size: 16, color: VColors.textPrimary),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Voice chat's button in place of Send: red and swelling with the voice while listening, a spinner while the
+/// models answer, sound bars while the answer is read; a tap ends listening, or stops the reading, or listens.
+class _MicButton extends StatelessWidget {
+  final String phase;
+  final bool busy;
+  final VoidCallback onTap;
+  const _MicButton({required this.phase, required this.busy, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final listening = phase == 'listening';
+    return VPress(
+      onTap: onTap,
+      child: ValueListenableBuilder<double>(
+        valueListenable: Voice.instance.level,
+        builder: (_, level, __) => SizedBox(
+          width: 26,
+          height: 26,
+          child: Stack(alignment: Alignment.center, clipBehavior: Clip.none, children: [
+            if (listening)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 80),
+                width: 26 + 14 * level,
+                height: 26 + 14 * level,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: VHue.red.withValues(alpha: 0.28)),
+              ),
+            AnimatedContainer(
+              duration: VMotion.base,
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(color: listening ? VHue.red : VColors.fillActive, shape: BoxShape.circle),
+              child: Center(
+                child: busy || phase == 'thinking'
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Icon(phase == 'speaking' ? Icons.graphic_eq_rounded : Icons.mic_rounded, size: 15,
+                        color: phase == 'speaking' ? VHue.red : Colors.white),
+              ),
+            ),
+          ]),
         ),
       ),
     );

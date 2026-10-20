@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import '../media/theme_blur_cache.dart';
 import '../theme/edge_fade.dart';
 import 'vision_tokens.dart';
+import 'hues.dart';
 
 export 'vision_tokens.dart';
+export 'hues.dart';
 export '../theme/edge_fade.dart';
 export 'md_text.dart';
 
@@ -291,7 +293,7 @@ class VCircleButton extends StatelessWidget {
       child: Icon(
         icon,
         size: size * 0.46,
-        color: iconColor ?? (selected ? VColors.textPrimary : VColors.textSecondary),
+        color: iconColor ?? vHueFor(icon) ?? (selected ? VColors.textPrimary : VColors.textSecondary),
       ),
     );
     final body = floating
@@ -1166,7 +1168,7 @@ Future<void> showVMenu(BuildContext context, Offset at, List<VMenuItem> items, {
                       child: Row(
                         children: [
                           if (it.icon != null) ...[
-                            Icon(it.icon, size: 16, color: VColors.textSecondary),
+                            Icon(it.icon, size: 16, color: vHueFor(it.icon!) ?? VColors.textSecondary),
                             const SizedBox(width: 10),
                           ],
                           Text(it.label, maxLines: 1, softWrap: false, style: VType.callout(weight: FontWeight.w500)),

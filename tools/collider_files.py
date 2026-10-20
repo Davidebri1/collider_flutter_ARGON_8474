@@ -83,6 +83,45 @@ class Files:
             f.write(text)
         return os.path.basename(p)
 
+    def _target(self, name, replace):
+        """Where an edited document is written: over the copy the editor itself saved earlier, else a new file.
+        Uploaded and downloaded originals are never written over."""
+        if replace:
+            p = os.path.join(self.root, "generated", self.safe_name(replace))
+            if os.path.isfile(p) and os.path.splitext(p)[1].lower() == os.path.splitext(self.safe_name(name))[1].lower():
+                return p
+        return self.unique_path("generated", name)
+
+    def save_bytes(self, name, b64, replace=""):
+        p = self._target(name, replace)
+        with open(p, "wb") as f:
+            f.write(base64.b64decode(b64))
+        return os.path.basename(p)
+
+    def print_pdf(self, name, html, replace=""):
+        """Writes a document as PDF with Microsoft Edge (part of Windows), which keeps the text real and sharp."""
+        import shutil, subprocess, tempfile
+        edge = shutil.which("msedge") or next((p for p in (
+            os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
+            os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
+            os.path.expandvars(r"%LocalAppData%\Microsoft\Edge\Application\msedge.exe")) if os.path.isfile(p)), None)
+        if not edge:
+            return None
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = os.path.join(tmp, "page.html"), os.path.join(tmp, "page.pdf")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write(html)
+            subprocess.run([edge, "--headless=new", "--disable-gpu", "--no-first-run", "--no-pdf-header-footer",
+                            "--user-data-dir=" + os.path.join(tmp, "profile"), "--print-to-pdf=" + out,
+                            "file:///" + src.replace("\\", "/")],
+                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=90, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            if not os.path.isfile(out) or os.path.getsize(out) == 0:
+                return None
+            p = self._target(name, replace)
+            shutil.copyfile(out, p)
+        return os.path.basename(p)
+
     def save_download(self, name, data):
         p = self.unique_path("downloaded", name)
         with open(p, "wb") as f:
