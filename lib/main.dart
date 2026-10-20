@@ -162,6 +162,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   String? _docUrl; // the file Documents opens (Claude, 2026-10-20); null for a new document
   bool _voiceChat = false; // Voice Chat (Claude, 2026-10-20): speak, the models answer, the answer is read aloud
   String _voicePhase = ''; // listening, thinking, speaking, or '' waiting for a tap
+  bool _musicHeldForVoice = false; // the music bar was playing when Voice Chat came on
   String? _docName;
   String _chatSection = 'history';
 
@@ -433,7 +434,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void _initializeBrowserTabs() {
     // One user tab; research sources are added as tabs when a question uses the web.
     _browserTabs = [
-      BrowserTab(id: 'user_default', title: 'Search', url: 'https://www.bing.com/', isUserControlling: true),
+      BrowserTab(id: 'user_default', title: 'Search', url: 'https://html.duckduckgo.com/html/', isUserControlling: true),
     ];
   }
 
@@ -483,11 +484,16 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _voiceChat = on;
       _voicePhase = '';
     });
+    final music = MusicPlayer.instance;
     if (on) {
+      _musicHeldForVoice = music.playing;
+      if (music.playing) music.toggle();
       _voiceTurn();
     } else {
       Voice.instance.cancelListening();
       Voice.instance.stopSpeaking();
+      if (_musicHeldForVoice && !music.playing) music.toggle();
+      _musicHeldForVoice = false;
     }
   }
 
@@ -988,6 +994,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           Flexible(
             child: EdgeFade(
               fadeHeight: 40,
+              focus: FadeFocus.top,
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Column(

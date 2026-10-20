@@ -17,7 +17,7 @@ with open(LOG, "w", encoding="utf-8") as log:
                     os.path.join(W, "web", "icons", "Icon-512.png"), ico], stdout=log, stderr=log, stdin=subprocess.DEVNULL)
     code = subprocess.run([PY, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--name", "Collider", "--windowed",
                            "--icon", ico, "--paths", os.path.join(W, "tools"),
-                           "--hidden-import", "collider_server", "--hidden-import", "collider_files", "--hidden-import", "collider_config",
+                           "--hidden-import", "collider_server", "--hidden-import", "collider_files", "--hidden-import", "collider_config", "--hidden-import", "collider_thumbs",
                            "--add-data", f"{web};web", "--distpath", os.path.join(X, "dist"), "--workpath", os.path.join(X, "work"),
                            "--specpath", X, os.path.join(W, "tools", "collider_app.py")],
                           stdout=log, stderr=log, stdin=subprocess.DEVNULL, cwd=X).returncode

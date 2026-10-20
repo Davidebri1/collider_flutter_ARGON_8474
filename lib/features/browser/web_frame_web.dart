@@ -52,6 +52,12 @@ class _WebFrameState extends State<WebFrame> {
       ..style.background = 'white';
     // A page may run its scripts and forms but may never replace the app around it.
     _el.style.setProperty('zoom', '${widget.zoom}');
+    // The page recedes at the window's lower edge, where it runs on, over an eased ramp (Claude, 2026-10-20).
+    // The app cannot fade inside a web page with its own masks, so the frame itself carries the mask.
+    const mask = 'linear-gradient(to bottom, #000 0, #000 calc(100% - 56px), rgba(0,0,0,.86) calc(100% - 40px), '
+        'rgba(0,0,0,.58) calc(100% - 24px), rgba(0,0,0,.24) calc(100% - 10px), transparent 100%)';
+    _el.style.setProperty('mask-image', mask);
+    _el.style.setProperty('-webkit-mask-image', mask);
     _el.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups');
     ui_web.platformViewRegistry.registerViewFactory(_type, (int _) => _el);
     _listener = ((web.Event e) {

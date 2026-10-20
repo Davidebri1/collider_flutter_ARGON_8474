@@ -25,6 +25,9 @@ let n = 0;
 for (const s of steps) {
   const [k, a, b] = s;
   if (k === 'click') await page.mouse.click(a, b);
+  else if (k === 'move') await page.mouse.move(a, b, { steps: 6 });
+  else if (k === 'down') { await page.mouse.move(a, b); await page.mouse.down(); }
+  else if (k === 'up') await page.mouse.up();
   else if (k === 'wait') await page.waitForTimeout(a);
   else if (k === 'type') await page.keyboard.type(a, { delay: 20 });
   else if (k === 'key') await page.keyboard.press(a);

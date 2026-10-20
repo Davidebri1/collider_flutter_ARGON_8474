@@ -12,6 +12,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import collider_files as cfiles
 import collider_config as ccfg
+import collider_thumbs as cthumbs
 
 # Set by setup(): the launch window passes the folder, the built app, the data folder and the host number.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +20,7 @@ WEB = os.path.join(ROOT, "build", "web")
 DATA = os.path.join(ROOT, "data")
 PORT = 0
 FILES = None
+THUMBS = None
 HIST = ""
 SMARTGEN_FILE = ""
 CONFIG = {"providers": []}
@@ -30,10 +32,11 @@ _smartgen_mem = None
 
 def setup(root, web, data, port, config):
     """Points the server at its folders, host number and configuration. Called once before serving."""
-    global ROOT, WEB, DATA, PORT, FILES, HIST, SMARTGEN_FILE, CONFIG, _history_mem, _smartgen_mem
+    global ROOT, WEB, DATA, PORT, FILES, THUMBS, HIST, SMARTGEN_FILE, CONFIG, _history_mem, _smartgen_mem
     ROOT, WEB, DATA, PORT, CONFIG = root, web, data, int(port), config
     os.makedirs(DATA, exist_ok=True)
     FILES = cfiles.Files(DATA)
+    THUMBS = cthumbs.Thumbs(FILES.root)
     HIST = os.path.join(DATA, "history.json")
     SMARTGEN_FILE = os.path.join(DATA, "smartgen_cards.json")
     if apply_settings(CONFIG):
@@ -1285,6 +1288,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._page()
         if p == "/api/fetch":
             return self._fetch()
+        if p == "/api/files/thumb":
+            return self._thumb()
         if p == "/api/files":
             return self._json(FILES.listing(list(LABEL.values())))
         if p.startswith("/files/"):
@@ -1293,6 +1298,22 @@ class Handler(SimpleHTTPRequestHandler):
         if self.headers.get("Range") and os.path.isfile(static) and self._part(static):
             return
         return super().do_GET()
+
+    def _thumb(self):
+        """A preview picture of one file in Files (collider_thumbs); 404 when it has nothing of its own to show."""
+        from urllib.parse import urlparse, parse_qs
+        q = parse_qs(urlparse(self.path).query)
+        path = FILES.path_for((q.get("source") or [""])[0], (q.get("name") or [""])[0])
+        out = THUMBS.path_for(path) if path else None
+        if not out:
+            return self._send(404, "text/plain", b"")
+        data = open(out, "rb").read()
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Cache-Control", "max-age=3600")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def _part(self, path):
         """Sound and video jump to a point in the file by asking for part of it."""
@@ -1346,7 +1367,10 @@ class Handler(SimpleHTTPRequestHandler):
     def _target(self):
         from urllib.parse import urlparse, parse_qs
         url = (parse_qs(urlparse(self.path).query).get("url") or [""])[0]
-        return url if re.match(r"^https?://", url) else "https://" + url
+        url = url if re.match(r"^https?://", url) else "https://" + url
+        # DuckDuckGo's script page meets the loader with a bot puzzle; its HTML page gives the same results.
+        m = re.match(r"^https?://(?:www\.)?duckduckgo\.com/\?(.*)$", url)
+        return "https://html.duckduckgo.com/html/?" + m.group(1) if m else url
 
     def _mobile(self):
         """The app says in a cookie when its window is phone-sized; sites are then asked for their phone pages."""

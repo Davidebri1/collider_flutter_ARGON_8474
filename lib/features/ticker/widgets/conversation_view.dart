@@ -173,6 +173,7 @@ class _ConversationViewState extends State<ConversationView> {
         Flexible(
           child: EdgeFade(
             fadeHeight: 16,
+            focus: FadeFocus.bottom, // the newest message is at the bottom; older ones recede upwards
             child: ListView.builder(
               controller: _scroll,
               shrinkWrap: true,

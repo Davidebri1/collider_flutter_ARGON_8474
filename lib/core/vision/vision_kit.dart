@@ -221,34 +221,105 @@ class VPress extends StatefulWidget {
   State<VPress> createState() => _VPressState();
 }
 
-class _VPressState extends State<VPress> {
+/// Light on a control (Claude, 2026-10-20), after Apple's visionOS "Look Glow" (the Default Action hover layer in
+/// Apple's visionOS kit, the Sketch file David linked: white at 15%, added onto the glass, softly blurred, sitting where
+/// the eyes are). The pointer brings it on a desktop; a press brings it brighter, where the finger lands, on any device,
+/// since phones have no hover. The control's own label and glyph never change; only the light on it does.
+class _GlowPainter extends CustomPainter {
+  final ValueNotifier<Offset?> at;
+  final Animation<double> amount;
+  _GlowPainter(this.at, this.amount) : super(repaint: Listenable.merge([at, amount]));
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final a = amount.value;
+    if (a <= 0.001 || size.isEmpty) return;
+    final c = at.value ?? size.center(Offset.zero);
+    final r = (size.longestSide * 0.7).clamp(22.0, 180.0);
+    final radius = Radius.circular((size.shortestSide / 2).clamp(0.0, 22.0));
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(Offset.zero & size, radius));
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..shader = RadialGradient(
+          colors: [Colors.white.withValues(alpha: 0.2 * a), Colors.white.withValues(alpha: 0.07 * a), Colors.white.withValues(alpha: 0)],
+          stops: const [0, 0.45, 1],
+        ).createShader(Rect.fromCircle(center: c, radius: r)),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_GlowPainter old) => false;
+}
+
+class _VPressState extends State<VPress> with SingleTickerProviderStateMixin {
   bool _down = false;
+  bool _over = false;
+  final ValueNotifier<Offset?> _at = ValueNotifier(null);
+  late final AnimationController _glow = AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
+
+  void _light() => _glow.animateTo(_down ? 1.0 : (_over ? 0.6 : 0.0),
+      duration: Duration(milliseconds: _down ? 90 : 320), curve: _down ? Curves.easeOut : Curves.easeOutCubic);
+
+  @override
+  void dispose() {
+    _glow.dispose();
+    _at.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onTap != null;
     Widget w = MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onEnter: enabled
+          ? (e) {
+              _over = true;
+              _at.value = e.localPosition;
+              _light();
+            }
+          : null,
+      onHover: enabled ? (e) => _at.value = e.localPosition : null,
+      onExit: enabled
+          ? (_) {
+              _over = false;
+              _light();
+            }
+          : null,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
         onTapDown: enabled
-            ? (_) {
+            ? (d) {
+                _at.value = d.localPosition;
                 setState(() => _down = true);
+                _light();
                 HapticFeedback.selectionClick();
               }
             : null,
-        onTapUp: enabled ? (_) => setState(() => _down = false) : null,
-        onTapCancel: enabled ? () => setState(() => _down = false) : null,
+        onTapUp: enabled
+            ? (_) {
+                setState(() => _down = false);
+                _light();
+              }
+            : null,
+        onTapCancel: enabled
+            ? () {
+                setState(() => _down = false);
+                _light();
+              }
+            : null,
+        // pressed in quickly, sprung back out with a slight overshoot, as a physical key would
         child: AnimatedScale(
           scale: _down ? VMotion.pressedScale : 1,
-          duration: VMotion.fast,
-          curve: Curves.easeOutCubic,
-          child: AnimatedOpacity(
-            opacity: _down ? VMotion.pressedOpacity : 1,
-            duration: VMotion.fast,
-            child: widget.child,
-          ),
+          duration: _down ? VMotion.fast : const Duration(milliseconds: 340),
+          curve: _down ? Curves.easeOutCubic : Curves.easeOutBack,
+          child: CustomPaint(foregroundPainter: _GlowPainter(_at, _glow), child: widget.child),
         ),
       ),
     );
@@ -1027,7 +1098,8 @@ class VFadeScroll extends StatelessWidget {
   final double fade;
   final EdgeInsetsGeometry padding;
   final Axis axis;
-  const VFadeScroll({super.key, required this.child, this.fade = 18, this.padding = EdgeInsets.zero, this.axis = Axis.vertical});
+  final FadeFocus focus;
+  const VFadeScroll({super.key, required this.child, this.fade = 18, this.padding = EdgeInsets.zero, this.axis = Axis.vertical, this.focus = FadeFocus.top});
 
   @override
   Widget build(BuildContext context) {
@@ -1037,20 +1109,7 @@ class VFadeScroll extends StatelessWidget {
       padding: padding,
       child: child,
     );
-    if (axis == Axis.horizontal) {
-      return ShaderMask(
-        blendMode: BlendMode.dstIn,
-        shaderCallback: (rect) {
-          final f = (fade / (rect.width <= 0 ? 1 : rect.width)).clamp(0.0, 0.3);
-          return LinearGradient(
-            colors: const [Color(0x00FFFFFF), Colors.white, Colors.white, Color(0x00FFFFFF)],
-            stops: [0, f, 1 - f, 1],
-          ).createShader(rect);
-        },
-        child: scroll,
-      );
-    }
-    return EdgeFade(fadeHeight: fade, child: scroll);
+    return EdgeFade(fadeHeight: fade, axis: axis, focus: focus, child: scroll);
   }
 }
 

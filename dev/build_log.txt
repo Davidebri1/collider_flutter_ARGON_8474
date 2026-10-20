@@ -39,5 +39,5 @@ Downloading packages...
 Got dependencies!
 36 packages have newer versions incompatible with dependency constraints.
 Try `flutter pub outdated` for more information.
-Compiling lib\main.dart for the Web...                             42.2s
+Compiling lib\main.dart for the Web...                             41.7s
 √ Built build\web

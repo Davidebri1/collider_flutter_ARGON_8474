@@ -213,6 +213,10 @@ class ColliderApi {
     }
   }
 
+  /// The preview picture of a file in Files (the server makes and keeps it).
+  String thumbUrl(ColliderFile f) =>
+      '$_base/api/files/thumb?source=${Uri.encodeQueryComponent(f.source)}&name=${Uri.encodeQueryComponent(f.name)}&v=${f.modified.millisecondsSinceEpoch}';
+
   /// Full address of a file for viewing.
   String fileUrl(ColliderFile f) => f.asset ? '$_base/assets/${f.url}' : '$_base${f.url}';
 

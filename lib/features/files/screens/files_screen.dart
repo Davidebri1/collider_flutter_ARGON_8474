@@ -382,15 +382,9 @@ class _FilesScreenState extends State<FilesScreen> {
   Widget _browse() {
     final home = _view.source == 'home';
     final list = _shown();
-    return ShaderMask(
-      // the list fades out at the bottom edge, as in the Figma frame
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (r) => const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Colors.white, Colors.white, Colors.transparent],
-        stops: [0, 0.9, 1],
-      ).createShader(r),
+    // The list recedes at its far end only while more lies below, and at the top once rows have gone up past it.
+    return EdgeFade(
+      focus: FadeFocus.top,
       child: ListView(
         padding: EdgeInsets.fromLTRB(20 * _u, 20 * _u, 20 * _u, 28),
         physics: const BouncingScrollPhysics(),
@@ -422,7 +416,8 @@ class _FilesScreenState extends State<FilesScreen> {
           if (_grid && !_songsOnly)
             LayoutBuilder(builder: (context, c) {
               // frame: cells 68 wide, 50 apart; here the cell follows the type (68 x 0.79) and the gap takes the rest
-              final cols = ((c.maxWidth + 50 * _u) / (54 + 50 * _u)).floor().clamp(3, 12);
+              // each file shown large enough to recognise by its own picture
+              final cols = ((c.maxWidth + 50 * _u) / (88 + 50 * _u)).floor().clamp(3, 12);
               final w = c.maxWidth / cols;
               return Wrap(
                 runSpacing: 30 * _u,
@@ -647,14 +642,15 @@ class _Thumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final h = width * 48 / 68;
+    // Square, so a page, a photo and a model each show at their own shape inside it (Claude, 2026-10-20).
+    final h = width;
     Widget tile() {
       // The tile carries the kind's colour and the glyph sits white on it, as the app icons do.
       final (icon, colors) = iconFor(file);
       return Container(
         decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: colors)),
         child: Center(
-          child: Icon(icon, size: h * 0.56, color: Colors.white, shadows: const [Shadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))]),
+          child: Icon(icon, size: h * 0.46, color: Colors.white, shadows: const [Shadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))]),
         ),
       );
     }
@@ -664,11 +660,19 @@ class _Thumb extends StatelessWidget {
       child: SizedBox(
         width: width,
         height: h,
-        child: file.kind == 'image'
-            ? (file.asset
-                ? Image.asset(file.url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => tile())
-                : Image.network(api.fileUrl(file), fit: BoxFit.cover, errorBuilder: (_, __, ___) => tile()))
-            : tile(),
+        // The file's own picture (made by the server, collider_thumbs.py): a photo, a video's frame, a PDF's first page,
+        // a model, a document's page, a program's icon. Until it arrives, or when a file has none, the kind's tile.
+        child: file.asset
+            ? (file.kind == 'image' ? Image.asset(file.url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => tile()) : tile())
+            : Image.network(
+                api.thumbUrl(file),
+                fit: (file.kind == 'image' && !file.name.toLowerCase().endsWith('.svg')) || file.kind == 'video' ? BoxFit.cover : BoxFit.contain,
+                filterQuality: FilterQuality.high,
+                frameBuilder: (_, child, frame, sync) => frame == null && !sync
+                    ? tile()
+                    : (file.kind == 'image' || file.kind == 'video' ? child : ColoredBox(color: const Color(0x14FFFFFF), child: child)),
+                errorBuilder: (_, __, ___) => tile(),
+              ),
       ),
     );
   }
@@ -699,7 +703,7 @@ class _FileCell extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            _Thumb(file: file, api: api, width: 54),
+            _Thumb(file: file, api: api, width: 88),
             const SizedBox(height: 10),
             ..._name(),
           ]),
