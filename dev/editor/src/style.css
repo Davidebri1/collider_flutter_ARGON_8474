@@ -21,6 +21,12 @@ select.pick option { background: #2c2c2e; }
 .swatch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .name { flex: 1 1 160px; min-width: 120px; height: 44px; border: 0; border-radius: 10px; background: rgba(255,255,255,.06); color: #fff; font: 600 14px/1 inherit; padding: 0 10px; }
 .name:focus { outline: none; background: rgba(255,255,255,.08); }
+@media (max-width: 600px) {
+  .bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-right: 44px; -webkit-overflow-scrolling: touch; }
+  .bar::-webkit-scrollbar { display: none; }
+  .bar > * { flex-shrink: 0; }
+  .name { flex: 0 0 150px; min-width: 150px; }
+}
 .status { font-size: 12px; color: rgba(235,235,245,.6); padding: 0 8px; white-space: nowrap; }
 .scroll { flex: 1; overflow: auto; padding: 18px 10px 40px; }
 .page { max-width: 816px; min-height: 1056px; margin: 0 auto; background: #fff; color: var(--ink); border-radius: 6px;

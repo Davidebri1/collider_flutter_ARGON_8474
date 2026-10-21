@@ -146,7 +146,11 @@ def _open(url):
     w = _WIN
     try:
         left, top, area_w, area_h, scale = _screen()
-        width, height = min(440, int(area_w / scale)), min(940, int(area_h / scale))
+        # A phone's shape, never cut to fit: iPhone 16 Pro's screen (402 x 874 points) under the window's title bar,
+        # made smaller as a whole when the screen is shorter (Claude, 2026-10-21).
+        bar = 32
+        inner = min(874, int(area_h / scale) - bar - 24)
+        width, height = round(inner * 402 / 874), inner + bar
         w.resize(width, height)
         w.move(int((left + (area_w - width * scale) / 2) / scale), int((top + (area_h - height * scale) / 2) / scale))
     except Exception as e:

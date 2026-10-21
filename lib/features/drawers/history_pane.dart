@@ -58,7 +58,7 @@ class _HistoryPaneState extends State<HistoryPane> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final wide = size.width >= 768;
-    final listW = wide ? 300.0 : (size.width - 32).clamp(260.0, 380.0);
+    final listW = wide ? 300.0 : VOverlay.toolWidth(context);
     final previewW = wide ? (size.width - 300 - 120).clamp(320.0, 460.0) : listW;
     final h = (size.height * (wide ? 0.66 : 0.62)).clamp(320.0, 720.0);
     final q = _q.toLowerCase();

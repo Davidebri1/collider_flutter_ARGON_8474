@@ -94,7 +94,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _navbar(),
+                _navbar(isMobile),
                 const SizedBox(height: VSpace.xs),
                 SizedBox(
                   height: VOverlay.toolMaxHeight(context),
@@ -156,13 +156,15 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   }
 
   /// Row 23's navbar: a capsule of its own above the window. The title sits left; view mode pills in the middle; close sits at the right end, tinted.
-  Widget _navbar() => VGlass(
+  Widget _navbar(bool isMobile) => VGlass(
         material: VMaterial.elevated,
         radius: VRadius.full,
         padding: const EdgeInsets.fromLTRB(16, 5, 5, 5),
         child: Row(
           children: [
             Expanded(child: Text('Smart Gen', maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.callout(weight: FontWeight.w600))),
+            // On a phone the side rail holds these four (Claude, 2026-10-21).
+            if (!isMobile)
             for (final (id, label) in const [
               ('boards', 'Boards'),
               ('cards', 'Cards'),

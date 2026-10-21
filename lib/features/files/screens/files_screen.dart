@@ -327,18 +327,18 @@ class _FilesScreenState extends State<FilesScreen> {
     final title = _view.file?.name ?? _sourceOf(_view.source == 'home' && _view.kind != null ? _view.kind! : _view.source).label;
     final nav = Row(mainAxisSize: MainAxisSize.min, children: [
       _RoundButton(icon: Icons.chevron_left_rounded, enabled: _at > 0, tooltip: 'Back', onTap: () => setState(() => _at--)),
-      const SizedBox(width: 6),
+      SizedBox(width: compact ? 0 : 6),
       _RoundButton(icon: Icons.chevron_right_rounded, enabled: _at < _history.length - 1, tooltip: 'Forward', onTap: () => setState(() => _at++)),
     ]);
     final actions = Row(mainAxisSize: MainAxisSize.min, children: [
       if (!_songsOnly) ...[
         _SquareButton(icon: _grid ? Icons.grid_view_rounded : Icons.view_list_rounded, on: true, tooltip: _grid ? 'Grid' : 'List', onTap: () => setState(() => _grid = !_grid)),
-        const SizedBox(width: 6),
+        SizedBox(width: compact ? 0 : 6),
       ],
       _SquareButton(icon: Icons.swap_vert_rounded, on: _byName, tooltip: _byName ? 'By name' : 'Newest first', onTap: () => setState(() => _byName = !_byName)),
-      const SizedBox(width: 6),
+      SizedBox(width: compact ? 0 : 6),
       _SquareButton(icon: _uploading ? Icons.more_horiz_rounded : Icons.upload_rounded, tooltip: 'Upload', onTap: _uploading ? null : _upload),
-      const SizedBox(width: 6),
+      SizedBox(width: compact ? 0 : 6),
       _SquareButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose),
     ]);
     final search = VRecessed(
@@ -370,9 +370,13 @@ class _FilesScreenState extends State<FilesScreen> {
       color: _N.titleBar,
       padding: EdgeInsets.all(20 * _u),
       child: compact
-          ? Column(mainAxisSize: MainAxisSize.min, children: [
-              Row(children: [nav, SizedBox(width: 15 * _u), Expanded(child: name), SizedBox(width: 15 * _u), actions]),
-              SizedBox(height: 20 * _u),
+          ? Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Row(children: [nav, const Spacer(), actions]),
+              if (title.isNotEmpty) ...[
+                SizedBox(height: 10 * _u),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(22, FontWeight.w700, _N.title)),
+              ],
+              SizedBox(height: 14 * _u),
               search,
             ])
           : Row(children: [

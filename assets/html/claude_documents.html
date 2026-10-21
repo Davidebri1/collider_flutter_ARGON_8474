@@ -1173,6 +1173,12 @@ select.pick option { background: #2c2c2e; }\r
 .swatch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }\r
 .name { flex: 1 1 160px; min-width: 120px; height: 44px; border: 0; border-radius: 10px; background: rgba(255,255,255,.06); color: #fff; font: 600 14px/1 inherit; padding: 0 10px; }\r
 .name:focus { outline: none; background: rgba(255,255,255,.08); }\r
+@media (max-width: 600px) {\r
+  .bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-right: 44px; -webkit-overflow-scrolling: touch; }\r
+  .bar::-webkit-scrollbar { display: none; }\r
+  .bar > * { flex-shrink: 0; }\r
+  .name { flex: 0 0 150px; min-width: 150px; }\r
+}\r
 .status { font-size: 12px; color: rgba(235,235,245,.6); padding: 0 8px; white-space: nowrap; }\r
 .scroll { flex: 1; overflow: auto; padding: 18px 10px 40px; }\r
 .page { max-width: 816px; min-height: 1056px; margin: 0 auto; background: #fff; color: var(--ink); border-radius: 6px;\r

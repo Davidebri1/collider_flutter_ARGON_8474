@@ -13,7 +13,13 @@ const [port, stepsJson] = process.argv.slice(2);
 const steps = JSON.parse(stepsJson || '[]');
 const exe = ['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Microsoft/Edge/Application/msedge.exe'].find(existsSync);
 const browser = await chromium.launch({ executablePath: exe, headless: true, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['microphone', 'clipboard-read', 'clipboard-write'] });
+// A phone by default (Claude, 2026-10-21; David: "we need proper mobile aspect ratio"): iPhone 16 Pro, 402 x 874 points,
+// touch, no hover. PHONE=WxH picks another size; PHONE=desk gives the old 1280 x 800 window.
+const size = (process.env.PHONE || '402x874');
+const desk = size === 'desk';
+const [vw, vh] = desk ? [1280, 800] : size.split('x').map(Number);
+const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: desk ? 1 : 2, isMobile: !desk, hasTouch: !desk,
+  permissions: ['microphone', 'clipboard-read', 'clipboard-write'] });
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
@@ -24,7 +30,8 @@ await page.waitForTimeout(6000);
 let n = 0;
 for (const s of steps) {
   const [k, a, b] = s;
-  if (k === 'click') await page.mouse.click(a, b);
+  if (k === 'click') { if (desk) await page.mouse.click(a, b); else await page.touchscreen.tap(a, b); }
+  else if (k === 'swipe') { const [x0, y0, x1, y1] = [a, b, s[3], s[4]]; await page.mouse.move(x0, y0); await page.mouse.down(); await page.mouse.move(x1, y1, { steps: 12 }); await page.mouse.up(); }
   else if (k === 'move') await page.mouse.move(a, b, { steps: 6 });
   else if (k === 'down') { await page.mouse.move(a, b); await page.mouse.down(); }
   else if (k === 'up') await page.mouse.up();
