@@ -7,5 +7,8 @@ src = src.replace('os.path.join(here, "test_app")', 'os.path.join(here, "phone_a
 assert 'phone_app' in src and '47801' in src
 exec(compile(src, "make_test_app.py (phone)", "exec"), {"__file__": os.path.join(here, "make_test_app.py"), "__name__": "__main__"})
 os.makedirs(os.path.join(here, "phone_app", "bin"), exist_ok=True)
-shutil.copy(os.path.join(here, "..", "bin", "cloudflared.exe"), os.path.join(here, "phone_app", "bin", "cloudflared.exe"))
+try:  # a hard link to the one cloudflared.exe, not a 53 MB copy (Claude, 2026-10-21)
+    os.link(os.path.join(here, "..", "bin", "cloudflared.exe"), os.path.join(here, "phone_app", "bin", "cloudflared.exe"))
+except OSError:
+    shutil.copy(os.path.join(here, "..", "bin", "cloudflared.exe"), os.path.join(here, "phone_app", "bin", "cloudflared.exe"))
 print("phone copy ready")

@@ -61,7 +61,11 @@ with open(os.path.join(up, "ring.stl"), "wb") as s:
     s.write(bytes(80) + struct.pack("<I", len(tris)))
     for t in tris:
         s.write(struct.pack("<3f", 0, 0, 0) + b"".join(struct.pack("<3f", *v) for v in t) + b"\0\0")
-shutil.copy(os.path.join(src, "Collider.exe"), os.path.join(f, "downloaded", "Collider.exe"))
+# a second name for the same exe on disk (a hard link), not a 43 MB copy (Claude, 2026-10-21)
+try:
+    os.link(os.path.join(src, "Collider.exe"), os.path.join(f, "downloaded", "Collider.exe"))
+except OSError:
+    shutil.copy(os.path.join(src, "Collider.exe"), os.path.join(f, "downloaded", "Collider.exe"))
 open(os.path.join(f, "downloaded", "archive.zip"), "wb").write(b"PK\x05\x06" + bytes(18))
 open(os.path.join(f, "downloaded", "deck.pptx"), "wb").write(b"PK")
 print("ok", dst)
