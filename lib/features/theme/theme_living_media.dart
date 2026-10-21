@@ -31,7 +31,7 @@ class _ThemePosterImageState extends State<ThemePosterImage> {
   void initState() {
     super.initState();
     if (widget.theme.assetPath.isNotEmpty) {
-      ThemeBlurCache.instance.ensureAllPresets(widget.theme.assetPath);
+      ThemeBlurCache.instance.ensurePoster(widget.theme.assetPath); // a still needs no blurred copies (Claude, 2026-10-21)
     }
   }
 
@@ -39,7 +39,7 @@ class _ThemePosterImageState extends State<ThemePosterImage> {
   void didUpdateWidget(covariant ThemePosterImage old) {
     super.didUpdateWidget(old);
     if (old.theme.assetPath != widget.theme.assetPath && widget.theme.assetPath.isNotEmpty) {
-      ThemeBlurCache.instance.ensureAllPresets(widget.theme.assetPath);
+      ThemeBlurCache.instance.ensurePoster(widget.theme.assetPath);
     }
   }
 

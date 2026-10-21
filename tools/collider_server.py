@@ -1113,7 +1113,23 @@ def _refresh_themes_bg():
         pass
 
 
+# The theme store's files come through Cloudflare's edge (collider-media), which tells every browser to keep them, so a
+# wallpaper, live wallpaper or song is downloaded once and then played from the phone's or PC's own cache; the store's
+# r2.dev address is kept by no cache. (Claude, 2026-10-21; David: "are we going to be doing any caching of these files")
+R2_PUBLIC = "https://pub-6263d41408f145baa5b058378744d787.r2.dev/"
+MEDIA_EDGE = "https://collider-media.ebridavid.workers.dev/"
+
+
+def _edge(u):
+    return MEDIA_EDGE + u[len(R2_PUBLIC):] if isinstance(u, str) and u.startswith(R2_PUBLIC) else u
+
+
 def themes():
+    return [{**t, "video": _edge(t.get("video")), "poster": _edge(t.get("poster")),
+             "tracks": [{**s, "url": _edge(s.get("url"))} for s in t.get("tracks") or []]} for t in (_themes() or [])]
+
+
+def _themes():
     with _themes_lock:
         if _themes_cache["data"]:
             if time.time() - _themes_cache["at"] >= TUNING["themes_refresh"]:

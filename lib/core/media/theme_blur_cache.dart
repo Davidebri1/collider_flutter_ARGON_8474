@@ -59,11 +59,35 @@ class ThemeBlurCache extends ChangeNotifier {
   /// Synchronous lookup of the active theme's pre-blurred surface for [preset].
   ui.Image? activeBlurred(ThemeBlurPreset preset) => blurredOf(_activeAssetPath, preset);
 
-  /// Pre-warms the default theme and free themes immediately at startup, and any theme list passed in.
+  /// Gets the pictures of the themes about to be seen ready: their posters only. Each theme's blurred surfaces are made
+  /// when something shows them (CachedThemeSurface) and for the theme in use.
+  /// Claude, 2026-10-21: this made four full-size blurred copies of every theme it was given (ten at start alone), kept
+  /// for good. A phone's browser has far less memory than a PC's, and on David's iPhone Safari ended the page at once
+  /// ("A problem repeatedly occurred"). The cache now keeps a bounded number of themes (see _keep).
   Future<void> prewarmThemes(Iterable<WallpaperTheme> themes) async {
     for (final t in themes) {
       if (t.assetPath.isEmpty) continue;
-      unawaited(ensureAllPresets(t.assetPath));
+      unawaited(ensurePoster(t.assetPath));
+    }
+  }
+
+  // How many themes' pictures stay decoded: posters for the themes around the one in view, blurred surfaces for the few
+  // most recently shown. The theme in use is always kept. Dropped pictures are decoded again if they come back.
+  static const _keepPosters = 8;
+  static const _keepBlurred = 3;
+
+  void _keep() {
+    while (_posters.length > _keepPosters) {
+      final old = _posters.keys.firstWhere((k) => k != _activeAssetPath, orElse: () => '');
+      if (old.isEmpty) break;
+      _posters.remove(old);
+    }
+    final themes = <String>[];
+    for (final k in _blurred.keys) {
+      if (!themes.contains(k.$1)) themes.add(k.$1);
+    }
+    for (final old in themes.where((p) => p != _activeAssetPath).take((themes.length - _keepBlurred).clamp(0, themes.length))) {
+      _blurred.removeWhere((k, _) => k.$1 == old);
     }
   }
 
@@ -83,8 +107,11 @@ class ThemeBlurCache extends ChangeNotifier {
   /// Decodes and caches the base poster [ui.Image] for [assetPath] once.
   Future<ui.Image?> ensurePoster(String assetPath) {
     if (assetPath.isEmpty) return SynchronousFuture(null);
-    final hit = _posters[assetPath];
-    if (hit != null) return SynchronousFuture(hit);
+    final hit = _posters.remove(assetPath);
+    if (hit != null) {
+      _posters[assetPath] = hit; // most recently used last
+      return SynchronousFuture(hit);
+    }
     final inflight = _posterPending[assetPath];
     if (inflight != null) return inflight;
 
@@ -103,6 +130,7 @@ class ThemeBlurCache extends ChangeNotifier {
       final frame = await codec.getNextFrame();
       final img = frame.image;
       _posters[assetPath] = img;
+      _keep();
       notifyListeners();
       return img;
     } catch (e) {
@@ -118,8 +146,11 @@ class ThemeBlurCache extends ChangeNotifier {
     if (assetPath.isEmpty) return SynchronousFuture(null);
     if (preset == ThemeBlurPreset.poster) return ensurePoster(assetPath);
     final key = (assetPath, preset);
-    final hit = _blurred[key];
-    if (hit != null) return SynchronousFuture(hit);
+    final hit = _blurred.remove(key);
+    if (hit != null) {
+      _blurred[key] = hit; // most recently used last
+      return SynchronousFuture(hit);
+    }
     final inflight = _blurPending[key];
     if (inflight != null) return inflight;
 
@@ -133,8 +164,10 @@ class ThemeBlurCache extends ChangeNotifier {
     final src = await ensurePoster(assetPath);
     if (src == null) return null;
     try {
-      // The poster's own size, up to 2560 wide (Claude, 2026-10-20: this was 360 wide, stretched over the screen).
-      final int targetW = src.width.clamp(1, 2560);
+      // Up to 1280 wide (Claude, 2026-10-21; was the poster's own size up to 2560, and before that 360). These are blurred
+      // by 16 to 36 points: nothing finer than the blur survives it, so 1280 (a phone screen's full width) shows the same
+      // picture as 2560 at a quarter of the memory. 360 had been visibly soft.
+      final int targetW = src.width.clamp(1, 1280);
       final int targetH = ((src.height * targetW) / (src.width <= 0 ? 1 : src.width)).round();
       final double scale = targetW / 1440.0; // reference desktop width
 
@@ -190,6 +223,7 @@ class ThemeBlurCache extends ChangeNotifier {
       final out = await picture.toImage(targetW, targetH);
       picture.dispose();
       _blurred[(assetPath, preset)] = out;
+      _keep();
       notifyListeners();
       return out;
     } catch (e) {
@@ -202,7 +236,7 @@ class ThemeBlurCache extends ChangeNotifier {
   static Future<ui.Image?> rasterizeFrameAmbient(ui.Image frame) async {
     try {
       // The frame's own size (Claude, 2026-10-20: this was at most 360 px).
-      final int w = frame.width.clamp(1, 2560);
+      final int w = frame.width.clamp(1, 1280); // blurred by 20 points: 1280 shows all of it (Claude, 2026-10-21)
       final int h = ((frame.height * w) / (frame.width <= 0 ? 1 : frame.width)).round();
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()));

@@ -26,22 +26,59 @@ class Tunnel:
         return None
 
     def start(self):
-        exe = self.program()
-        if not exe:
+        if not self.program():
             return False
-        flags = 0x08000000 if os.name == "nt" else 0  # no console window
-        self._proc = subprocess.Popen([exe, "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{self.port}"],
-                                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                                      creationflags=flags)
-        threading.Thread(target=self._read, daemon=True).start()
+        self._spawn()
+        threading.Thread(target=self._watch, daemon=True).start()
         return True
 
-    def _read(self):
-        for raw in iter(self._proc.stderr.readline, b""):
+    def _spawn(self):
+        flags = 0x08000000 if os.name == "nt" else 0  # no console window
+        self.url = ""
+        self._proc = subprocess.Popen([self.program(), "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{self.port}"],
+                                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                      creationflags=flags)
+        threading.Thread(target=self._read, args=(self._proc,), daemon=True).start()
+
+    def _read(self, proc):
+        for raw in iter(proc.stderr.readline, b""):
             m = re.search(rb"https://[a-z0-9-]+\.trycloudflare\.com", raw)
-            if m and not self.url:
+            if m and m.group(0).decode() != self.url:
                 self.url = m.group(0).decode()
                 threading.Thread(target=self._announce, daemon=True).start()
+
+    def _alive(self):
+        """The tunnel's own address still answers (a quick tunnel can be dropped by Cloudflare while the program runs)."""
+        if not self.url:
+            return False
+        try:
+            urllib.request.urlopen(urllib.request.Request(self.url + "/", method="HEAD", headers={"User-Agent": "Collider/1.0"}),
+                                   timeout=20)
+            return True
+        except urllib.error.HTTPError:
+            return True  # it answered (the key gate says no to a bare request): the tunnel is up
+        except Exception:
+            return False
+
+    def _watch(self):
+        """Keeps the phone link working for as long as Collider runs (Claude, 2026-10-21; David, 21 Oct: "Link doesn't
+        work"): every minute, if the tunnel program has ended or its address has stopped answering twice running, a new
+        tunnel is opened and the unchanging link is pointed at it."""
+        import time
+        misses = 0
+        time.sleep(60)
+        while (p := self._proc) is not None:
+            ended = p.poll() is not None
+            misses = 0 if (not ended and self._alive()) else misses + 1
+            if self._proc is None:
+                break
+            if ended or misses >= 2:
+                if not ended:
+                    p.terminate()
+                self._spawn()
+                misses = 0
+                time.sleep(30)
+            time.sleep(60)
 
     def _announce(self):
         """Tells the Worker where Collider is now, so the unchanging link leads here."""
@@ -76,5 +113,6 @@ class Tunnel:
         return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
     def stop(self):
-        if self._proc and self._proc.poll() is None:
-            self._proc.terminate()
+        p, self._proc = self._proc, None  # ends the watch too
+        if p and p.poll() is None:
+            p.terminate()

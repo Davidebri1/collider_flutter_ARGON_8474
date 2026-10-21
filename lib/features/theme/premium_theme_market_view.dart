@@ -794,7 +794,7 @@ class _Poster extends StatelessWidget {
             filterQuality: FilterQuality.medium,
           );
         }
-        ThemeBlurCache.instance.ensureAllPresets(theme.assetPath);
+        ThemeBlurCache.instance.ensurePoster(theme.assetPath); // a cover needs no blurred copies (Claude, 2026-10-21)
         return Image.asset(
           theme.assetPath,
           fit: BoxFit.cover,

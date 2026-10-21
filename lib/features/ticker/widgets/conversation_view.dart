@@ -18,6 +18,8 @@ class ConversationView extends StatefulWidget {
   final VoidCallback? onOpenBrowser;
   final void Function(TickerMessage message)? onTapMessage;
   final VoidCallback? onOpenLocalHistory;
+  /// Opened under its own summary, which already shows the model's name and closes it on a tap (Claude, 2026-10-21).
+  final bool attached;
 
   const ConversationView({
     super.key,
@@ -27,6 +29,7 @@ class ConversationView extends StatefulWidget {
     this.onOpenBrowser,
     this.onTapMessage,
     this.onOpenLocalHistory,
+    this.attached = false,
   });
 
   @override
@@ -152,17 +155,22 @@ class _ConversationViewState extends State<ConversationView> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 0:639 header: the name, and a round button at the right.
+        // 0:639 header: the name, and a round button at the right. Attached under its summary, there is none.
+        if (!widget.attached)
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 2, 0, 8),
           child: Row(
             children: [
               Expanded(
-                child: Text(item.modelDef.label, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.headline().copyWith(fontSize: 15, height: 20 / 15)),
+                child: widget.attached
+                    ? const SizedBox.shrink()
+                    : Text(item.modelDef.label, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.headline().copyWith(fontSize: 15, height: 20 / 15)),
               ),
               Builder(builder: (c) => VCircleButton(icon: Icons.more_horiz_rounded, size: 30, tooltip: 'More', onTap: () => _menu(c))),
-              const SizedBox(width: 6),
-              VCircleButton(icon: Icons.close_rounded, size: 30, tooltip: 'Close', onTap: widget.onClose),
+              if (!widget.attached) ...[
+                const SizedBox(width: 6),
+                VCircleButton(icon: Icons.close_rounded, size: 30, tooltip: 'Close', onTap: widget.onClose),
+              ],
             ],
           ),
         ),
@@ -229,11 +237,15 @@ class _ConversationViewState extends State<ConversationView> {
         // 0:639 entry box: recessed, the words to type, send at the right.
         VRecessed(
           radius: 20,
-          padding: const EdgeInsets.fromLTRB(14, 0, 4, 0),
+          padding: EdgeInsets.fromLTRB(widget.attached ? 4 : 14, 0, 4, 0),
           child: SizedBox(
             height: 40,
             child: Row(
               children: [
+                if (widget.attached) ...[
+                  Builder(builder: (c) => VCircleButton(icon: Icons.more_horiz_rounded, size: 32, tooltip: 'More', onTap: () => _menu(c))),
+                  const SizedBox(width: 6),
+                ],
                 Expanded(
                   child: TextField(
                     controller: _reply,

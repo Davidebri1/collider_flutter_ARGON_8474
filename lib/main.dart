@@ -577,15 +577,22 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
   }
 
+  /// A summary opens its conversation under itself, one at a time; the window scrolls it into view (Claude, 2026-10-21).
   void _onTogglePill(String id) {
+    final opening = !_expandedModelIds.contains(id);
     setState(() {
-      if (_expandedModelIds.contains(id)) {
-        _expandedModelIds.remove(id);
-      } else {
-        _expandedModelIds.add(id);
-      }
+      _expandedModelIds.clear();
+      if (opening) _expandedModelIds.add(id);
     });
+    if (opening) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final c = _openKey.currentContext;
+        if (c != null) Scrollable.ensureVisible(c, duration: const Duration(milliseconds: 360), curve: Curves.easeOutCubic, alignment: 0.0);
+      });
+    }
   }
+
+  final GlobalKey _openKey = GlobalKey();
 
   Future<void> _onSendInlineReply(String modelId, String text, [List<String> files = const []]) async {
     final idx = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
@@ -1012,7 +1019,26 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final openId = _expandedModelIds.isEmpty ? null : _expandedModelIds.first;
     final TickerItem? openItem = activePills.where((p) => p.modelDef.id == openId).firstOrNull;
     // On a phone the opened conversation is wide; the side navigation steps aside for it.
-    final railVisible = _railVisible && !(isMobile && openItem != null);
+    final railVisible = _railVisible;
+
+    // Expanded: that model's conversation, closeable, opened under its own summary (see the rows below).
+    // what is left of the window (half the screen) under the consensus row and the summary, so the entry box shows whole
+    final convHeight = (MediaQuery.sizeOf(context).height * 0.5 - 150).clamp(220.0, 420.0);
+    final Widget conversation = openItem == null
+        ? const SizedBox.shrink()
+        : ConversationView(
+            key: ValueKey('conv-${openItem.modelDef.id}'),
+            item: openItem,
+            attached: true,
+            onClose: () => setState(() => _expandedModelIds.clear()),
+            onSendReply: (reply, files) => _onSendInlineReply(openItem.modelDef.id, reply, files),
+            onOpenBrowser: () => _openBrowserForTab(_browserTabs.length > 1 ? _browserTabs[1].id : 'user_default'),
+            onTapMessage: (msg) => setState(() {
+              _zoomedMessage = msg;
+              _zoomedModelDef = openItem.modelDef;
+            }),
+            onOpenLocalHistory: () => setState(() => _localHistoryModel = openItem.modelDef),
+          );
 
     // Collapsed: the consensus row pinned on top, then one row per model.
     final Widget rows = Column(
@@ -1039,11 +1065,31 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   children: [
                     for (int i = 0; i < activePills.length; i++) ...[
                       if (i > 0) const SizedBox(height: 13),
+                      // the summary and the conversation it opens are one piece, scrolled into view together
+                      Column(
+                        key: activePills[i].modelDef.id == openId ? _openKey : null,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                       ModelPill(
                         item: activePills[i],
                         elevation: activePills.length <= 1 ? 1.0 : 1.0 - i / (activePills.length - 1),
                         isExpanded: activePills[i].modelDef.id == openId,
                         onToggleExpand: () => _onTogglePill(activePills[i].modelDef.id),
+                      ),
+                      // The opened conversation grows out of its own summary, the other summaries staying where they
+                      // are (Claude, 2026-10-21; David: the swap "to slightly larger ticker ... we lost the summaries").
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 320),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: activePills[i].modelDef.id == openId
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: SizedBox(height: convHeight, child: conversation),
+                              )
+                            : const SizedBox(width: double.infinity),
+                      ),
+                        ],
                       ),
                     ],
                   ],
@@ -1053,22 +1099,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           ),
       ],
     );
-
-    // Expanded: that model's conversation, closeable.
-    final Widget conversation = openItem == null
-        ? const SizedBox.shrink()
-        : ConversationView(
-            key: ValueKey('conv-${openItem.modelDef.id}'),
-            item: openItem,
-            onClose: () => setState(() => _expandedModelIds.clear()),
-            onSendReply: (reply, files) => _onSendInlineReply(openItem.modelDef.id, reply, files),
-            onOpenBrowser: () => _openBrowserForTab(_browserTabs.length > 1 ? _browserTabs[1].id : 'user_default'),
-            onTapMessage: (msg) => setState(() {
-              _zoomedMessage = msg;
-              _zoomedModelDef = openItem.modelDef;
-            }),
-            onOpenLocalHistory: () => setState(() => _localHistoryModel = openItem.modelDef),
-          );
 
     if (ThemeBlurCache.instance.activeAssetPath != _currentTheme.assetPath) {
       ThemeBlurCache.instance.setActiveTheme(_currentTheme);
@@ -1117,8 +1147,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       child: Container(
                         constraints: BoxConstraints(
                           maxWidth: isMobile
-                              ? (media ? 360.0 : (openItem != null ? 300.0 : 260.0)) // the pictures' toolbar fits whole (Claude, 2026-10-21)
-                              : (openItem != null || media ? 780.0 : 480.0),
+                              ? (media ? 360.0 : 300.0) // one width, opened or not; the pictures' toolbar fits whole (Claude, 2026-10-21)
+                              : (media ? 780.0 : 480.0),
                           // rows: never more than 40% of the screen; a conversation: "halfway up is sufficient"
                           maxHeight: MediaQuery.of(context).size.height * (openItem != null || (media && _mediaExpanded) ? 0.50 : 0.40),
                         ),
@@ -1138,14 +1168,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                                   onRemix: (ref) => _toImageChat(reference: ref),
                                   refresh: _mediaRefresh,
                                 )
-                              : openItem == null
-                              ? rows
-                              : (isMobile
-                                  ? conversation
-                                  : Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [SizedBox(width: 260, child: rows), const SizedBox(width: 13), Expanded(child: conversation)],
-                                    )),
+                              : rows,
                         ),
                       ),
                     ),
@@ -1153,7 +1176,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     // The composer is its own element, never a row of the ticker. Tucked, it is an arrow.
                     ConstrainedBox(
                       // as wide as the ticker and the dock, so it stands beside the side navigation, not over it
-                      constraints: BoxConstraints(maxWidth: isMobile ? 260.0 : 480.0),
+                      constraints: BoxConstraints(maxWidth: isMobile ? 300.0 : 480.0),
                       child: FloatingPrompt(
                         summoned: _isComposerSummoned,
                         busy: _busy,

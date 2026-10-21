@@ -92,7 +92,7 @@ class _ModelPillState extends State<ModelPill> {
                   separatorBuilder: (_, __) => const SizedBox(width: VSpace.xs),
                   itemBuilder: (_, i) => ClipRRect(
                     borderRadius: BorderRadius.circular(VRadius.sm),
-                    child: Image.asset('https://pub-6263d41408f145baa5b058378744d787.r2.dev/premium/${_mediaAssetFor(i)}.jpg', width: 58, height: 58, fit: BoxFit.cover),
+                    child: Image.asset('https://collider-media.ebridavid.workers.dev/premium/${_mediaAssetFor(i)}.jpg', width: 58, height: 58, fit: BoxFit.cover),
                   ),
                 ),
               ),
