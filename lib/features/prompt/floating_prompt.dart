@@ -232,7 +232,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                       ),
                       const SizedBox(width: 6),
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        padding: EdgeInsets.zero,
                         child: widget.voice != null && widget.onMic != null
                             ? _MicButton(phase: widget.voice!, busy: widget.busy, onTap: () => _ctrl.text.trim().isEmpty ? widget.onMic!() : _submit())
                             : _SendButton(busy: widget.busy, onTap: _submit),
@@ -376,13 +376,15 @@ class _SendButtonState extends State<_SendButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTapDown: (_) => setState(() => _down = true),
       onTapCancel: () => setState(() => _down = false),
       onTapUp: (_) {
         setState(() => _down = false);
         widget.onTap();
       },
-      child: AnimatedScale(
+      // the circle is drawn at 26; the finger gets Apple's minimum 44 x 44 around it (Claude, 2026-10-20)
+      child: SizedBox(width: 44, height: 44, child: Center(child: AnimatedScale(
         scale: _down ? 0.86 : 1.0,
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOutBack,
@@ -401,7 +403,7 @@ class _SendButtonState extends State<_SendButton> {
             ),
           ),
         ),
-      ),
+      ))),
     );
   }
 }

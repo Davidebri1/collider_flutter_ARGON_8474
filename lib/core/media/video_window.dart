@@ -198,7 +198,7 @@ class _VideoWindowState extends State<VideoWindow> with SingleTickerProviderStat
                                     child: Row(
                                       children: [
                                         _Plain(icon: Icons.close_rounded, onTap: widget.onClose),
-                                        _Skip15(forward: false, onTap: () => _skip(-15)),
+                                        _Plain(icon: Icons.replay_10_rounded, onTap: () => _skip(-10)),
                                         _Plain(
                                           icon: ready && v.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                                           size: 22,
@@ -208,7 +208,7 @@ class _VideoWindowState extends State<VideoWindow> with SingleTickerProviderStat
                                             _touch();
                                           },
                                         ),
-                                        _Skip15(forward: true, onTap: () => _skip(15)),
+                                        _Plain(icon: Icons.forward_10_rounded, onTap: () => _skip(10)),
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: LayoutBuilder(
@@ -318,26 +318,3 @@ class _Plain extends StatelessWidget {
       );
 }
 
-/// The reference's 15-second skips (Figma row 19). Material has 10 and 30 but no 15, so the glyph is the plain
-/// circular arrow with 15 set in its middle; forward is the same arrow mirrored. Made by Claude (2026-10-20).
-class _Skip15 extends StatelessWidget {
-  final bool forward;
-  final VoidCallback onTap;
-  const _Skip15({required this.forward, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => VPress(
-        onTap: onTap,
-        child: SizedBox(
-          width: 34,
-          height: 32,
-          child: Stack(alignment: Alignment.center, children: [
-            Transform.flip(flipX: forward, child: const Icon(Icons.replay_rounded, size: 20, color: Color(0xE6FFFFFF))),
-            const Padding(
-              padding: EdgeInsets.only(top: 1.5),
-              child: Text('15', style: TextStyle(fontSize: 6.5, fontWeight: FontWeight.w700, color: Color(0xE6FFFFFF), height: 1)),
-            ),
-          ]),
-        ),
-      );
-}

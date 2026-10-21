@@ -1,10 +1,10 @@
-237 INFO: PyInstaller: 6.22.3, contrib hooks: 2026.8
-237 INFO: Python: 3.12.13
-306 INFO: Platform: Windows-11-10.0.26200-SP0
-306 INFO: Python environment: C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\.venv-build
-306 INFO: wrote C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\Collider.spec
-310 INFO: Removing temporary files and cleaning cache in C:\Users\D\AppData\Local\pyinstaller
-322 INFO: Module search paths (PYTHONPATH):
+258 INFO: PyInstaller: 6.22.3, contrib hooks: 2026.8
+258 INFO: Python: 3.12.13
+324 INFO: Platform: Windows-11-10.0.26200-SP0
+324 INFO: Python environment: C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\.venv-build
+326 INFO: wrote C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\Collider.spec
+333 INFO: Removing temporary files and cleaning cache in C:\Users\D\AppData\Local\pyinstaller
+349 INFO: Module search paths (PYTHONPATH):
 ['C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\exe',
  'C:\\Users\\D\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python312.zip',
  'C:\\Users\\D\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\DLLs',
@@ -13,98 +13,96 @@
  'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build',
  'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages',
  'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\tools']
-844 INFO: Appending 'datas' from .spec
-847 INFO: checking Analysis
-847 INFO: Building Analysis because Analysis-00.toc is non existent
-847 INFO: Looking for Python shared library...
-847 INFO: Using Python shared library: C:\Users\D\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\python312.dll
-847 INFO: Running Analysis Analysis-00.toc
-847 INFO: Target bytecode optimization level: 0
-847 INFO: Initializing module dependency graph...
-849 INFO: Initializing module graph hook caches...
-910 INFO: Analyzing modules for base_library.zip ...
-2352 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-2873 INFO: Processing standard module hook 'hook-math.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-4781 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-6520 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-7216 INFO: Caching module dependency graph...
-7267 INFO: Analyzing C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\tools\collider_app.py
-7349 INFO: Processing standard module hook 'hook-webbrowser.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-7565 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-8057 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-8182 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-8540 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-8805 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-8969 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-9425 INFO: Processing standard module hook 'hook-numpy.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-9942 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-9945 INFO: SetuptoolsInfo: initializing cached setuptools info...
-11920 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-13163 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-14552 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-14808 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-15125 INFO: Processing standard module hook 'hook-markdown.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
-15840 INFO: Processing standard module hook 'hook-pypdfium2.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
-15875 INFO: Processing standard module hook 'hook-pypdfium2_raw.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
-17354 INFO: Processing standard module hook 'hook-xml.dom.domreg.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-17707 INFO: Processing standard module hook 'hook-openpyxl.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
-19420 INFO: Processing standard module hook 'hook-webview.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\webview\\__pyinstaller'
-20175 INFO: Processing pre-safe-import-module hook 'hook-gi.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-20367 INFO: Processing standard module hook 'hook-clr.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\pythonnet\\_pyinstaller'
-20400 INFO: Processing standard module hook 'hook-clr_loader.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
-20550 INFO: Processing standard module hook 'hook-pycparser.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
-20763 INFO: Processing standard module hook 'hook-setuptools.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-20782 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-20852 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-20854 INFO: Setuptools: 'jaraco' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco'!
-20869 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-20870 INFO: Setuptools: 'more_itertools' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.more_itertools'!
-21065 INFO: Processing standard module hook 'hook-_osx_support.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-21092 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-21453 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-21456 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-21468 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-21469 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.backports'!
-22174 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-22175 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
-22922 INFO: Processing pre-safe-import-module hook 'hook-wheel.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
-22923 INFO: Setuptools: 'wheel' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.wheel'!
-23473 INFO: Processing module hooks (post-graph stage)...
-23683 WARNING: Hidden import "pycparser.lextab" not found!
-23684 WARNING: Hidden import "pycparser.yacctab" not found!
-24082 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
-24212 INFO: Performing binary vs. data reclassification (75 entries)
-24253 INFO: Looking for ctypes DLLs
-24384 INFO: Analyzing run-time hooks ...
-24391 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
-24395 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
-24400 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
-24405 INFO: Including run-time hook 'pyi_rth_setuptools.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
-24428 INFO: Creating base_library.zip...
-24460 INFO: Looking for dynamic libraries
-25687 INFO: Extra DLL search directories (AddDllDirectory): ['C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\numpy.libs']
-25687 INFO: Extra DLL search directories (PATH): []
-26885 INFO: Warnings written to C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\work\Collider\warn-Collider.txt
-27014 INFO: Graph cross-reference written to C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\work\Collider\xref-Collider.html
-27074 INFO: checking PYZ
-27074 INFO: Building PYZ because PYZ-00.toc is non existent
-27074 INFO: Building PYZ (ZlibArchive) C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\work\Collider\PYZ-00.pyz
-28164 INFO: Building PYZ (ZlibArchive) C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\work\Collider\PYZ-00.pyz completed successfully.
-28198 INFO: checking PKG
-28198 INFO: Building PKG because PKG-00.toc is non existent
-28198 INFO: Building PKG (CArchive) Collider.pkg
-41791 INFO: Building PKG (CArchive) Collider.pkg completed successfully.
-41797 INFO: Bootloader C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\.venv-build\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
-41797 INFO: checking EXE
-41797 INFO: Building EXE because EXE-00.toc is non existent
-41797 INFO: Building EXE from EXE-00.toc
-41799 INFO: Copying bootloader EXE to C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\dist\Collider.exe
-41805 INFO: Copying icon to EXE
-41810 INFO: Copying 0 resources to EXE
-41810 INFO: Embedding manifest in EXE
-41816 INFO: Appending PKG archive to EXE
-41859 INFO: Fixing EXE headers
-42127 INFO: Building EXE from EXE-00.toc completed successfully.
-42134 INFO: Build complete! The results are available in: C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\dist
-EXE MB 43.2
-EXE_EXIT 0
+958 INFO: Appending 'datas' from .spec
+958 INFO: checking Analysis
+958 INFO: Building Analysis because Analysis-00.toc is non existent
+958 INFO: Looking for Python shared library...
+967 INFO: Using Python shared library: C:\Users\D\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\python312.dll
+967 INFO: Running Analysis Analysis-00.toc
+967 INFO: Target bytecode optimization level: 0
+967 INFO: Initializing module dependency graph...
+967 INFO: Initializing module graph hook caches...
+990 INFO: Analyzing modules for base_library.zip ...
+2500 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+3296 INFO: Processing standard module hook 'hook-math.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+4324 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+6015 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+6521 INFO: Caching module dependency graph...
+6562 INFO: Analyzing C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\tools\collider_app.py
+6635 INFO: Processing standard module hook 'hook-webbrowser.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+6797 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+7200 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+7292 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+7611 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+7823 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+7939 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+8438 INFO: Processing standard module hook 'hook-numpy.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+8875 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+8875 INFO: SetuptoolsInfo: initializing cached setuptools info...
+10687 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+11661 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+12821 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+13020 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+13270 INFO: Processing standard module hook 'hook-markdown.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+14035 INFO: Processing standard module hook 'hook-pypdfium2.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+14075 INFO: Processing standard module hook 'hook-pypdfium2_raw.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+15291 INFO: Processing standard module hook 'hook-xml.dom.domreg.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+15646 INFO: Processing standard module hook 'hook-openpyxl.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+17095 INFO: Processing standard module hook 'hook-webview.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\webview\\__pyinstaller'
+17734 INFO: Processing pre-safe-import-module hook 'hook-gi.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+17890 INFO: Processing standard module hook 'hook-clr.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\pythonnet\\_pyinstaller'
+17931 INFO: Processing standard module hook 'hook-clr_loader.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+18044 INFO: Processing standard module hook 'hook-pycparser.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+18215 INFO: Processing standard module hook 'hook-setuptools.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+18231 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+18296 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+18296 INFO: Setuptools: 'jaraco' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco'!
+18311 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+18311 INFO: Setuptools: 'more_itertools' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.more_itertools'!
+18467 INFO: Processing standard module hook 'hook-_osx_support.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+18486 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+18791 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+18799 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+18811 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+18812 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.backports'!
+19383 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+19383 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
+19959 INFO: Processing pre-safe-import-module hook 'hook-wheel.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+19965 INFO: Setuptools: 'wheel' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.wheel'!
+20395 INFO: Processing module hooks (post-graph stage)...
+20565 WARNING: Hidden import "pycparser.lextab" not found!
+20565 WARNING: Hidden import "pycparser.yacctab" not found!
+20894 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks'
+20992 INFO: Performing binary vs. data reclassification (75 entries)
+21042 INFO: Looking for ctypes DLLs
+21146 INFO: Analyzing run-time hooks ...
+21151 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+21156 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+21156 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+21163 INFO: Including run-time hook 'pyi_rth_setuptools.py' from 'C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+21183 INFO: Creating base_library.zip...
+21204 INFO: Looking for dynamic libraries
+22397 INFO: Extra DLL search directories (AddDllDirectory): ['C:\\Users\\D\\Documents\\collider_flutter_CLAUDE_20261020\\dev\\.venv-build\\Lib\\site-packages\\numpy.libs']
+22397 INFO: Extra DLL search directories (PATH): []
+23442 INFO: Warnings written to C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\work\Collider\warn-Collider.txt
+23539 INFO: Graph cross-reference written to C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\work\Collider\xref-Collider.html
+23592 INFO: checking PYZ
+23592 INFO: Building PYZ because PYZ-00.toc is non existent
+23592 INFO: Building PYZ (ZlibArchive) C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\work\Collider\PYZ-00.pyz
+24449 INFO: Building PYZ (ZlibArchive) C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\work\Collider\PYZ-00.pyz completed successfully.
+24479 INFO: checking PKG
+24479 INFO: Building PKG because PKG-00.toc is non existent
+24479 INFO: Building PKG (CArchive) Collider.pkg
+35644 INFO: Building PKG (CArchive) Collider.pkg completed successfully.
+35650 INFO: Bootloader C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\.venv-build\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+35650 INFO: checking EXE
+35650 INFO: Building EXE because EXE-00.toc is non existent
+35650 INFO: Building EXE from EXE-00.toc
+35661 INFO: Copying bootloader EXE to C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\dist\Collider.exe
+35667 INFO: Copying icon to EXE
+35669 INFO: Copying 0 resources to EXE
+35669 INFO: Embedding manifest in EXE
+35676 INFO: Appending PKG archive to EXE
+35713 INFO: Fixing EXE headers
+35995 INFO: Building EXE from EXE-00.toc completed successfully.
+35998 INFO: Build complete! The results are available in: C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\dev\exe\dist

@@ -26,7 +26,8 @@ for n, t in gen.items():
         shutil.copy(os.path.join(here, "editor", "test_out", next(x for x in os.listdir(os.path.join(here, "editor", "test_out")) if x.endswith(".docx"))), p)
     else:
         open(p, "w", encoding="utf-8").write(t)
-json.dump({"Quarterly plan.docx": "Documents"}, open(os.path.join(f, ".models.json"), "w"))
+shutil.copy(os.path.join(src, "assets", "themes", "premium", "tracks", "track1_driftwood.mp3"), os.path.join(f, "generated", "Night drive.mp3"))
+json.dump({"Quarterly plan.docx": "Documents", "Night drive.mp3": "Gemma 4 31B"}, open(os.path.join(f, ".models.json"), "w"))
 up = os.path.join(f, "uploaded")
 open(os.path.join(up, "budget.csv"), "w").write("a,b\n1,2\n")
 open(os.path.join(up, "settings.json"), "w").write("{}")

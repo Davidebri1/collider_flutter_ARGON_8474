@@ -9,16 +9,17 @@ body { background: transparent; font: 14px/1.4 -apple-system, "Segoe UI", system
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 8px 10px; margin: 10px 10px 0; border-radius: 22px;
   background: var(--glass); backdrop-filter: blur(24px) saturate(1.4); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
 .sep { width: 1px; height: 22px; background: var(--line); margin: 0 6px; }
-.btn { width: 32px; height: 32px; border-radius: 10px; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; }
-.btn:hover { background: rgba(255,255,255,.10); }
+.btn { width: 44px; height: 44px; border-radius: 12px; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; }
+@media (hover: hover) { .btn:hover { background: rgba(255,255,255,.10); } }
+.btn:active { background: rgba(255,255,255,.16); }
 .btn.on { background: rgba(255,255,255,.20); }
 .btn:disabled { opacity: .35; cursor: default; }
-.ico { font-family: 'Symbols'; font-size: 20px; line-height: 1; font-variation-settings: 'FILL' 1; -webkit-font-smoothing: antialiased; }
-select.pick { height: 32px; border-radius: 10px; border: 0; background: rgba(255,255,255,.08); color: #f2f2f7; padding: 0 8px; font: inherit; cursor: pointer; }
+.ico { font-family: 'Symbols'; font-size: 22px; line-height: 1; font-variation-settings: 'FILL' 1; -webkit-font-smoothing: antialiased; }
+select.pick { height: 44px; border-radius: 10px; border: 0; background: rgba(255,255,255,.08); color: #f2f2f7; padding: 0 8px; font: inherit; cursor: pointer; }
 select.pick option { background: #2c2c2e; }
 .swatch { position: relative; }
 .swatch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.name { flex: 1 1 160px; min-width: 120px; height: 32px; border: 0; border-radius: 10px; background: rgba(255,255,255,.06); color: #fff; font: 600 14px/1 inherit; padding: 0 10px; }
+.name { flex: 1 1 160px; min-width: 120px; height: 44px; border: 0; border-radius: 10px; background: rgba(255,255,255,.06); color: #fff; font: 600 14px/1 inherit; padding: 0 10px; }
 .name:focus { outline: none; background: rgba(255,255,255,.08); }
 .status { font-size: 12px; color: rgba(235,235,245,.6); padding: 0 8px; white-space: nowrap; }
 .scroll { flex: 1; overflow: auto; padding: 18px 10px 40px; }

@@ -206,7 +206,7 @@ textarea.f{width:100%;min-height:64px;resize:vertical;background:#0E1118;border:
 const C=INITIAL;let rows=C.providers.map(r=>Object.assign({name:'',endpoint:'',key:'',models:''},r));
 const R=document.getElementById('rows'),H=document.getElementById('host');
 const S=JSON.parse(JSON.stringify(C.settings));
-const N={consensus_agent:'Consensus agent',agent_chain:'Agent chain',agent_prompt:'Consensus agent instruction',lines_prompt:'One-line agent instruction',essence_prompt:'Essence instruction',plan_prompt:'Search planning instruction',models:'Models',depth:'Answer instruction by mode',line_rule:'One-line rule',line_length:'Line length',search:'Search',plan_queries:'Planned searches',source_chars:'Source length',max_tokens:'Max tokens',deadline:'Deadline',silence:'Silence',tuning:'Tuning',pack_price:'Pack price',tracks_per_pack:'Tracks per pack'};
+const N={consensus_agent:'Consensus agent',agent_chain:'Agent chain',agent_prompt:'Consensus agent instruction',lines_prompt:'One-line agent instruction',essence_prompt:'Essence instruction',plan_prompt:'Search planning instruction',models:'Models',depth:'Answer instruction by mode',line_rule:'One-line rule',line_length:'Line length',search:'Search',plan_queries:'Planned searches',source_chars:'Source length',max_tokens:'Max tokens',deadline:'Deadline',silence:'Silence',tuning:'Tuning',pack_price:'Pack price',tracks_per_pack:'Tracks per pack',imagine:'Discover Market'};
 function inp(v,set){const long=typeof v==='string'&&(v.length>70||v.includes('\n'));const e=document.createElement(long?'textarea':'input');e.className='f';e.value=Array.isArray(v)?v.join(', '):v;if(long)e.rows=Math.min(14,v.split('\n').length+1);e.addEventListener('input',()=>set(e.value));return e;}
 function typed(old,s){if(typeof old==='number'){const n=Number(s);return isNaN(n)?old:n;}if(Array.isArray(old))return s.split(',').map(x=>x.trim()).filter(Boolean).map((x,i)=>typeof old[i]==='number'?Number(x):x);return s;}
 const MF=['id','label','short','provider','via','color','temperature'];
@@ -222,12 +222,13 @@ host.appendChild(box);}
 ['consensus_agent','agent_chain','agent_prompt','lines_prompt','essence_prompt','plan_prompt','models'].forEach(k=>section(k,document.getElementById('agents')));
 ['depth','line_rule','line_length','search','plan_queries','source_chars','max_tokens','deadline','silence','tuning'].forEach(k=>section(k,document.getElementById('answers')));
 ['pack_price','tracks_per_pack'].forEach(k=>section(k,document.getElementById('buy')));
+['imagine'].forEach(k=>section(k,document.getElementById('answers')));
 function draw(){R.innerHTML='';rows.forEach((r,i)=>{const d=document.createElement('div');d.className='row';
 d.innerHTML=`<div class="grid"><input class="f" data-k="name" placeholder="Name"><input class="f" data-k="key" placeholder="Key"><button type="button" class="x" title="Remove">×</button></div>
 <div class="grid2"><input class="f" data-k="endpoint" placeholder="Address"><input class="f" data-k="models" placeholder="Models"></div><div class="uses"></div>`;
 d.querySelectorAll('input').forEach(inp=>{inp.value=r[inp.dataset.k]||'';inp.addEventListener('input',()=>{r[inp.dataset.k]=inp.value;});});
 d.querySelector('.x').onclick=()=>{rows.splice(i,1);C.uses.splice(i,1);draw();};
-if(/tavily/i.test((r.endpoint||'')+(r.name||'')))d.querySelector('[data-k=models]').style.visibility='hidden';
+if(/tavily|fal\.run/i.test((r.endpoint||'')+(r.name||'')))d.querySelector('[data-k=models]').style.visibility='hidden';
 d.querySelector('.uses').textContent=C.uses[i]||'';R.appendChild(d);});}
 document.getElementById('add').onclick=()=>{rows.push({name:'',endpoint:'',key:'',models:''});C.uses.push('');draw();};
 H.value=C.host;document.getElementById('themes').value=C.themes;document.getElementById('bypass').checked=C.bypass;

@@ -314,12 +314,21 @@ class _VPressState extends State<VPress> with SingleTickerProviderStateMixin {
                 _light();
               }
             : null,
-        // pressed in quickly, sprung back out with a slight overshoot, as a physical key would
-        child: AnimatedScale(
-          scale: _down ? VMotion.pressedScale : 1,
-          duration: _down ? VMotion.fast : const Duration(milliseconds: 340),
-          curve: _down ? Curves.easeOutCubic : Curves.easeOutBack,
-          child: CustomPaint(foregroundPainter: _GlowPainter(_at, _glow), child: widget.child),
+        // Apple's minimum touch target, 44 x 44 points: a smaller control keeps its look and the finger gets the room
+        // around it (Claude, 2026-10-20).
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          child: Center(
+            widthFactor: 1,
+            heightFactor: 1,
+            // pressed in quickly, sprung back out with a slight overshoot, as a physical key would
+            child: AnimatedScale(
+              scale: _down ? VMotion.pressedScale : 1,
+              duration: _down ? VMotion.fast : const Duration(milliseconds: 340),
+              curve: _down ? Curves.easeOutCubic : Curves.easeOutBack,
+              child: CustomPaint(foregroundPainter: _GlowPainter(_at, _glow), child: widget.child),
+            ),
+          ),
         ),
       ),
     );

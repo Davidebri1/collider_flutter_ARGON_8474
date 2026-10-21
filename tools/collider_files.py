@@ -4,7 +4,7 @@ Files holds what the user uploaded, what the models generated and what the brows
 (purchased theme packs are bundled with the app and listed by the app itself).
 The browser part fetches pages here so that sites which refuse framing still render inside the app.
 """
-import base64, gzip, json, mimetypes, os, re, time, urllib.request, urllib.error, zlib
+import base64, gzip, json, mimetypes, os, re, threading, time, urllib.request, urllib.error, zlib
 from urllib.parse import urlparse, unquote
 
 SOURCES = ("uploaded", "generated", "downloaded")
@@ -131,6 +131,14 @@ class Files:
         self._remember(os.path.basename(p), model)
         return os.path.basename(p)
 
+    def save_media(self, name, data, model=""):
+        """A picture or video made through fal (Discover Market), into Generated. (Claude, 2026-10-20)"""
+        p = self.unique_path("generated", name)
+        with open(p, "wb") as f:
+            f.write(data)
+        self._remember(os.path.basename(p), model)
+        return os.path.basename(p)
+
     def print_pdf(self, name, html, replace="", model=""):
         """Writes a document as PDF with Microsoft Edge (part of Windows), which keeps the text real and sharp."""
         import shutil, subprocess, tempfile
@@ -228,6 +236,37 @@ def fetch_page(url, method="GET", body=None, content_type=None, mobile=False):
     return fetch(url, mobile=mobile)
 
 
+def needs_script(final_url, html):
+    """True for a page that shows nothing until its script runs (Google's results). (Claude, 2026-10-21)"""
+    return "google." in urlparse(final_url).netloc and "/httpservice/retry/enablejs" in html
+
+
+_render_gate = threading.Semaphore(2)
+
+
+def render_page(url, mobile=False):
+    """The page as a browser leaves it once its script has run, by Edge (part of Windows), script taken out.
+    None when Edge is not there or gives nothing. (Claude, 2026-10-21)"""
+    import shutil, subprocess, tempfile
+    edge = shutil.which("msedge") or next((p for p in (
+        os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%LocalAppData%\Microsoft\Edge\Application\msedge.exe")) if os.path.isfile(p)), None)
+    if not edge:
+        return None
+    with _render_gate, tempfile.TemporaryDirectory() as tmp:
+        try:
+            out = subprocess.run([edge, "--headless=new", "--disable-gpu", "--no-first-run", "--user-agent=" + (UA_MOBILE if mobile else UA),
+                                  "--user-data-dir=" + os.path.join(tmp, "p"), "--virtual-time-budget=4000", "--dump-dom", url],
+                                 stdin=subprocess.DEVNULL, capture_output=True, timeout=30).stdout.decode("utf-8", "ignore")
+        except Exception:
+            return None
+    if len(out) < 2000:
+        return None
+    out = re.sub(r"(?is)<script\b.*?</script>", "", out)
+    return re.sub(r"(?is)<noscript\b.*?</noscript>", "", out)
+
+
 def is_search_challenge(final_url, html):
     """True when the search engine sent a puzzle instead of results."""
     return urlparse(final_url).netloc.endswith("duckduckgo.com") and ("anomaly-modal" in html or "bots use DuckDuckGo" in html)
@@ -319,9 +358,11 @@ document.addEventListener('submit',function(e){
  if(m==='get'||/(^|\.)duckduckgo\.com$/.test(new URL(act).hostname)){var u=new URL(act);u.search='';new FormData(f).forEach(function(v,k){if(typeof v==='string')u.searchParams.append(k,v)});go(u.toString())}
  else{var pf=document.createElement('form');pf.method='post';pf.action=P+encodeURIComponent(act);pf.style.display='none';
   new FormData(f).forEach(function(v,k){if(typeof v==='string'){var i=document.createElement('input');i.type='hidden';i.name=k;i.value=v;pf.appendChild(i)}});
-  document.documentElement.appendChild(pf);HTMLFormElement.prototype.submit.call(pf)}
+  document.documentElement.appendChild(pf);sub.call(pf)}
 },true);
 window.open=function(u){if(u)go(u);return null};
+var sub=HTMLFormElement.prototype.submit;HTMLFormElement.prototype.submit=function(){var e=new Event('submit',{bubbles:true,cancelable:true});if(this.dispatchEvent(e))sub.call(this)};
+if(window.navigation)navigation.addEventListener('navigate',function(e){var u=e.destination&&e.destination.url;if(e.cancelable&&u&&/^https?:/.test(u)&&u.indexOf(O)!==0){e.preventDefault();go(u)}});
 ['pushState','replaceState'].forEach(function(k){var o=history[k];history[k]=function(s,t){try{return o.call(history,s,t)}catch(e){}}});
 function via(u){var a=abs(u);return(/^https?:/.test(a)&&a.indexOf(O)!==0)?F+encodeURIComponent(a):u}
 var of=window.fetch;if(of){window.fetch=function(i,n){try{if(typeof i==='string')i=via(i);else if(i&&i.url)i=new Request(via(i.url),i)}catch(e){}return of.call(window,i,n)}}

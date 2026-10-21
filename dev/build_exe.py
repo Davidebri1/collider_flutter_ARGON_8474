@@ -17,13 +17,23 @@ with open(LOG, "w", encoding="utf-8") as log:
                     os.path.join(W, "web", "icons", "Icon-512.png"), ico], stdout=log, stderr=log, stdin=subprocess.DEVNULL)
     code = subprocess.run([PY, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--name", "Collider", "--windowed",
                            "--icon", ico, "--paths", os.path.join(W, "tools"),
-                           "--hidden-import", "collider_server", "--hidden-import", "collider_files", "--hidden-import", "collider_config", "--hidden-import", "collider_thumbs",
+                           "--hidden-import", "collider_server", "--hidden-import", "collider_files", "--hidden-import", "collider_config", "--hidden-import", "collider_thumbs", "--hidden-import", "collider_imagine",
                            "--add-data", f"{web};web", "--distpath", os.path.join(X, "dist"), "--workpath", os.path.join(X, "work"),
                            "--specpath", X, os.path.join(W, "tools", "collider_app.py")],
                           stdout=log, stderr=log, stdin=subprocess.DEVNULL, cwd=X).returncode
     out = os.path.join(X, "dist", "Collider.exe")
     if code == 0 and os.path.isfile(out):
-        shutil.copy2(out, os.path.join(W, "Collider.exe"))
+        target = os.path.join(W, "Collider.exe")
+        try:
+            shutil.copy2(out, target)
+        except PermissionError:
+            # Collider is open: a running program can be moved aside though not written over; the open window keeps
+            # running from its new place and the next start is the new build (Claude, 2026-10-21).
+            aside = os.path.join(X, "replaced")
+            os.makedirs(aside, exist_ok=True)
+            import time
+            os.replace(target, os.path.join(aside, time.strftime("Collider %Y%m%d-%H%M%S.exe")))
+            shutil.copy2(out, target)
         log.write(f"EXE MB {os.path.getsize(os.path.join(W, 'Collider.exe')) / 1048576:.1f}\n")
     log.write(f"EXE_EXIT {code}\n")
 print("EXE_EXIT", code)

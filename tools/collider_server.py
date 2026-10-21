@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import collider_files as cfiles
 import collider_config as ccfg
 import collider_thumbs as cthumbs
+import collider_imagine as cimagine
 
 # Set by setup(): the launch window passes the folder, the built app, the data folder and the host number.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -21,6 +22,7 @@ DATA = os.path.join(ROOT, "data")
 PORT = 0
 FILES = None
 THUMBS = None
+IMAGINE = None
 HIST = ""
 SMARTGEN_FILE = ""
 CONFIG = {"providers": []}
@@ -32,11 +34,12 @@ _smartgen_mem = None
 
 def setup(root, web, data, port, config):
     """Points the server at its folders, host number and configuration. Called once before serving."""
-    global ROOT, WEB, DATA, PORT, FILES, THUMBS, HIST, SMARTGEN_FILE, CONFIG, _history_mem, _smartgen_mem
+    global ROOT, WEB, DATA, PORT, FILES, THUMBS, IMAGINE, HIST, SMARTGEN_FILE, CONFIG, _history_mem, _smartgen_mem
     ROOT, WEB, DATA, PORT, CONFIG = root, web, data, int(port), config
     os.makedirs(DATA, exist_ok=True)
     FILES = cfiles.Files(DATA)
     THUMBS = cthumbs.Thumbs(FILES.root)
+    IMAGINE = cimagine.Imagine(DATA, FILES, lambda: [r for r in rows() if ccfg.is_fal(r)], lambda: CONFIG.get("imagine"))
     HIST = os.path.join(DATA, "history.json")
     SMARTGEN_FILE = os.path.join(DATA, "smartgen_cards.json")
     if apply_settings(CONFIG):
@@ -190,7 +193,7 @@ def _extend_roster():
     del ROSTER[_BUILT_IN:]
     known = {m["id"] for m in ROSTER}
     for r in rows(search=False):
-        if ccfg.is_speech(r):
+        if ccfg.is_speech(r) or ccfg.is_fal(r):
             continue
         for mid in ccfg.models_of(r):
             if mid in known:
@@ -228,6 +231,8 @@ def uses(row):
     """Where in the app a provider row is read, for the launch window."""
     if ccfg.is_speech(row):
         return "Voice chat: what is said, turned into text (/api/transcribe)"
+    if ccfg.is_fal(row):
+        return "Discover Market: pictures and videos (/api/imagine)"
     if ccfg.is_search(row):
         return "Web sources for Internet, Research and Deep Research (/api/ask); search answers in the browser (/api/page)"
     name = (row.get("name") or "").strip()
@@ -1161,7 +1166,7 @@ def settings_defaults():
             "search": {k: list(v) for k, v in SEARCH.items()}, "max_tokens": dict(MAX_TOKENS), "deadline": dict(DEADLINE),
             "silence": SILENCE, "plan_queries": dict(PLAN_QUERIES), "plan_prompt": PLAN_PROMPT,
             "source_chars": dict(SOURCE_CHARS), "agent_prompt": AGENT_PROMPT, "lines_prompt": LINES_PROMPT,
-            "pack_price": PACK_PRICE, "tracks_per_pack": TRACKS_PER_PACK}
+            "pack_price": PACK_PRICE, "tracks_per_pack": TRACKS_PER_PACK, "imagine": dict(cimagine.DEFAULTS)}
 
 
 def apply_settings(cfg):
@@ -1200,6 +1205,8 @@ def apply_settings(cfg):
     cfg["tuning"] = dict(TUNING)
     AGENT_PROMPT, LINES_PROMPT = str(cfg["agent_prompt"]), str(cfg["lines_prompt"])
     PACK_PRICE, TRACKS_PER_PACK = str(cfg["pack_price"]), int(cfg["tracks_per_pack"])
+    missing = missing or any(k not in cfg["imagine"] for k in cimagine.DEFAULTS)
+    cfg["imagine"] = {**cimagine.DEFAULTS, **cfg["imagine"]}
     return missing
 
 
@@ -1292,6 +1299,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._thumb()
         if p == "/api/files":
             return self._json(FILES.listing(list(LABEL.values())))
+        if p == "/api/imagine":
+            return self._json({"items": IMAGINE.listing()})
         if p.startswith("/files/"):
             return self._file(p)
         static = self.translate_path(self.path)
@@ -1400,6 +1409,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._send(200, "text/html; charset=utf-8", cfiles.saved_page(name).encode())
         if "html" in ctype.lower():
             text = cfiles.decode_html(data, headers)
+            if cfiles.needs_script(final, text):
+                text = cfiles.render_page(final, mobile=self._mobile()) or text
             if rows(search=True) and cfiles.is_search_challenge(final, text):
                 # The search engine is asking for a puzzle; answer the search from the web-search key instead.
                 q = cfiles.search_query(final, body)
@@ -1432,6 +1443,9 @@ class Handler(SimpleHTTPRequestHandler):
             if p == "/api/files/generated":
                 b = self._body()
                 return self._json({"name": FILES.save_generated(b.get("name", "note.md"), b.get("text", ""), b.get("model", ""))})
+            if p == "/api/imagine":
+                b = self._body()
+                return self._json(IMAGINE.start(b.get("text", ""), b.get("kind", "image"), b.get("from"), b.get("replace")))
             if p == "/api/transcribe":
                 b = self._body()
                 return self._json({"text": transcribe(base64.b64decode(b.get("b64", "")), b.get("mime", "audio/webm"))})

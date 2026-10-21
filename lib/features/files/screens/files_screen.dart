@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../core/api/collider_api.dart';
+import '../../../core/audio/generated_songs.dart';
 import '../../../core/audio/music_player.dart';
 import '../../../core/media/video_window.dart';
 import '../../../core/platform/open_url.dart';
@@ -192,13 +193,17 @@ class _FilesScreenState extends State<FilesScreen> {
       widget.onOpenDocument!(f.url, f.name);
       return;
     }
-    // An uploaded, generated or downloaded song plays in the music bar, with the songs listed beside it.
-    if (f != null && !f.asset && f.kind == 'audio') {
-      final songs = _shown().where((x) => x.kind == 'audio' && !x.asset).toList();
-      final at = songs.indexOf(f);
-      MusicPlayer.instance.play(at < 0 ? 0 : at,
-          list: [for (final s in (at < 0 ? [f] : songs)) MusicTrack(s.name.replaceFirst(RegExp(r'\.[^.]+$'), ''), '', _api.fileUrl(s))],
-          id: 'files-${_view.source}');
+    // A song a model made plays here, in Files > Music, in its own row; never in the music bar (David, 20 Oct).
+    // Songs uploaded or downloaded do not play in the app; they open to their cover. (Claude, 2026-10-21)
+    if (f != null && !f.asset && f.kind == 'audio' && f.source == 'generated') {
+      if (_view.kind != 'music') {
+        setState(() {
+          _history.removeRange(_at + 1, _history.length);
+          _history.add(_View(_view.source, kind: 'music', model: _view.model));
+          _at++;
+        });
+      }
+      GeneratedSongs.instance.toggle(_api.fileUrl(f));
       return;
     }
     setState(() {
@@ -439,6 +444,7 @@ class _FilesScreenState extends State<FilesScreen> {
 
   // ---------------- an opened file ----------------
   Widget _preview(ColliderFile f) {
+    if (f.kind == 'audio') return Center(child: _Thumb(file: f, api: _api, width: 180));
     if (f.kind == 'video' && !f.asset) {
       return VideoWindow(key: ValueKey(f.url), url: _api.fileUrl(f), onClose: () => setState(() => _at--));
     }
@@ -703,7 +709,9 @@ class _FileCell extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            _Thumb(file: file, api: api, width: 88),
+            file.kind == 'audio' && file.source == 'generated'
+                ? _SongState(url: api.fileUrl(file), child: _Thumb(file: file, api: api, width: 88))
+                : _Thumb(file: file, api: api, width: 88),
             const SizedBox(height: 10),
             ..._name(),
           ]),
@@ -774,7 +782,9 @@ class _FileRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(children: [
-          _Thumb(file: file, api: api, width: 44),
+          file.kind == 'audio' && file.source == 'generated'
+              ? _SongState(url: api.fileUrl(file), child: _Thumb(file: file, api: api, width: 44))
+              : _Thumb(file: file, api: api, width: 44),
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -787,6 +797,54 @@ class _FileRow extends StatelessWidget {
           ),
         ]),
       ),
+    );
+  }
+}
+
+/// A generated song's cover with its state on it: a pause glyph while it plays and the line of how far it has got.
+/// Made by Claude (2026-10-21).
+class _SongState extends StatelessWidget {
+  final String url;
+  final Widget child;
+  const _SongState({required this.url, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = GeneratedSongs.instance;
+    return AnimatedBuilder(
+      animation: s,
+      builder: (_, __) {
+        final on = s.isPlaying(url);
+        final started = s.url == url && s.position > 0;
+        return Stack(alignment: Alignment.center, children: [
+          child,
+          AnimatedOpacity(
+            opacity: on ? 1 : 0,
+            duration: const Duration(milliseconds: 220),
+            child: Container(
+              width: 30,
+              height: 30,
+              decoration: const BoxDecoration(color: Color(0x66000000), shape: BoxShape.circle),
+              child: const Icon(Icons.pause_rounded, size: 20, color: Colors.white),
+            ),
+          ),
+          if (started)
+            Positioned(
+              left: 6,
+              right: 6,
+              bottom: 6,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: s.progressOf(url),
+                  minHeight: 3,
+                  backgroundColor: const Color(0x40FFFFFF),
+                  valueColor: const AlwaysStoppedAnimation(Colors.white),
+                ),
+              ),
+            ),
+        ]);
+      },
     );
   }
 }

@@ -434,7 +434,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void _initializeBrowserTabs() {
     // One user tab; research sources are added as tabs when a question uses the web.
     _browserTabs = [
-      BrowserTab(id: 'user_default', title: 'Search', url: 'https://html.duckduckgo.com/html/', isUserControlling: true),
+      BrowserTab(id: 'user_default', title: 'Search', url: 'https://www.google.com/', isUserControlling: true),
     ];
   }
 

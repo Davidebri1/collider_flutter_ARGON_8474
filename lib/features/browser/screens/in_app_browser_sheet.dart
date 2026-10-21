@@ -34,8 +34,8 @@ class InAppBrowserSheet extends StatefulWidget {
 
 class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   // Bing: a search engine whose results the app's page loader can show. Google's results page comes back empty through it.
-  static const _homePage = 'https://html.duckduckgo.com/html/';
-  static const _search = 'https://html.duckduckgo.com/html/?q=';
+  static const _homePage = 'https://www.google.com/';
+  static const _search = 'https://www.google.com/search?q=';
 
   late String _activeTabId;
   bool _overview = false;

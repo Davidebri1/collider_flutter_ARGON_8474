@@ -132,6 +132,27 @@ class JobState {
   }
 }
 
+/// One making: pictures from words, a video from words, or a video from a picture.
+class Creation {
+  final String id;
+  final String kind; // image | video | motion
+  final String text;
+  final String status; // making | done | failed
+  final List<Map<String, dynamic>> media;
+  final String? from; // for a video made from a picture: the making that holds the picture
+  const Creation(this.id, this.kind, this.text, this.status, this.media, [this.from]);
+  factory Creation.fromJson(Map<String, dynamic> j) => Creation(
+        '${j['id']}',
+        '${j['kind'] ?? 'image'}',
+        '${j['text'] ?? ''}',
+        '${j['status'] ?? 'making'}',
+        [for (final m in (j['media'] as List? ?? const [])) Map<String, dynamic>.from(m as Map)],
+        j['from'] == null ? null : '${j['from']}',
+      );
+  bool get making => status == 'making';
+  bool get isVideo => kind != 'image';
+}
+
 /// One entry in Files. Sources: uploaded, generated, purchased, downloaded.
 class ColliderFile {
   final String name;
@@ -218,6 +239,25 @@ class ColliderApi {
       '$_base/api/files/thumb?source=${Uri.encodeQueryComponent(f.source)}&name=${Uri.encodeQueryComponent(f.name)}&v=${f.modified.millisecondsSinceEpoch}';
 
   /// Full address of a file for viewing.
+  /// Discover Market (Claude, 2026-10-20): what has been made through fal, newest first.
+  Future<List<Creation>> creations() async {
+    try {
+      final r = await _dio.get('$_base/api/imagine');
+      return [for (final j in (r.data['items'] as List? ?? const [])) Creation.fromJson(Map<String, dynamic>.from(j as Map))];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Makes pictures (kind image) or a video (video) from words, or a video from a made picture (motion, from its id).
+  Future<void> make(String text, String kind, {String? from, String? replace}) async {
+    try {
+      await _dio.post('$_base/api/imagine',
+          data: {'text': text, 'kind': kind, if (from != null) 'from': from, if (replace != null) 'replace': replace});
+      cachedFiles = null;
+    } catch (_) {}
+  }
+
   String fileUrl(ColliderFile f) => f.asset ? '$_base/assets/${f.url}' : '$_base${f.url}';
 
   Future<String> fileText(ColliderFile f) async {
