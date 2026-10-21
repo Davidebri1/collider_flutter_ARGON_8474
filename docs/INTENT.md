@@ -163,3 +163,20 @@ Flagged so far (not followed; each is David's to confirm or strike):
 - Voice (2026-10-20): "voice chat feel free to incorporate."
 - Icons (2026-10-20): "your icons are no good . the app selector overlay mostly. redo them all in a nice distinct and color-respecting manner. the rest of the icons need to be in color too. visionOS isnt meant to be stale. it's meant to be realistic. take a look at apple guidelines to prepare you."
 - Files (2026-10-20): "do we have our in-house video player and browser too? i know ios frowns against the broowser so we will have to see about that. but the video player, music player(widget is already in and i think full music module), and any other file reader. i want icons to show in files (which should be segregated by file type/category, file origin (uploaded vs generated), and for generated we need a per model segregation (and All)."
+
+
+## 2026-10-21 (David's words, kept by Claude)
+
+- "Yeah we need proper mobile aspect ratio. And responsive design to match"
+- "does our browser in collider have tabs, bookmarks, history, settings, all working? This should all be part of the package since they are stock features"
+- "Are you happy with the look of your discover market? ... Evaluate side by side. And just double check all your screens vs the references or any known good reference of your choice. There should be a standard you're aiming to match and exceed and I want to see where you target your expectations"
+- "Discover market is just images for now. But Unsplash has shown that can be displayed well. Use that as a reference as well."
+- "The config file first needs a makeover. This cyber tech look is hard to read and annoying."
+- On "detailed thinking off": "Why should anyone turn off thinking? ... The rest of us don't think thinking is a trivial toggle. It's mandatory"
+- "Are model categories in? General image video audio? Do they have their config surfaces? Their options and toolbars and settings and source and reference and queues and generations pane(perhaps collapsible expandable)/Files preview window for that media type?"
+- "Grok merely transfers you to the chat window when you hit remix on something. It injects that thing as context or source or reference ... from there it's the same chat window and agent and you type in a prompt. We should be the same ... either bring the chat window to discover or have discover spit us to media gen rather than duplicate value"
+- "discover market ... needs to match grok imagine market in terms of color sharpness, layout, design, features, but also needs to extract the cinematic effect. Through dimming the background."
+- Premium Theme Market: "dim ... when browsing through locked live wallpapers. Unlocked live wallpapers are fully lit. Thumbnails during browsing are always fully lit and play the preview video in full. Background video is just like the source(unless unlocked, then it's full resolution and no dim)." "lose the music player icons: play, skip track (left and right). And any other leftovers from the music source. Make sure the dim is the same as the source. That was nearly black. And super cinematic."
+- "Uploaded songs, like all uploaded files, should open up the app picker so users get to choose where they play the file ... Videos play in this app because we have a full video player, not a full music player ... Collider will never be on that list. It either opens the document/file, or it opens app picker and outsources the effort. Previews still do show in my app though"
+- Picture providers: "All 3. Especially a and c" (NVIDIA FLUX and Cloudflare Workers AI first; fal kept).
+- Phone link: yes to installing Cloudflare's tunnel.

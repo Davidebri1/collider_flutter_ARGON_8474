@@ -1,19 +1,26 @@
-"""Discover Market's making of pictures and videos, through fal. Made by Claude (2026-10-20).
+"""Making pictures and videos. Made by Claude (2026-10-20); providers added 2026-10-21.
 
-David, 20 Oct: "discover market should be wired to Fal ... whatever functionality imagine market has, discover market
-has." So, as in Grok's Imagine: words make pictures (several at once, at 2K), a picture can be set in motion (a video
-from that picture), and words alone can make a video. The models are Grok Imagine's own on fal by default and are lines
-in the configuration (settings > imagine), so any fal model can be put in their place without touching code.
-
-Everything made is saved in Files > Generated (marked as made by Discover Market) and listed in data\\imagine.json,
-newest first, which the app reads for Discover Market's feed and My Gallery.
+David, 20 Oct: "discover market should be wired to Fal"; 21 Oct, on which provider makes pictures: "All 3. Especially
+a and c" (NVIDIA's FLUX and Cloudflare Workers AI first, fal kept). So a picture is asked of the providers in the
+configuration's order (settings > imagine > providers), the first that answers makes it:
+  Cloudflare  FLUX.2 klein 4B through David's own Worker (dev/cf_imagine), up to 1920 on the long side, free each day
+              up to Cloudflare's daily allowance; takes up to four reference pictures.
+  NVIDIA      FLUX.1 dev, up to 1344 on the long side, on the NVIDIA keys.
+  fal         Grok Imagine, 2K, paid per picture ($0.08 at 2K medium, Oct 2026); videos only here.
+A request may name its model ("Cloudflare:@cf/...", "NVIDIA:black-forest-labs/...", "fal:xai/..."), as the media chat
+does; otherwise the order above is used. Everything made is saved in Files > Generated under the model that made it and
+listed in data\\imagine.json, newest first.
 """
-import json, os, re, threading, time, urllib.error, urllib.request, uuid
+import base64, concurrent.futures as cf, io, json, os, random, re, threading, time, urllib.error, urllib.request, uuid
 
 QUEUE = "https://queue.fal.run/"
+NVIDIA_GENAI = "https://ai.api.nvidia.com/v1/genai/"
+UA = {"User-Agent": "Collider/1.0"}
 
-# The lines the configuration starts with (settings > imagine). Values are the best each model offers.
 DEFAULTS = {
+    "providers": ["Cloudflare", "NVIDIA", "fal"],
+    "cloudflare_model": "@cf/black-forest-labs/flux-2-klein-4b",
+    "nvidia_model": "black-forest-labs/flux.1-dev",
     "image_model": "xai/grok-imagine-image/v2.0/text-to-image",
     "motion_model": "xai/grok-imagine-video/v1.5/image-to-video",
     "video_model": "xai/grok-imagine-video/v1.5/text-to-video",
@@ -27,17 +34,40 @@ DEFAULTS = {
     "deadline_seconds": 600,
 }
 
+# Each model's own name, for Files > Generated and the media chat.
+LABELS = {
+    "@cf/black-forest-labs/flux-2-klein-4b": "FLUX.2 klein 4B",
+    "@cf/black-forest-labs/flux-2-klein-9b": "FLUX.2 klein 9B",
+    "@cf/black-forest-labs/flux-2-dev": "FLUX.2 dev",
+    "@cf/black-forest-labs/flux-1-schnell": "FLUX.1 schnell",
+    "black-forest-labs/flux.1-dev": "FLUX.1 dev",
+    "xai/grok-imagine-image/v2.0/text-to-image": "Grok Imagine",
+    "xai/grok-imagine-video/v1.5/image-to-video": "Grok Imagine Video",
+    "xai/grok-imagine-video/v1.5/text-to-video": "Grok Imagine Video",
+}
+
+# Sizes per shape: Cloudflare's FLUX.2 takes any size to 1920; NVIDIA's FLUX.1 dev takes only these.
+CF_SIZE = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1440, 1440), "3:4": (1440, 1920), "4:3": (1920, 1440)}
+NV_SIZE = {"9:16": (768, 1344), "16:9": (1344, 768), "1:1": (1024, 1024), "3:4": (896, 1152), "4:3": (1152, 896)}
+
 _lock = threading.Lock()
+
+
+def label(model):
+    p, _, rest = model.partition(":")
+    model = rest if p in ("Cloudflare", "NVIDIA", "fal") else model  # "Provider:model" ids (Claude, 2026-10-21)
+    return LABELS.get(model) or model.split("/")[-1]
 
 
 class Imagine:
     def __init__(self, data_dir, files, rows, settings):
-        """files: collider_files.Files; rows(): the configuration's fal rows (with keys); settings(): the imagine lines."""
+        """files: collider_files.Files; rows(name): the configuration's rows with keys for a provider; settings(): the
+        imagine lines."""
         self.path = os.path.join(data_dir, "imagine.json")
         self.files = files
         self.rows = rows
         self.settings = settings
-        self._turn = 0
+        self._turn = {}
 
     # ---------------- the list ----------------
     def _load(self):
@@ -64,10 +94,29 @@ class Imagine:
         with _lock:
             return self._load()
 
+    def models(self):
+        """The picture models that can be used now (their provider has a key), in the configuration's order."""
+        s = self._s()
+        out = []
+        for p in s["providers"]:
+            if not self.rows(p):
+                continue
+            if p == "Cloudflare":
+                ids = [m.strip() for m in (self.rows(p)[0].get("models") or s["cloudflare_model"]).split(",") if m.strip()]
+            elif p == "NVIDIA":
+                ids = [s["nvidia_model"]]
+            else:
+                ids = [s["image_model"]]
+            out += [{"id": f"{p}:{m}", "label": label(m), "provider": p} for m in ids]
+        return out
+
+    def _s(self):
+        return {**DEFAULTS, **(self.settings() or {})}
+
     # ---------------- making ----------------
-    def start(self, text, kind="image", from_id=None, replace=None):
+    def start(self, text, kind="image", from_id=None, replace=None, model=None, references=None, aspect=None, count=None):
         """kind: image (pictures from words), video (a video from words), motion (a video from one of the pictures).
-        replace: a making that failed, taken off the list as it is tried again."""
+        references: Files paths ("source/name") of pictures to make from. replace: a making that failed, tried again."""
         if replace:
             self.remove(replace)
         text = (text or "").strip()
@@ -80,74 +129,195 @@ class Imagine:
             raise ValueError("no words")
         cid = uuid.uuid4().hex[:12]
         item = {"id": cid, "kind": kind, "text": text or (source or {}).get("text", ""), "status": "making",
-                "created": time.time(), "from": from_id, "media": []}
+                "created": time.time(), "from": from_id, "media": [], "model": model or "",
+                "references": list(references or []), "aspect": aspect or "", "count": int(count or 0)}
         with _lock:
             items = self._load()
             items.insert(0, item)
             self._save(items)
-        threading.Thread(target=self._run, args=(cid, kind, item["text"], source), daemon=True).start()
+        threading.Thread(target=self._run, args=(cid, item, source), daemon=True).start()
         return item
 
-    def _key(self):
-        rs = self.rows()
+    def _key(self, provider):
+        rs = self.rows(provider)
         if not rs:
             return None
-        self._turn = (self._turn + 1) % len(rs)
-        return rs[self._turn]["key"].strip()
+        self._turn[provider] = (self._turn.get(provider, -1) + 1) % len(rs)
+        return rs[self._turn[provider]]
 
-    def _call(self, method, url, key, body=None):
-        req = urllib.request.Request(url, method=method, data=json.dumps(body).encode() if body is not None else None,
-                                     headers={"Authorization": "Key " + key, "Content-Type": "application/json",
-                                              "Accept": "application/json", "User-Agent": "Collider/1.0"})
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return json.loads(r.read() or b"{}")
+    def _refs(self, item, small):
+        """The reference pictures as base64, made smaller than small x small for models that need it."""
+        out = []
+        for ref in item.get("references") or []:
+            try:
+                src, name = ref.split("/", 1)
+                p = self.files.path_for(src, name)
+                if not p:
+                    continue
+                from PIL import Image
+                im = Image.open(p).convert("RGB")
+                im.thumbnail((small - 1, small - 1))
+                buf = io.BytesIO()
+                im.save(buf, "JPEG", quality=92)
+                out.append(base64.b64encode(buf.getvalue()).decode())
+            except Exception as e:
+                print("reference", ref, e)
+        return out
 
-    def _run(self, cid, kind, text, source):
-        s = {**DEFAULTS, **(self.settings() or {})}
+    def _run(self, cid, item, source):
+        s = self._s()
+        kind, text = item["kind"], item["text"]
         try:
-            key = self._key()
-            if not key:
-                raise RuntimeError("no fal key")
-            if kind == "image":
-                model = s["image_model"]
-                body = {"prompt": text, "num_images": int(s["pictures"]), "resolution": s["image_resolution"],
-                        "quality": s["image_quality"], "aspect_ratio": s["aspect_ratio"], "output_format": "png"}
-            elif kind == "video":
-                model = s["video_model"]
-                body = {"prompt": text, "resolution": s["video_resolution"], "duration": int(s["video_seconds"]),
-                        "aspect_ratio": s["aspect_ratio"]}
+            if kind != "image":
+                found, model = self._fal_video(s, kind, text, source)
             else:
-                model = s["motion_model"]
-                body = {"prompt": text or "", "image_url": source["media"][0]["remote"],
-                        "resolution": s["video_resolution"], "duration": int(s["video_seconds"])}
-            job = self._call("POST", QUEUE + model, key, body)
-            status_url = job.get("status_url") or f"{QUEUE}{model}/requests/{job['request_id']}/status"
-            result_url = job.get("response_url") or f"{QUEUE}{model}/requests/{job['request_id']}"
-            give_up = time.time() + float(s["deadline_seconds"])
-            while True:
-                st = self._call("GET", status_url, key)
-                if st.get("status") == "COMPLETED":
-                    break
-                if st.get("status") in ("FAILED", "ERROR") or time.time() > give_up:
-                    raise RuntimeError(st.get("status") or "timeout")
-                time.sleep(float(s["poll_seconds"]))
-            out = self._call("GET", result_url, key)
-            found = [i for i in (out.get("images") or []) if i.get("url")]
-            if out.get("video", {}).get("url"):
-                found.append(out["video"])
+                # the chosen model first; if it cannot make them (its day's allowance used up, its service down), the
+                # next makers in line, so a request still comes back with pictures (Claude, 2026-10-21)
+                chosen = item.get("model") or ""
+                order = ([chosen] if chosen else []) + [f"{p}:" for p in s["providers"] if not chosen.startswith(p + ":")]
+                found, model, last = None, "", ""
+                for choice in order:
+                    provider, _, m = choice.partition(":")
+                    try:
+                        found, model = self._pictures(s, provider, m, item)
+                        if found:
+                            model = f"{provider}:{model}"  # kept as the id a retry picks (Claude, 2026-10-21)
+                            break
+                    except Exception as e:
+                        last = f"{provider}: {str(e)[:120]}"
+                        print("pictures", last)
+                if not found:
+                    raise RuntimeError(last or "no provider")
             media = []
-            stem = re.sub(r"[^\w\- ]", "", text)[:48].strip() or "Discover Market"
-            for n, m in enumerate(found):
-                url = m["url"]
-                ext = os.path.splitext(url.split("?")[0])[1] or (".mp4" if kind != "image" else ".png")
-                data = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Collider/1.0"}), timeout=120).read()
-                name = self.files.save_media(f"{stem}{'' if n == 0 else f' {n + 1}'}{ext}", data, "Discover Market")
-                media.append({"name": name, "url": f"/files/generated/{urllib.request.quote(name)}", "remote": url,
+            stem = re.sub(r"[^\w\- ]", "", text)[:48].strip() or "Picture"
+            for n, (data, ext, w, h, remote) in enumerate(found):
+                name = self.files.save_media(f"{stem}{'' if n == 0 else f' {n + 1}'}{ext}", data, label(model))
+                media.append({"name": name, "url": f"/files/generated/{urllib.request.quote(name)}", "remote": remote,
                               "kind": "video" if ext.lower() in (".mp4", ".webm", ".mov") else "image",
-                              "width": m.get("width"), "height": m.get("height")})
-            self._update(cid, status="done", media=media, model=model)
+                              "width": w, "height": h})
+            self._update(cid, status="done", media=media, model=model, label=label(model))
         except Exception as e:
             self._update(cid, status="failed", error=str(e)[:160])
+
+    # ---------------- providers ----------------
+    @staticmethod
+    def _some(one, n):
+        """Makes n pictures at once and keeps those that came back; fails only when none did. (Claude, 2026-10-21)"""
+        got, err, missed = [], None, 0
+        with cf.ThreadPoolExecutor(n) as pool:
+            for f in [pool.submit(one, i) for i in range(n)]:
+                try:
+                    got.append(f.result())
+                except Exception as e:
+                    err, missed = err or e, missed + 1
+        for i in range(missed if got else 0):  # one more try each, one at a time, for those a busy service dropped
+            try:
+                got.append(one(i))
+            except Exception:
+                pass
+        if not got and err:
+            raise err
+        return got
+
+    def _pictures(self, s, provider, model, item):
+        n = max(1, min(int(item.get("count") or s["pictures"]), 8))
+        aspect = item.get("aspect") or s["aspect_ratio"]
+        if provider == "Cloudflare":
+            row = self._key("Cloudflare")
+            if not row:
+                return None, ""
+            model = model or s["cloudflare_model"]
+            w, h = CF_SIZE.get(aspect, CF_SIZE["9:16"])
+            refs = self._refs(item, 512)
+
+            def one(_):
+                body = {"model": model, "prompt": item["text"], "width": w, "height": h, "seed": random.randint(1, 2**31 - 1),
+                        "references": refs}
+                req = urllib.request.Request(row["endpoint"], data=json.dumps(body).encode(), headers={
+                    "Content-Type": "application/json", "Authorization": "Key " + row["key"].strip(), **UA})
+                try:
+                    with urllib.request.urlopen(req, timeout=180) as r:
+                        data = r.read()
+                        ext = ".jpg" if "jpeg" in (r.headers.get("Content-Type") or "") else ".png"
+                except urllib.error.HTTPError as e:  # the Worker's own words say why
+                    raise RuntimeError(f"{e.code} {e.read()[:160].decode('utf-8', 'replace')}")
+                return data, ext, w, h, ""
+            return self._some(one, n), model
+        if provider == "NVIDIA":
+            row = self._key("NVIDIA")
+            if not row:
+                return None, ""
+            model = model or s["nvidia_model"]
+            w, h = NV_SIZE.get(aspect, NV_SIZE["9:16"])
+
+            def one(_):
+                body = {"prompt": item["text"], "mode": "base", "cfg_scale": 3.5, "width": w, "height": h,
+                        "seed": random.randint(1, 2**31 - 1), "steps": 50}
+                req = urllib.request.Request(NVIDIA_GENAI + model, data=json.dumps(body).encode(), headers={
+                    "Content-Type": "application/json", "Accept": "application/json",
+                    "Authorization": "Bearer " + row["key"].strip(), **UA})
+                with urllib.request.urlopen(req, timeout=180) as r:
+                    art = (json.load(r).get("artifacts") or [{}])[0]
+                if art.get("finishReason") not in (None, "SUCCESS"):
+                    raise RuntimeError(art.get("finishReason"))
+                return base64.b64decode(art["base64"]), ".jpg", w, h, ""
+            return self._some(one, n), model
+        if provider == "fal":
+            row = self._key("fal")
+            if not row:
+                return None, ""
+            model = model or s["image_model"]
+            body = {"prompt": item["text"], "num_images": n, "resolution": s["image_resolution"],
+                    "quality": s["image_quality"], "aspect_ratio": aspect, "output_format": "png"}
+            out = self._fal(s, model, body, row["key"].strip())
+            return [(self._get(i["url"]), os.path.splitext(i["url"].split("?")[0])[1] or ".png", i.get("width"), i.get("height"), i["url"])
+                    for i in (out.get("images") or []) if i.get("url")], model
+        return None, ""
+
+    def _fal_video(self, s, kind, text, source):
+        row = self._key("fal")
+        if not row:
+            raise RuntimeError("no fal key")
+        if kind == "video":
+            model = s["video_model"]
+            body = {"prompt": text, "resolution": s["video_resolution"], "duration": int(s["video_seconds"]), "aspect_ratio": s["aspect_ratio"]}
+        else:
+            model = s["motion_model"]
+            body = {"prompt": text or "", "image_url": source["media"][0].get("remote") or "",
+                    "resolution": s["video_resolution"], "duration": int(s["video_seconds"])}
+        out = self._fal(s, model, body, row["key"].strip())
+        v = out.get("video") or {}
+        if not v.get("url"):
+            raise RuntimeError("no video")
+        return [(self._get(v["url"]), ".mp4", v.get("width"), v.get("height"), v["url"])], model
+
+    def _fal(self, s, model, body, key):
+        def call(method, url, b=None):
+            req = urllib.request.Request(url, method=method, data=json.dumps(b).encode() if b is not None else None,
+                                         headers={"Authorization": "Key " + key, "Content-Type": "application/json",
+                                                  "Accept": "application/json", **UA})
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    return json.loads(r.read() or b"{}")
+            except urllib.error.HTTPError as e:
+                detail = e.read()[:200].decode("utf-8", "ignore")
+                raise RuntimeError(f"HTTP {e.code} {detail}")
+        job = call("POST", QUEUE + model, body)
+        status_url = job.get("status_url") or f"{QUEUE}{model}/requests/{job['request_id']}/status"
+        result_url = job.get("response_url") or f"{QUEUE}{model}/requests/{job['request_id']}"
+        give_up = time.time() + float(s["deadline_seconds"])
+        while True:
+            st = call("GET", status_url)
+            if st.get("status") == "COMPLETED":
+                break
+            if st.get("status") in ("FAILED", "ERROR") or time.time() > give_up:
+                raise RuntimeError(st.get("status") or "timeout")
+            time.sleep(float(s["poll_seconds"]))
+        return call("GET", result_url)
+
+    @staticmethod
+    def _get(url):
+        return urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=120).read()
 
     def remove(self, cid):
         """Takes a making off the list. Its files stay in Files > Generated."""

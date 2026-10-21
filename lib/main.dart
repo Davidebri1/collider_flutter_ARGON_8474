@@ -35,6 +35,8 @@ import 'features/browser/models/browser_tab.dart';
 import 'features/browser/screens/in_app_browser_sheet.dart';
 import 'features/theme/premium_theme_market_view.dart';
 import 'features/theme/theme_living_media.dart';
+import 'features/theme/theme_pack_store.dart';
+import 'features/media/generations_pane.dart';
 import 'core/media/theme_blur_cache.dart';
 import 'core/media/theme_cloud.dart';
 import 'features/drawers/history_pane.dart';
@@ -101,6 +103,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   // Active Model Category
   ModelCategory _activeCategory = ModelCategory.general;
+  // The Image category (Claude, 2026-10-21): the shape and number of pictures, and the generations pane.
+  String _aspect = '9:16';
+  int _count = 4;
+  bool _mediaExpanded = false;
+  int _mediaRefresh = 0;
 
   // Active temporary pane / drawer: 'themes', 'settings', 'consensus', 'apps', 'history', 'market', 'smartgen', 'upgrade', 'skills', 'files', 'model_ladder'
   String? _activeDrawer;
@@ -245,7 +252,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     setState(() {
       _selectedModelIds
         ..clear()
-        ..addAll(live.take(6));
+        ..addAll(live.take(6))
+        ..addAll(ModelRoster.forCategory(ModelCategory.image).take(1).map((m) => m.id));
     });
     await _reloadHistory(restoreLatest: true);
     // Deep links used by the launcher and the screenshot tour: ?ask=...&mode=research
@@ -662,7 +670,32 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
   }
 
+  /// The Image category: the words (and any reference pictures) go to the picture models chosen there.
+  Future<void> _onSendImage(String prompt, [List<String> files = const []]) async {
+    var models = _selectedModelIds.where((id) => ModelRoster.byId(id)?.categories.contains(ModelCategory.image) ?? false).toList();
+    if (models.isEmpty) models = ModelRoster.forCategory(ModelCategory.image).take(1).map((m) => m.id).toList();
+    if (models.isEmpty) return;
+    final refs = [for (final f in files) f.contains('/') ? f : 'uploaded/$f'];
+    setState(() => _isComposerSummoned = false);
+    for (final m in models) {
+      await ColliderApi.instance.make(prompt, 'image', model: m, references: refs, aspect: _aspect, count: _count);
+    }
+    if (mounted) setState(() => _mediaRefresh++);
+  }
+
+  /// From Discover: to the chat's Image category, with words to make from, or a picture to remix (Grok's remix).
+  void _toImageChat({String? text, String? reference}) {
+    _requestSwitchSurface(null);
+    setState(() {
+      _activeCategory = ModelCategory.image;
+      _isComposerSummoned = reference != null;
+    });
+    if (reference != null) FloatingPrompt.attach.value = reference;
+    if (text != null) _onSendImage(text);
+  }
+
   Future<void> _onSendPrompt(String prompt, [List<String> files = const []]) async {
+    if (_activeCategory == ModelCategory.image) return _onSendImage(prompt, files);
     final models = _selectedModelIds.where((id) {
       final d = ModelRoster.byId(id);
       return d != null && !d.isMedia;
@@ -799,6 +832,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         return InAppBrowserSheet(
           initialTabId: tabId,
           tabs: _browserTabs,
+          incognito: _incognito,
           onTabUpdated: (updated) {
             setState(() {
               final idx = _browserTabs.indexWhere((t) => t.id == updated.id);
@@ -816,6 +850,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       if (mounted) setState(() => _browserOpen = false);
     });
   }
+
+  bool _locked(WallpaperTheme t) => ThemePackStore.instance.priceFor(t) != null && !ThemePackStore.instance.isUnlocked(t.id);
 
   Widget _buildSideNav({required bool isMobile}) {
     // REQ-21 visual language: a slim detached rail of circular glass buttons sits at
@@ -969,6 +1005,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
 
     final activePills = categoryPills;
+    final media = _activeCategory == ModelCategory.image;
     final isMobile = MediaQuery.of(context).size.width < 768;
 
     // The opened conversation, if any.
@@ -1048,7 +1085,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               theme: _currentTheme,
               // Asset-swap: live loop + cached ambient frame when Premium Market
               preferVideo: true,
-              builderAmbient: _activeDrawer == 'premium',
+              // Locked: the source's near-black dim. Unlocked (or free): the wallpaper itself, full and lit (David, 21 Oct).
+              builderAmbient: _activeDrawer == 'premium' && _locked(_currentTheme),
             ),
           ),
 
@@ -1079,17 +1117,28 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       child: Container(
                         constraints: BoxConstraints(
                           maxWidth: isMobile
-                              ? (openItem != null ? 300.0 : 260.0)
-                              : (openItem != null ? 780.0 : 480.0),
+                              ? (media ? 360.0 : (openItem != null ? 300.0 : 260.0)) // the pictures' toolbar fits whole (Claude, 2026-10-21)
+                              : (openItem != null || media ? 780.0 : 480.0),
                           // rows: never more than 40% of the screen; a conversation: "halfway up is sufficient"
-                          maxHeight: MediaQuery.of(context).size.height * (openItem != null ? 0.50 : 0.40),
+                          maxHeight: MediaQuery.of(context).size.height * (openItem != null || (media && _mediaExpanded) ? 0.50 : 0.40),
                         ),
                         margin: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24),
                         child: VGlass(
                           radius: VRadius.card,
                           material: VMaterial.resting,
                           padding: const EdgeInsets.all(VSpace.xs),
-                          child: openItem == null
+                          child: media
+                              ? GenerationsPane(
+                                  aspect: _aspect,
+                                  count: _count,
+                                  onAspect: (a) => setState(() => _aspect = a),
+                                  onCount: (n) => setState(() => _count = n),
+                                  expanded: _mediaExpanded,
+                                  onToggleExpanded: () => setState(() => _mediaExpanded = !_mediaExpanded),
+                                  onRemix: (ref) => _toImageChat(reference: ref),
+                                  refresh: _mediaRefresh,
+                                )
+                              : openItem == null
                               ? rows
                               : (isMobile
                                   ? conversation
@@ -1284,6 +1333,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               child: MarketScreen(
                 onClose: () => _requestSwitchSurface(null),
                 view: _marketCategory,
+                onImagine: (t) => _toImageChat(text: t),
+                onRemix: (ref) => _toImageChat(reference: ref),
               ),
             ),
 

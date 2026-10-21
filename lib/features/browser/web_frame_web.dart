@@ -1,6 +1,7 @@
 // Browser page surface (web). Made by Claude.
 // Pages load through the local Collider server so sites that refuse framing still render.
 // The page reports where it is, so the address bar, Back and Forward follow links the user taps.
+import 'browser_store.dart';
 import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 import 'package:flutter/widgets.dart';
@@ -43,7 +44,8 @@ class _WebFrameState extends State<WebFrame> {
     super.initState();
     _showing = widget.url;
     // A phone-sized window gets the phone page of a site, so the page fits it.
-    web.document.cookie = 'collider_ua=${web.window.innerWidth < 768 ? 'mobile' : 'desktop'}; path=/; SameSite=Lax';
+    // Sites are asked for their phone pages on a phone, unless Settings > Request Desktop Website is on.
+    web.document.cookie = 'collider_ua=${web.window.innerWidth < 768 && !BrowserStore.instance.desktop ? 'mobile' : 'desktop'}; path=/; SameSite=Lax';
     _el = web.HTMLIFrameElement()
       ..src = _proxied(widget.url)
       ..style.border = '0'

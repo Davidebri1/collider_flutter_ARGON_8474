@@ -27,3 +27,8 @@ __pycache__/
 /dev/*.log
 /dev/build_log.txt
 /dev/test_app/
+
+# Claude (2026-10-21): the phone copy carries the keys in its configuration; Wrangler's own scratch folders
+/dev/phone_app/
+.wrangler/
+/data/collider_config.before_*.json

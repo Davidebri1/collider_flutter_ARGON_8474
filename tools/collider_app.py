@@ -161,35 +161,46 @@ def _open(url):
 
 FORM = r"""<!doctype html><html><head><meta charset="utf-8"><title>Collider</title>
 <style>
-:root{color-scheme:dark}
+/* The launch window, redone by Claude (2026-10-21) in Apple's grouped-settings layout (iOS Settings; seen in Mobbin on
+   Wispr Flow and GroupMe): grey page, white rounded groups, small grey headings above them, plain readable type.
+   David: "This cyber tech look is hard to read and annoying." Light, and dark when Windows is set to dark. */
+:root{color-scheme:light dark;--bg:#F2F2F7;--card:#FFFFFF;--text:#000000;--sub:#6C6C70;--sep:rgba(60,60,67,.16);--field:#F2F2F7;--accent:#007AFF;--red:#FF3B30}
+@media (prefers-color-scheme:dark){:root{--bg:#000000;--card:#1C1C1E;--text:#FFFFFF;--sub:#8E8E93;--sep:rgba(84,84,88,.55);--field:#2C2C2E;--accent:#0A84FF;--red:#FF453A}}
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:#0B0D12;color:#E9EBF0;font:13px/1.4 "Segoe UI",system-ui,sans-serif;user-select:none}
-form{padding:18px 18px 14px}
-.host{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
-.host label{color:#8B90A0;font-size:12px}
-.host input{font-size:26px;font-weight:600;width:130px;background:transparent;border:0;border-bottom:1px solid #2A2F3A;color:#fff;padding:2px 0;outline:none}
-.host input.bad{border-bottom-color:#FF453A}
-h2{font-size:11px;font-weight:600;color:#8B90A0;letter-spacing:.04em;text-transform:uppercase;margin:16px 0 6px}
-.row{background:#141822;border:1px solid #1F2430;border-radius:10px;padding:8px;margin-bottom:6px}
-.grid{display:grid;grid-template-columns:96px 1fr 22px;gap:6px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
-input.f{width:100%;background:#0E1118;border:1px solid #232836;border-radius:6px;color:#E9EBF0;padding:5px 7px;font:12px "Cascadia Mono",Consolas,monospace;outline:none;user-select:text}
-input.f:focus{border-color:#3B82F6}
-.uses{color:#7D8394;font-size:11px;margin-top:5px}
-.x{background:none;border:0;color:#7D8394;cursor:pointer;font-size:15px;line-height:1}
-.add{background:none;border:0;color:#5E6474;width:100%;padding:2px;cursor:pointer;font-size:15px}
-.sw{display:flex;align-items:center;justify-content:space-between}
-.sw input{width:34px;height:20px;accent-color:#0A84FF}
-.go{margin-top:14px;width:100%;padding:9px;border:0;border-radius:9px;background:#0A84FF;color:#fff;font-weight:600;cursor:pointer}
-.where{color:#5E6474;font-size:11px;margin-top:8px;word-break:break-all}
-textarea.f{width:100%;min-height:64px;resize:vertical;background:#0E1118;border:1px solid #232836;border-radius:6px;color:#E9EBF0;padding:5px 7px;font:12px "Cascadia Mono",Consolas,monospace;outline:none;user-select:text}
-.kv{display:grid;grid-template-columns:160px 1fr;gap:6px;align-items:center;margin-bottom:6px}
-.kv:last-child{margin-bottom:0}
-.kv span{color:#8B90A0;font-size:11px}
-.m{display:grid;grid-template-columns:1.6fr 1fr .5fr .7fr .7fr .7fr .5fr 22px;gap:6px;margin-bottom:6px}
-.mw{padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid #1F2430}
-.mw textarea.f{min-height:30px}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;user-select:none;-webkit-font-smoothing:antialiased}
+form{padding:22px 18px 26px;max-width:760px;margin:0 auto}
+.host{display:flex;align-items:baseline;gap:12px;margin:0 4px 6px}
+.host label{color:var(--sub);font-size:15px}
+.host input{font:600 30px/1.1 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;width:150px;background:transparent;border:0;border-bottom:1px solid var(--sep);color:var(--text);padding:2px 0;outline:none}
+.host input:focus{border-bottom-color:var(--accent)}
+.host input.bad{border-bottom-color:var(--red);color:var(--red)}
+h2{font-size:13px;font-weight:400;color:var(--sub);text-transform:uppercase;letter-spacing:.02em;margin:24px 16px 7px}
+.row{background:var(--card);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:120px 1fr 28px;gap:8px;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+input.f,textarea.f{width:100%;background:var(--field);border:0;border-radius:8px;color:var(--text);padding:8px 10px;font:14px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;outline:none;user-select:text}
+input.f:focus,textarea.f:focus{box-shadow:0 0 0 2px var(--accent)}
+textarea.f{min-height:72px;resize:vertical}
+input.f::placeholder,textarea.f::placeholder{color:var(--sub)}
+.uses{color:var(--sub);font-size:12.5px;margin-top:8px}
+.x{background:none;border:0;color:var(--sub);cursor:pointer;font-size:20px;line-height:1;width:28px;height:28px;border-radius:14px}
+.x:hover{background:var(--field)}
+.add{background:var(--card);border:0;border-radius:12px;color:var(--accent);width:100%;padding:10px;cursor:pointer;font-size:22px;line-height:1}
+.sw{display:flex;align-items:center;justify-content:space-between;font-size:15px}
+.sw input{width:42px;height:24px;accent-color:#34C759}
+.go{margin-top:20px;width:100%;padding:13px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:600 17px "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;cursor:pointer}
+.go:active{opacity:.85}
+.where{color:var(--sub);font-size:12px;margin:12px 4px 0;word-break:break-all}
+.kv{display:grid;grid-template-columns:190px 1fr;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--sep)}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--text);font-size:14px}
+.m{display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:8px;margin-bottom:8px;align-items:center}
+.m>:first-child{grid-column:1/4;grid-row:1}
+.m>button.x{grid-column:4;grid-row:1}
+.mw{padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--sep)}
+.mw:last-of-type{border-bottom:0}
+.mw textarea.f{min-height:34px}
 </style></head><body>
 <form id="f" autocomplete="off">
   <div class="host"><label for="host">Host</label><input id="host" inputmode="numeric" autofocus></div>

@@ -241,10 +241,10 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
   Widget _models() {
     final cats = [
       for (final c in ModelCategory.values)
-        if (ModelRoster.forCategory(c).any((m) => !m.isMedia)) c,
+        if (ModelRoster.forCategory(c).isNotEmpty) c,
     ];
     final cat = cats.contains(widget.activeCategory) || cats.isEmpty ? widget.activeCategory : cats.first;
-    final models = ModelRoster.forCategory(cat).where((m) => !m.isMedia).toList();
+    final models = ModelRoster.forCategory(cat);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,

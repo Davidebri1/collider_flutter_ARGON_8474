@@ -248,19 +248,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
 
   // ---------------------------------------------------------------- Player.tsx
 
-  void _togglePlay() {
-    final t = _selected;
-    if (t == null) return;
-    final on = !PremiumAmbient.playing.value;
-    PremiumAmbient.playing.value = on;
-    final p = MusicPlayer.instance;
-    if (on) {
-      _playSong(t);
-    } else if (p.queueId == t.id && p.playing) {
-      p.toggle();
-    }
-    setState(() {});
-  }
 
   /// The preview track in focus plays with the wallpaper, as the source's song played with its video.
   void _playSong(WallpaperTheme t) {
@@ -284,12 +271,12 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
 
   /// The centre cover and its two neighbours play; the rest show their posters.
   ValueNotifier<ui.Image?>? _framesFor(int i, WallpaperTheme t) {
-    if ((i - _index).abs() > 1 || t.videoPath == null) return null;
+    if ((i - _index).abs() > 4 || t.videoPath == null) return null; // every cover on screen plays (David, 21 Oct)
     return (_live[i] ??= LiveFrames(themeMediaUrl(t.videoPath!), fps: 20)).frame;
   }
 
   void _dropFrames() {
-    final gone = _live.keys.where((k) => (k - _index).abs() > 1).toList();
+    final gone = _live.keys.where((k) => (k - _index).abs() > 4).toList();
     for (final k in gone) {
       _live.remove(k)?.dispose();
     }
@@ -362,8 +349,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                                           fontWeight: FontWeight.w300,
                                           shadows: const [Shadow(color: Color(0x80000000), blurRadius: 8, offset: Offset(0, 2))],
                                         )),
-                                    SizedBox(height: gapPlayer),
-                                    _player(t, compactH: compactH),
                                     if (t.tracks.isNotEmpty) ...[SizedBox(height: gapTracks), _tracks(t, compactH: compactH)],
                                   ],
                                 ],
@@ -434,14 +419,14 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
         ..rotateY((offset < 0 ? 55 : -55) * math.pi / 180)
         ..scale(k, k, 1.0);
     }
-    final opacity = d <= 2 ? 1.0 : d <= 3 ? 0.95 : d <= 4 ? 0.9 : math.max(0.8, 0.9 - (d - 4) * 0.05);
+    const opacity = 1.0; // covers are always fully lit (David, 21 Oct)
     final isCurrent = i == _index;
     final frames = _framesFor(i, t);
     Widget picture() => frames == null
         ? _Poster(theme: t)
         : ValueListenableBuilder<ui.Image?>(
             valueListenable: frames,
-            builder: (_, img, __) => img == null ? _Poster(theme: t) : RawImage(image: img, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+            builder: (_, img, __) => img == null ? _Poster(theme: t) : RawImage(image: img, fit: BoxFit.cover, filterQuality: FilterQuality.high),
           );
     return Transform(
       alignment: Alignment.center,
@@ -554,7 +539,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                   ),
                 ),
                 if (isCurrent) ...[
-                  const Positioned(top: 12, right: 12, child: _Pulse()),
                   Positioned(
                     top: 0,
                     left: size / 4,
@@ -575,45 +559,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
           ),
         ),
       ),
-    );
-  }
-
-  // ---------------------------------------------------------------- Player.tsx: drawing
-
-  Widget _player(WallpaperTheme t, {bool compactH = false}) {
-    final playing = PremiumAmbient.playing.value;
-    final btnSize = compactH ? 64.0 : 80.0;
-    Widget side(IconData icon, VoidCallback onTap) => VPress(
-          onTap: onTap,
-          child: SizedBox(width: 48, height: 48, child: Icon(icon, size: compactH ? 28 : 32, color: const Color(0xCCFFFFFF))),
-        );
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        side(Icons.skip_previous_rounded, () => _select(_index - 1)),
-        SizedBox(width: compactH ? 24 : 32),
-        VPress(
-          onTap: _togglePlay,
-          child: Container(
-            width: btnSize,
-            height: btnSize,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(color: Color(0x4DFFFFFF), blurRadius: 40, offset: Offset(0, 12)),
-                BoxShadow(color: Color(0x1A000000), blurRadius: 16, offset: Offset(0, 4)),
-              ],
-            ),
-            child: Padding(
-              padding: EdgeInsets.only(left: playing ? 0 : 4),
-              child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: compactH ? 28 : 32, color: Colors.black),
-            ),
-          ),
-        ),
-        SizedBox(width: compactH ? 24 : 32),
-        side(Icons.skip_next_rounded, () => _select(_index + 1)),
-      ],
     );
   }
 
@@ -864,37 +809,6 @@ class _Poster extends StatelessWidget {
 }
 
 /// The source's small white indicator on the centre cover (animate-pulse).
-class _Pulse extends StatefulWidget {
-  const _Pulse();
-  @override
-  State<_Pulse> createState() => _PulseState();
-}
-
-class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => FadeTransition(
-        opacity: Tween(begin: 0.9, end: 0.45).animate(CurvedAnimation(parent: _c, curve: const Cubic(0.4, 0, 0.6, 1))),
-        child: Container(
-          width: 10,
-          height: 10,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))],
-          ),
-        ),
-      );
-}
-
-/// SearchBar.tsx: a rounded field, the search mark at the left, a clear cross once something is typed.
 class _SearchBar extends StatefulWidget {
   final ValueChanged<String> onSearch;
   final VoidCallback onClear;

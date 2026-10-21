@@ -217,12 +217,13 @@ class ModelRoster {
   ];
 
   /// Live roster. Starts from the seed; replaced by the server's models at launch.
-  static List<ModelDef> allModels = List.of(_seed);
+  static List<ModelDef> allModels = [for (final m in _seed) if (!m.isMedia) m];
 
   /// Live text models from the Collider server replace the seed text models.
   /// Media models stay listed under their own categories.
   static void setLive(List<ModelDef> live) {
-    allModels = [...live, ..._seed.where((m) => m.isMedia)];
+    // The seed's media models were names with nothing behind them; the live picture models come from the server.
+    allModels = [...live];
   }
 
   static List<ModelDef> forCategory(ModelCategory category) {

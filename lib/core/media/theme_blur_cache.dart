@@ -172,9 +172,9 @@ class ThemeBlurCache extends ChangeNotifier {
           final sigma = 20.0 * scale;
           // Combined brightness(0.5) * contrast(1.2) matrix: scale = 0.6, translate = -25.5, alpha = 0.7
           const matrix = <double>[
-            0.6, 0, 0, 0, -25.5,
-            0, 0.6, 0, 0, -25.5,
-            0, 0, 0.6, 0, -25.5,
+            0.36, 0, 0, 0, -25.5,
+            0, 0.36, 0, 0, -25.5,
+            0, 0, 0.36, 0, -25.5,
             0, 0, 0, 0.7, 0,
           ];
           final paint = Paint()
@@ -182,7 +182,8 @@ class ThemeBlurCache extends ChangeNotifier {
             ..colorFilter = const ColorFilter.matrix(matrix)
             ..imageFilter = ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.clamp);
           canvas.drawImageRect(src, srcRect, dstRect, paint);
-          canvas.drawRect(dstRect, Paint()..color = const Color(0x33000000));
+          canvas.drawRect(dstRect, Paint()..color = const Color(0x59000000));
+          canvas.drawRect(dstRect, Paint()..shader = _edges(dstRect));
       }
 
       final picture = recorder.endRecording();
@@ -209,9 +210,9 @@ class ThemeBlurCache extends ChangeNotifier {
       final src = Rect.fromLTWH(0, 0, frame.width.toDouble(), frame.height.toDouble());
       canvas.drawRect(dst, Paint()..color = Colors.black);
       const matrix = <double>[
-        0.6, 0, 0, 0, -25.5,
-        0, 0.6, 0, 0, -25.5,
-        0, 0, 0.6, 0, -25.5,
+        0.36, 0, 0, 0, -25.5,
+        0, 0.36, 0, 0, -25.5,
+        0, 0, 0.36, 0, -25.5,
         0, 0, 0, 0.7, 0,
       ];
       final sigma = 20.0 * w / 1440.0;
@@ -220,7 +221,8 @@ class ThemeBlurCache extends ChangeNotifier {
         ..colorFilter = const ColorFilter.matrix(matrix)
         ..imageFilter = ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.clamp);
       canvas.drawImageRect(frame, src, dst, paint);
-      canvas.drawRect(dst, Paint()..color = const Color(0x33000000));
+      canvas.drawRect(dst, Paint()..color = const Color(0x59000000));
+      canvas.drawRect(dst, Paint()..shader = _edges(dst));
       final pic = recorder.endRecording();
       final img = await pic.toImage(w, h);
       pic.dispose();
@@ -298,3 +300,11 @@ class _CachedThemeSurfaceState extends State<CachedThemeSurface> {
     return widget.placeholder ?? const ColoredBox(color: Color(0xFF0B0D13));
   }
 }
+
+/// The source's letterbox: the picture falls away to black toward the top and bottom edges (Claude, 2026-10-21).
+Shader _edges(Rect r) => const LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color(0xF2000000), Color(0x00000000), Color(0x00000000), Color(0xF2000000)],
+      stops: [0.0, 0.3, 0.7, 1.0],
+    ).createShader(r);

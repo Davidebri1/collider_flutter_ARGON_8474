@@ -78,6 +78,16 @@ def _fal_rows(text):
             for k in dict.fromkeys(re.findall(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}:[0-9a-fA-F]{32}\b", text))]
 
 
+def is_pictures(row):
+    """Collider's own picture Worker on Cloudflare (dev/cf_imagine)."""
+    return "collider-imagine" in (row.get("endpoint") or "").lower()
+
+
+def is_phone(row):
+    """The phone link's Worker (dev/cf_phone)."""
+    return "collider-phone" in (row.get("endpoint") or "").lower()
+
+
 def is_fal(row):
     return "fal.run" in (row.get("endpoint") or "").lower()
 

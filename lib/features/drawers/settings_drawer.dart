@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../../core/api/collider_api.dart';
 import '../../../core/vision/vision_kit.dart';
 
 /// Settings. Made by Claude (2026-10-04).
@@ -37,6 +41,46 @@ class SettingsDrawer extends StatefulWidget {
 
 class _SettingsDrawerState extends State<SettingsDrawer> {
   int _tab = 0;
+  String _phone = '', _qr = ''; // the phone link (Claude, 2026-10-21)
+
+  @override
+  void initState() {
+    super.initState();
+    ColliderApi.instance.phone().then((v) {
+      if (mounted) {
+        setState(() {
+          _phone = v.$1;
+          _qr = v.$2;
+        });
+      }
+    });
+  }
+
+  /// The phone link as a QR code for the phone's camera; a tap on it copies the link.
+  void _showPhone() {
+    final png = base64Decode(_qr.substring(_qr.indexOf(',') + 1));
+    showDialog(
+      context: context,
+      barrierColor: VOverlay.scrim,
+      builder: (ctx) => Center(
+        child: VPress(
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: _phone));
+            Navigator.of(ctx).pop();
+          },
+          child: VGlass(
+            material: VMaterial.modal,
+            radius: 22,
+            padding: const EdgeInsets.all(14),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.memory(png, width: 220, height: 220, filterQuality: FilterQuality.none),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _row(String label, Widget trailing) => SizedBox(
         height: 36,
@@ -119,6 +163,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
                               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                                 _link('Purchased', w.onOpenPurchased),
                                 _link('Upgrade', w.onOpenUpgrade),
+                                if (_phone.isNotEmpty && _qr.isNotEmpty) _link('Phone', _showPhone),
                               ]),
                             ),
                         ]),

@@ -211,6 +211,36 @@ class _FilesScreenState extends State<FilesScreen> {
       _history.add(v);
       _at++;
     });
+    // A file Collider does not open itself: its preview here, and the device's app picker for the rest.
+    if (f != null && !f.asset && _outside(f)) _appPicker(f);
+  }
+
+  /// Collider opens pictures, videos (its player), documents (Documents) and the songs the models made (Files >
+  /// Music). Everything else goes to the device's own apps. (Claude, 2026-10-21)
+  bool _outside(ColliderFile f) => f.kind != 'image' && f.kind != 'video' && f.kind != 'text';
+
+  final Map<String, List<int>> _bytes = {};
+
+  Future<void> _appPicker(ColliderFile f) async {
+    if (onThisComputer) {
+      await _api.openWith(f);
+      return;
+    }
+    final bytes = _bytes[f.url] ??= (await _api.fileBytes(f)) ?? const [];
+    if (bytes.isEmpty) return;
+    if (!await shareFile(bytes, f.name, _mime(f.name))) openUrl(_api.fileUrl(f));
+  }
+
+  static String _mime(String name) {
+    final e = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+    return const {
+          'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'aac': 'audio/aac', 'wav': 'audio/wav', 'flac': 'audio/flac', 'ogg': 'audio/ogg',
+          'zip': 'application/zip', 'csv': 'text/csv', 'json': 'application/json', 'stl': 'model/stl', 'obj': 'model/obj',
+          'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'svg': 'image/svg+xml', 'exe': 'application/vnd.microsoft.portable-executable',
+        }[e] ??
+        'application/octet-stream';
   }
 
   Future<void> _upload() async {
@@ -476,7 +506,7 @@ class _FilesScreenState extends State<FilesScreen> {
         _Thumb(file: f, api: _api, width: 96),
         const SizedBox(height: 14),
         VPress(
-          onTap: () => openUrl(_api.fileUrl(f)),
+          onTap: () => _appPicker(f),
           child: Container(
             height: 36,
             padding: const EdgeInsets.symmetric(horizontal: 16),

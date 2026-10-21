@@ -14,6 +14,7 @@ import collider_files as cfiles
 import collider_config as ccfg
 import collider_thumbs as cthumbs
 import collider_imagine as cimagine
+import collider_tunnel as ctunnel
 
 # Set by setup(): the launch window passes the folder, the built app, the data folder and the host number.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,6 +24,7 @@ PORT = 0
 FILES = None
 THUMBS = None
 IMAGINE = None
+TUNNEL = None
 HIST = ""
 SMARTGEN_FILE = ""
 CONFIG = {"providers": []}
@@ -34,12 +36,12 @@ _smartgen_mem = None
 
 def setup(root, web, data, port, config):
     """Points the server at its folders, host number and configuration. Called once before serving."""
-    global ROOT, WEB, DATA, PORT, FILES, THUMBS, IMAGINE, HIST, SMARTGEN_FILE, CONFIG, _history_mem, _smartgen_mem
+    global ROOT, WEB, DATA, PORT, FILES, THUMBS, IMAGINE, TUNNEL, HIST, SMARTGEN_FILE, CONFIG, _history_mem, _smartgen_mem
     ROOT, WEB, DATA, PORT, CONFIG = root, web, data, int(port), config
     os.makedirs(DATA, exist_ok=True)
     FILES = cfiles.Files(DATA)
     THUMBS = cthumbs.Thumbs(FILES.root)
-    IMAGINE = cimagine.Imagine(DATA, FILES, lambda: [r for r in rows() if ccfg.is_fal(r)], lambda: CONFIG.get("imagine"))
+    IMAGINE = cimagine.Imagine(DATA, FILES, _picture_rows, lambda: CONFIG.get("imagine"))
     HIST = os.path.join(DATA, "history.json")
     SMARTGEN_FILE = os.path.join(DATA, "smartgen_cards.json")
     if apply_settings(CONFIG):
@@ -49,6 +51,11 @@ def setup(root, web, data, port, config):
             print("config save failed", e)
     _extend_roster()
     _init_caches()
+    # The phone link: a private https address through Cloudflare's tunnel, when bin\cloudflared.exe is beside the app.
+    import atexit
+    TUNNEL = ctunnel.Tunnel(ROOT, PORT, next((r for r in rows() if ccfg.is_phone(r)), None))
+    if TUNNEL.start():
+        atexit.register(TUNNEL.stop)
 
 
 def _init_caches():
@@ -156,6 +163,17 @@ def rows(name=None, search=None):
     return out
 
 
+def _picture_rows(provider):
+    """Rows with keys for a picture provider: Cloudflare (Collider's Worker), NVIDIA, fal. (Claude, 2026-10-21)"""
+    if provider == "Cloudflare":
+        return [r for r in rows() if ccfg.is_pictures(r)]
+    if provider == "fal":
+        return [r for r in rows() if ccfg.is_fal(r)]
+    if provider == "NVIDIA":
+        return [r for r in rows() if "integrate.api.nvidia.com" in (r.get("endpoint") or "")]
+    return []
+
+
 def next_row(name=None, search=None):
     """Round-robin over the keys of one provider, so several keys share the load."""
     rs = rows(name, search)
@@ -193,7 +211,7 @@ def _extend_roster():
     del ROSTER[_BUILT_IN:]
     known = {m["id"] for m in ROSTER}
     for r in rows(search=False):
-        if ccfg.is_speech(r) or ccfg.is_fal(r):
+        if ccfg.is_speech(r) or ccfg.is_fal(r) or ccfg.is_pictures(r) or ccfg.is_phone(r):
             continue
         for mid in ccfg.models_of(r):
             if mid in known:
@@ -232,7 +250,11 @@ def uses(row):
     if ccfg.is_speech(row):
         return "Voice chat: what is said, turned into text (/api/transcribe)"
     if ccfg.is_fal(row):
-        return "Discover Market: pictures and videos (/api/imagine)"
+        return "Pictures (Grok Imagine, paid) and videos (/api/imagine)"
+    if ccfg.is_phone(row):
+        return "The phone link: always the same address, leading to this computer (Settings > Account > Phone)"
+    if ccfg.is_pictures(row):
+        return "Pictures through Collider's Cloudflare Worker, free each day up to Cloudflare's allowance (/api/imagine)"
     if ccfg.is_search(row):
         return "Web sources for Internet, Research and Deep Research (/api/ask); search answers in the browser (/api/page)"
     name = (row.get("name") or "").strip()
@@ -262,7 +284,7 @@ MAX_TOKENS = {"chat": 900, "internet": 1200, "research": 2400, "deep": 4000}
 # Research and Deep Research (Claude, 2026-10-20): searches planned beyond the question itself, and source length kept.
 PLAN_QUERIES = {"research": 4, "deep": 8}
 SOURCE_CHARS = {"internet": 1200, "research": 1200, "deep": 1200}
-PLAN_PROMPT = ("detailed thinking off\nSplit the question into {k} web searches that together cover what a thorough answer "
+PLAN_PROMPT = ("Split the question into {k} web searches that together cover what a thorough answer "
                "needs: the facts, the evidence for and against, recent developments, and expert disagreement. Each search is "
                "a short query a search engine understands. Return ONLY JSON: {\"queries\": [\"...\"]}")
 
@@ -412,6 +434,10 @@ def web_search(query, mode, job=None):
     return out
 
 
+# Every model is asked to think (Claude, 2026-10-21; David: thinking is "mandatory").
+THINK = {"enable_thinking": True, "thinking": True}
+
+
 def call_model(model, messages, max_tokens, timeout=None):
     timeout = timeout or TUNING["answer_timeout"]
     via = next((m.get("via") for m in ROSTER if m["id"] == model), "NVIDIA")
@@ -422,17 +448,11 @@ def call_model(model, messages, max_tokens, timeout=None):
         if not row:
             raise RuntimeError(f"no key for {via}")
         try:
-            r = post_json(row["endpoint"], {"model": model, "messages": clean_msgs, "max_tokens": max_tokens, "temperature": temperature_of(model)},
+            r = post_json(row["endpoint"], {"model": model, "messages": clean_msgs, "max_tokens": max_tokens + TUNING["thinking_tokens"],
+                                            "temperature": temperature_of(model), "chat_template_kwargs": THINK},
                           {"Authorization": "Bearer " + row["key"].strip()}, timeout)
             msg = r["choices"][0]["message"]
-            text = sanitize_model_output(msg.get("content") or "")
-            if not text:
-                raw_reasoning = sanitize_model_output(msg.get("reasoning_content") or "")
-                if raw_reasoning and "{" in raw_reasoning and "}" in raw_reasoning:
-                    text = raw_reasoning
-                elif raw_reasoning:
-                    paras = [p.strip() for p in raw_reasoning.split("\n\n") if p.strip()]
-                    text = paras[-1] if paras else ""
+            text = sanitize_model_output(msg.get("content") or "")  # the answer only; the thinking stays out
             if text:
                 return text
             last = "empty reply"
@@ -476,7 +496,8 @@ def stream_model(model, messages, max_tokens, on_text=None, timeout=None):
     row = next_row(via, search=False)
     if not row:
         raise RuntimeError(f"no key for {via}")
-    payload = {"model": model, "messages": _sanitize_messages(messages), "max_tokens": max_tokens, "temperature": temperature_of(model), "stream": True}
+    payload = {"model": model, "messages": _sanitize_messages(messages), "max_tokens": max_tokens + TUNING["thinking_tokens"],
+               "temperature": temperature_of(model), "stream": True, "chat_template_kwargs": THINK}
     req = urllib.request.Request(row["endpoint"], data=json.dumps(payload).encode(), headers={
         "Content-Type": "application/json", "Accept": "text/event-stream", "Authorization": "Bearer " + row["key"].strip()})
     parts = []
@@ -519,8 +540,7 @@ def sources_block(sources):
 # ---------------- Consensus agent (Consensus Map v3: a headcount of essences) ----------------
 # Primary agent answers in plain JSON; the reasoning models are backups with room to think.
 AGENT_CHAIN = [CONSENSUS_AGENT, "nvidia/nemotron-3-super-120b-a12b", "z-ai/glm-5.3"]
-AGENT_PROMPT = """detailed thinking off
-You are the Collider consensus agent. Consensus is a headcount: how many responses say essentially the same thing.
+AGENT_PROMPT = """You are the Collider consensus agent. Consensus is a headcount: how many responses say essentially the same thing.
 Steps:
 1. Read the question and derive the need behind it.
 2. Reduce each response to its essence: what it says, as one standalone sentence (occasionally two) in service of that need.
@@ -616,8 +636,7 @@ def self_essence(model, prompt, answer):
 LINE_DEFAULT = 28
 LINE_RULE = ("Begin your reply with one line of at most {n} characters, spaces included, that is the complete answer itself: "
              "the conclusion, stated outright in plain words, with no full stop. Then an empty line. Then the full answer.")
-LINES_PROMPT = """detailed thinking off
-For each response below, write its line: the complete answer to the question in at most {n} characters, spaces included.
+LINES_PROMPT = """For each response below, write its line: the complete answer to the question in at most {n} characters, spaces included.
 The conclusion itself, stated outright in plain words. Never a teaser, never "it depends", never cut off.
 No full stop at the end. Responses listed together under Groups agree: they share one line, word for word.
 Responses in different groups disagree: their lines must show how they differ.
@@ -1125,6 +1144,7 @@ ESSENCE_PROMPT = ("Reduce the answer below to its essence: one standalone senten
                   "in service of the question's need. Never mention who wrote it. Reply with the sentence only.")
 # Every other number the server works by. These are the values it has always run on.
 TUNING = {
+    "thinking_tokens": 4000,
     "temperature": 0.4, "answer_timeout": 150, "retries": 2, "retry_wait": 1.5, "reply_tokens": 1400,
     "agent_answer_chars": 2200, "agent_tokens": 2500, "agent_backup_tokens": 9000, "agent_timeout": 110,
     "lines_tokens": 900, "lines_backup_tokens": 6000, "lines_timeout": 90, "line_min": 18, "line_max": 72,
@@ -1262,8 +1282,45 @@ class Handler(SimpleHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         return json.loads(self.rfile.read(n) or b"{}")
 
+    def _local(self):
+        """Asked on this computer itself (the app's own window, or a browser here)."""
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+        return self.client_address[0] in ("127.0.0.1", "::1") and host in ("127.0.0.1", "localhost", "::1") \
+            and not self.headers.get("Cf-Connecting-Ip")
+
+    def _let_in(self):
+        """Through the phone link only with its key: once in the address, then kept by the phone as a cookie."""
+        if self._local():
+            return True
+        import hmac
+        from urllib.parse import urlparse, parse_qs
+        key = TUNNEL.key if TUNNEL else ""
+        if not key:
+            return False
+        jar = dict(c.strip().split("=", 1) for c in (self.headers.get("Cookie") or "").split(";") if "=" in c)
+        if hmac.compare_digest(jar.get("collider_key", ""), key):
+            return True
+        given = (parse_qs(urlparse(self.path).query).get("k") or [""])[0]
+        if self.command == "GET" and given and hmac.compare_digest(given, key):
+            self.send_response(302)
+            self.send_header("Set-Cookie", f"collider_key={key}; Path=/; Max-Age=31536000; Secure; HttpOnly; SameSite=Lax")
+            self.send_header("Location", "/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return None
+        return False
+
     def do_GET(self):
+        ok = self._let_in()
+        if ok is None:
+            return
+        if not ok:
+            return self._send(403, "text/plain", b"")
         p = self.path.split("?")[0]
+        if p == "/api/phone":
+            if not self._local() or not TUNNEL:
+                return self._json({"link": "", "qr": ""})
+            return self._json({"link": TUNNEL.link(), "qr": TUNNEL.qr()})
         if p == "/api/whoami":
             return self._json({"root": ROOT, "port": PORT})
         if p == "/api/models":
@@ -1300,7 +1357,7 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/files":
             return self._json(FILES.listing(list(LABEL.values())))
         if p == "/api/imagine":
-            return self._json({"items": IMAGINE.listing()})
+            return self._json({"items": IMAGINE.listing(), "models": IMAGINE.models()})
         if p.startswith("/files/"):
             return self._file(p)
         static = self.translate_path(self.path)
@@ -1421,7 +1478,14 @@ class Handler(SimpleHTTPRequestHandler):
             return self._send(200, "text/html; charset=utf-8", html.encode("utf-8"))
         self._send(200, ctype, data)
 
+    def do_HEAD(self):
+        if not self._let_in():
+            return self._send(403, "text/plain", b"")
+        return super().do_HEAD()
+
     def do_POST(self):
+        if not self._let_in():
+            return self._send(403, "text/plain", b"")
         p = self.path.split("?")[0]
         try:
             if p == "/api/ask":
@@ -1445,7 +1509,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"name": FILES.save_generated(b.get("name", "note.md"), b.get("text", ""), b.get("model", ""))})
             if p == "/api/imagine":
                 b = self._body()
-                return self._json(IMAGINE.start(b.get("text", ""), b.get("kind", "image"), b.get("from"), b.get("replace")))
+                return self._json(IMAGINE.start(b.get("text", ""), b.get("kind", "image"), b.get("from"), b.get("replace"),
+                                                b.get("model"), b.get("references"), b.get("aspect"), b.get("count")))
             if p == "/api/transcribe":
                 b = self._body()
                 return self._json({"text": transcribe(base64.b64decode(b.get("b64", "")), b.get("mime", "audio/webm"))})
@@ -1456,6 +1521,16 @@ class Handler(SimpleHTTPRequestHandler):
                 b = self._body()
                 name = FILES.print_pdf(b.get("name", "document.pdf"), b.get("html", ""), b.get("replace", ""), "Documents")
                 return self._json({"name": name} if name else {"error": "pdf"}, 200 if name else 500)
+            if p == "/api/files/openwith":
+                # Windows' own app picker for a file in Files; only from this computer's own window.
+                b = self._body()
+                path = FILES.path_for(b.get("source", ""), b.get("name", "")) if self._local() else None
+                if not path:
+                    return self._json({"ok": False}, 404)
+                import subprocess
+                subprocess.Popen(["rundll32.exe", "shell32.dll,OpenAs_RunDLL", path], stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return self._json({"ok": True})
             if p == "/api/files/download":
                 url = self._body().get("url", "")
                 code, final, headers, data = cfiles.fetch(url)

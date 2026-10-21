@@ -13,6 +13,9 @@ import '../../core/vision/vision_kit.dart';
 import '../../core/voice/voice.dart';
 
 class FloatingPrompt extends StatefulWidget {
+  /// A file to add to the message being written (Claude, 2026-10-21): Discover's remix puts its picture here.
+  static final ValueNotifier<String?> attach = ValueNotifier(null);
+
   final bool summoned;
   final bool busy;
   final AskMode mode;
@@ -59,6 +62,20 @@ class _FloatingPromptState extends State<FloatingPrompt> {
   bool _options = false;
 
   @override
+  void initState() {
+    super.initState();
+    FloatingPrompt.attach.addListener(_attached);
+  }
+
+  /// A picture handed over (Discover's remix): it goes with the next message, as its reference.
+  void _attached() {
+    final f = FloatingPrompt.attach.value;
+    if (f == null) return;
+    FloatingPrompt.attach.value = null;
+    if (mounted && !_files.contains(f)) setState(() => _files.add(f));
+  }
+
+  @override
   void didUpdateWidget(covariant FloatingPrompt old) {
     super.didUpdateWidget(old);
     if (widget.summoned && !old.summoned) {
@@ -69,6 +86,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
 
   @override
   void dispose() {
+    FloatingPrompt.attach.removeListener(_attached);
     _ctrl.dispose();
     _focus.dispose();
     super.dispose();
@@ -155,7 +173,14 @@ class _FloatingPromptState extends State<FloatingPrompt> {
       if (widget.mode != AskMode.chat) VChip(label: widget.mode.label, selected: true, onTap: () => widget.onMode(AskMode.chat)),
       if (widget.voice != null) VChip(label: 'Voice Chat', selected: true, onTap: () => widget.onVoiceChat?.call(false)),
       if (widget.incognito) VChip(label: 'Private', selected: true, onTap: () => widget.onIncognito(false)),
-      for (final f in _files) VChip(label: f.length > 22 ? '${f.substring(0, 21)}…' : f, selected: true, onTap: () => setState(() => _files.remove(f))),
+      for (final f in _files)
+        VChip(
+            label: () {
+              final n = f.split('/').last;
+              return n.length > 22 ? '${n.substring(0, 21)}…' : n;
+            }(),
+            selected: true,
+            onTap: () => setState(() => _files.remove(f))),
     ];
     return VGlass(
       key: const ValueKey('open'),

@@ -140,7 +140,13 @@ class Creation {
   final String status; // making | done | failed
   final List<Map<String, dynamic>> media;
   final String? from; // for a video made from a picture: the making that holds the picture
-  const Creation(this.id, this.kind, this.text, this.status, this.media, [this.from]);
+  final String model; // "Provider:model" asked for, '' for the configuration's order
+  final String label; // the model that made it, by name
+  final List<String> references; // pictures it was made from, as "source/name" in Files
+  final String aspect;
+  final int count;
+  const Creation(this.id, this.kind, this.text, this.status, this.media,
+      [this.from, this.model = '', this.label = '', this.references = const [], this.aspect = '', this.count = 0]);
   factory Creation.fromJson(Map<String, dynamic> j) => Creation(
         '${j['id']}',
         '${j['kind'] ?? 'image'}',
@@ -148,6 +154,11 @@ class Creation {
         '${j['status'] ?? 'making'}',
         [for (final m in (j['media'] as List? ?? const [])) Map<String, dynamic>.from(m as Map)],
         j['from'] == null ? null : '${j['from']}',
+        '${j['model'] ?? ''}',
+        '${j['label'] ?? ''}',
+        [for (final r in (j['references'] as List? ?? const [])) '$r'],
+        '${j['aspect'] ?? ''}',
+        (j['count'] as num?)?.toInt() ?? 0,
       );
   bool get making => status == 'making';
   bool get isVideo => kind != 'image';
@@ -200,7 +211,23 @@ class ColliderApi {
       final list = (r.data['models'] as List).cast<Map>();
       webSearch = r.data['search'] == true;
       nvidiaKeys = (r.data['keys'] as num?)?.toInt() ?? 0;
+      // The picture models (Claude, 2026-10-21): the Image category, from the providers that have keys.
+      var pictures = const <Map>[];
+      try {
+        pictures = ((await _dio.get('$_base/api/imagine')).data['models'] as List? ?? const []).cast<Map>();
+      } catch (_) {}
       ModelRoster.setLive([
+        for (final m in pictures)
+          ModelDef(
+            id: '${m['id']}',
+            label: '${m['label']}',
+            short: '${m['label']}'.split(' ').map((w) => w.isEmpty ? '' : w[0]).join(),
+            desc: '${m['provider']}',
+            tier: ModelTier.free,
+            categories: const [ModelCategory.image],
+            providerColor: const Color(0xFF8E8E93),
+            isMedia: true,
+          ),
         for (final m in list)
           ModelDef(
             id: m['id'] as String,
@@ -250,12 +277,48 @@ class ColliderApi {
   }
 
   /// Makes pictures (kind image) or a video (video) from words, or a video from a made picture (motion, from its id).
-  Future<void> make(String text, String kind, {String? from, String? replace}) async {
+  Future<void> make(String text, String kind,
+      {String? from, String? replace, String? model, List<String>? references, String? aspect, int? count}) async {
     try {
-      await _dio.post('$_base/api/imagine',
-          data: {'text': text, 'kind': kind, if (from != null) 'from': from, if (replace != null) 'replace': replace});
+      await _dio.post('$_base/api/imagine', data: {
+        'text': text,
+        'kind': kind,
+        if (from != null) 'from': from,
+        if (replace != null) 'replace': replace,
+        if (model != null) 'model': model,
+        if (references != null && references.isNotEmpty) 'references': references,
+        if (aspect != null) 'aspect': aspect,
+        if (count != null) 'count': count,
+      });
       cachedFiles = null;
     } catch (_) {}
+  }
+
+  /// Windows' own app picker for [f], on the computer that serves the app (Claude, 2026-10-21).
+  Future<void> openWith(ColliderFile f) async {
+    try {
+      await _dio.post('$_base/api/files/openwith', data: {'source': f.source, 'name': f.name});
+    } catch (_) {}
+  }
+
+  /// The file's bytes, for handing it to the phone's share sheet.
+  Future<List<int>?> fileBytes(ColliderFile f) async {
+    try {
+      final r = await _dio.get<List<int>>(fileUrl(f), options: Options(responseType: ResponseType.bytes));
+      return r.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The phone link and its QR picture (data URL); empty away from the computer that serves the app.
+  Future<(String, String)> phone() async {
+    try {
+      final r = await _dio.get('$_base/api/phone');
+      return ('${r.data['link'] ?? ''}', '${r.data['qr'] ?? ''}');
+    } catch (_) {
+      return ('', '');
+    }
   }
 
   String fileUrl(ColliderFile f) => f.asset ? '$_base/assets/${f.url}' : '$_base${f.url}';
