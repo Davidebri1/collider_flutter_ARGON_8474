@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../models/ticker_item.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../core/api/collider_api.dart';
+import '../../../core/drafts.dart';
 import '../../../core/platform/open_url.dart';
 
 /// One model's conversation, opened. Made by Claude on 2026-10-04.
@@ -37,11 +38,12 @@ class ConversationView extends StatefulWidget {
 }
 
 class _ConversationViewState extends State<ConversationView> {
-  final TextEditingController _reply = TextEditingController();
+  // the reply being written is kept per model in Drafts: closing this view or opening another keeps it (Claude, 2026-10-21)
+  late final TextEditingController _reply = Drafts.text('reply:${widget.item.modelDef.id}');
   final TextEditingController _search = TextEditingController();
   bool _searching = false;
   String _filter = '';
-  final List<String> _files = [];
+  late final List<String> _files = Drafts.files('reply:${widget.item.modelDef.id}');
   final ScrollController _scroll = ScrollController();
 
   @override
@@ -56,7 +58,6 @@ class _ConversationViewState extends State<ConversationView> {
 
   @override
   void dispose() {
-    _reply.dispose();
     _search.dispose();
     _scroll.dispose();
     super.dispose();
@@ -92,8 +93,8 @@ class _ConversationViewState extends State<ConversationView> {
     final text = _reply.text.trim();
     if (text.isEmpty && _files.isEmpty) return;
     widget.onSendReply?.call(text, List.of(_files));
-    _reply.clear();
-    setState(() => _files.clear());
+    Drafts.sent('reply:${widget.item.modelDef.id}');
+    setState(() {});
   }
 
   Future<void> _attach() async {
@@ -104,6 +105,7 @@ class _ConversationViewState extends State<ConversationView> {
         if (f.bytes == null) continue;
         final saved = await ColliderApi.instance.uploadFile(f.name, f.bytes!);
         if (saved != null && mounted) setState(() => _files.add(saved));
+        Drafts.touch();
       }
     } catch (_) {}
   }
@@ -229,7 +231,10 @@ class _ConversationViewState extends State<ConversationView> {
             spacing: 6,
             runSpacing: 6,
             children: [
-              for (final f in _files) VChip(label: f.length > 22 ? '${f.substring(0, 21)}…' : f, selected: true, onTap: () => setState(() => _files.remove(f))),
+              for (final f in _files) VChip(label: f.length > 22 ? '${f.substring(0, 21)}…' : f, selected: true, onTap: () {
+                setState(() => _files.remove(f));
+                Drafts.touch();
+              }),
             ],
           ),
         ],

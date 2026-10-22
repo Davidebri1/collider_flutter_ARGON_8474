@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A custom painter that renders an authentic Apple visionOS 0.5px-0.6px specular light bevel.
 /// The rim simulates directional illumination from the top-left, fading to subtle occlusion shadow on bottom-right.

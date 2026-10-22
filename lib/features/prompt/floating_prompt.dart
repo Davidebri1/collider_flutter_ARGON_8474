@@ -7,8 +7,9 @@
 // It is its own element under the ticker window, never a row of it. Tucked, it is an arrow above the dock
 // (David: "has an indicator acknowledging its tucked view. an arrow").
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../core/api/collider_api.dart';
+import '../../core/drafts.dart';
 import '../../core/vision/vision_kit.dart';
 import '../../core/voice/voice.dart';
 
@@ -56,9 +57,10 @@ class FloatingPrompt extends StatefulWidget {
 }
 
 class _FloatingPromptState extends State<FloatingPrompt> {
-  final TextEditingController _ctrl = TextEditingController();
+  // the words and files being written live in Drafts, not in this box, so nothing that hides the box can lose them
+  final TextEditingController _ctrl = Drafts.text('composer');
   final FocusNode _focus = FocusNode();
-  final List<String> _files = [];
+  final List<String> _files = Drafts.files('composer');
   bool _options = false;
 
   @override
@@ -73,6 +75,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     if (f == null) return;
     FloatingPrompt.attach.value = null;
     if (mounted && !_files.contains(f)) setState(() => _files.add(f));
+    Drafts.touch();
   }
 
   @override
@@ -87,7 +90,6 @@ class _FloatingPromptState extends State<FloatingPrompt> {
   @override
   void dispose() {
     FloatingPrompt.attach.removeListener(_attached);
-    _ctrl.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -96,11 +98,8 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     final text = _ctrl.text.trim();
     if (text.isEmpty || widget.busy) return;
     widget.onSubmitPrompt(text, List.of(_files));
-    _ctrl.clear();
-    setState(() {
-      _files.clear();
-      _options = false;
-    });
+    Drafts.sent('composer');
+    setState(() => _options = false);
   }
 
   Future<void> _attach() async {
@@ -112,6 +111,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
         if (f.bytes == null) continue;
         final saved = await ColliderApi.instance.uploadFile(f.name, f.bytes!);
         if (saved != null && mounted) setState(() => _files.add(saved));
+        Drafts.touch();
       }
     } catch (_) {}
   }
@@ -180,7 +180,10 @@ class _FloatingPromptState extends State<FloatingPrompt> {
               return n.length > 22 ? '${n.substring(0, 21)}…' : n;
             }(),
             selected: true,
-            onTap: () => setState(() => _files.remove(f))),
+            onTap: () {
+              setState(() => _files.remove(f));
+              Drafts.touch();
+            }),
     ];
     return VGlass(
       key: const ValueKey('open'),

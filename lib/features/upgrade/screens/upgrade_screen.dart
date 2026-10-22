@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../../core/vision/vision_kit.dart';
 
 /// Tiers & Entitlements — account-style window (Vision OS Design System

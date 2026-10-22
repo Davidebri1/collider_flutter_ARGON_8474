@@ -1,9 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/collider_api.dart';
+import '../../../core/drafts.dart';
 import '../../../core/media/theme_cloud.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../models/theme_def.dart';
@@ -50,7 +51,7 @@ class _MarketScreenState extends State<MarketScreen> {
   final Set<String> _saved = {..._savedCache};
   List<Creation> _made = const [];
   Timer? _poll;
-  final _text = TextEditingController();
+  final _text = Drafts.text('discover'); // kept when Discover closes (Claude, 2026-10-21)
 
   @override
   void initState() {
@@ -76,7 +77,6 @@ class _MarketScreenState extends State<MarketScreen> {
   @override
   void dispose() {
     _poll?.cancel();
-    _text.dispose();
     ThemeCloud.instance.removeListener(_changed);
     super.dispose();
   }
@@ -166,7 +166,7 @@ class _MarketScreenState extends State<MarketScreen> {
   void _send() {
     final t = _text.text.trim();
     if (t.isEmpty) return;
-    _text.clear();
+    Drafts.sent('discover');
     widget.onImagine(t);
   }
 

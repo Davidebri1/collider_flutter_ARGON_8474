@@ -4,7 +4,7 @@
 // Icons that name a thing (an app, a place, an action, a kind of file) are drawn in its colour, filled where a filled
 // glyph exists, as Apple asks for colour in bold shapes rather than thin lines. Plain controls (close, back, more,
 // chevrons, send) stay white on glass, as visionOS draws them.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 abstract final class VHue {
   static const red = Color(0xFFFF4245);

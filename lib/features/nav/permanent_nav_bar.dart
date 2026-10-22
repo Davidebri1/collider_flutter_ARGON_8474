@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../core/vision/vision_kit.dart';
 
 /// REQ-12 Permanent 3-Icon Bottom Dock — a compact glass capsule ornament

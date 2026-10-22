@@ -1,5 +1,5 @@
 import 'dart:ui' show ImageFilter;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../core/vision/vision_kit.dart';
 
 /// REQ-01 App Grid (Vision OS Design System 2:6774, visionOS Home 97:34752):

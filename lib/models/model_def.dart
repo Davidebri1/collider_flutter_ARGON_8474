@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 enum ModelCategory { general, image, video, audio, writing }
 enum ModelTier { free, pro, elite }

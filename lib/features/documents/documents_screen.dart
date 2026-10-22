@@ -3,7 +3,7 @@
 // comprehensive suite of functionality ... you can get this from the vercel templates ... it can be a html render
 // in flutter". The editor is Novel (Vercel's editor template) built into assets/html/claude_documents.html
 // (source in dev/editor). It sits in one glass window; a tap outside does not close it, so no writing is lost.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../core/vision/vision_kit.dart';
 import 'html_page.dart';
 

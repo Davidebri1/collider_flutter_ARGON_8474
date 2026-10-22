@@ -7,7 +7,7 @@
 // It floats over the app while a song is loaded.
 // Floating, it can be dragged anywhere and stays where it is put.
 // The list glyph drops a menu down: the songs, Music Player (the music in Files), and Close. A long press or a right click on the bar opens it too.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../core/audio/music_player.dart';
 import '../../core/vision/vision_kit.dart';
 

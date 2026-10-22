@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A living visionOS ambient stardust particle overlay that floats gently in Plane 0
 /// above the wallpaper and behind the content glass windows.

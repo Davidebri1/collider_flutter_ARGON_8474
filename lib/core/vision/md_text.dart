@@ -1,6 +1,6 @@
 // Light Markdown renderer for model answers. Made by Claude.
 // Headings, bold, bullets and numbered lists, rendered as calm text (no raw symbols).
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'vision_tokens.dart';
 
 class MdText extends StatelessWidget {

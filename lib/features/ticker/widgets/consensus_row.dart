@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../../core/vision/vision_kit.dart';
 
 /// Pinned consensus preview. Made by Claude (2026-10-04).

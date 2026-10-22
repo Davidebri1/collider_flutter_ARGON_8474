@@ -51,14 +51,14 @@ class Tunnel:
         """The tunnel's own address still answers (a quick tunnel can be dropped by Cloudflare while the program runs)."""
         if not self.url:
             return False
+        # Asked of Cloudflare's own name servers, not this computer's, which may remember an earlier "does not exist".
+        host = self.url.split("//", 1)[-1].split("/", 1)[0]
         try:
-            urllib.request.urlopen(urllib.request.Request(self.url + "/", method="HEAD", headers={"User-Agent": "Collider/1.0"}),
-                                   timeout=20)
-            return True
-        except urllib.error.HTTPError:
-            return True  # it answered (the key gate says no to a bare request): the tunnel is up
+            q = urllib.request.Request(f"https://cloudflare-dns.com/dns-query?name={host}&type=A",
+                                       headers={"Accept": "application/dns-json", "User-Agent": "Collider/1.0"})
+            return bool(json.loads(urllib.request.urlopen(q, timeout=15).read()).get("Answer"))
         except Exception:
-            return False
+            return True  # the question could not be asked (no network): not a reason to replace the tunnel
 
     def _watch(self):
         """Keeps the phone link working for as long as Collider runs (Claude, 2026-10-21; David, 21 Oct: "Link doesn't
@@ -85,6 +85,21 @@ class Tunnel:
         ep = (self.relay.get("endpoint") or "").rstrip("/")
         if not ep:
             return
+        # Wait until the new address exists on the internet's name servers before pointing the link at it. Cloudflare
+        # hands the address over a few seconds before it can be found; a phone or PC that asks too early is told it
+        # does not exist and remembers that answer for minutes ("the link doesn't even work on my pc"). (Claude, 2026-10-21)
+        import time
+        host = self.url.split("//", 1)[-1].split("/", 1)[0]
+        for _ in range(60):
+            try:
+                q = urllib.request.Request(f"https://cloudflare-dns.com/dns-query?name={host}&type=A",
+                                           headers={"Accept": "application/dns-json", "User-Agent": "Collider/1.0"})
+                if json.loads(urllib.request.urlopen(q, timeout=10).read()).get("Answer"):
+                    break
+            except Exception:
+                pass
+            time.sleep(3)
+        time.sleep(5)
         for _ in range(5):
             try:
                 req = urllib.request.Request(ep + "/set", data=json.dumps({"url": self.url}).encode(), headers={

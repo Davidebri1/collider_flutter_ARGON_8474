@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../core/vision/vision_kit.dart';
 import 'contextual_side_nav.dart';
 

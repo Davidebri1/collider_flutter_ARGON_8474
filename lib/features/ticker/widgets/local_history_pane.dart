@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../../../models/ticker_item.dart';
 import '../../../models/model_def.dart';
 import '../../../core/vision/vision_kit.dart';

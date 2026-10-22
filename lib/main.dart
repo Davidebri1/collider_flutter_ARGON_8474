@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -41,8 +41,9 @@ import 'core/media/theme_blur_cache.dart';
 import 'core/media/theme_cloud.dart';
 import 'features/drawers/history_pane.dart';
 import 'core/media/theme_media_bundle.dart';
+import 'core/drafts.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -54,6 +55,7 @@ void main() {
   ThemeBlurCache.instance.prewarmThemes(WallpaperCatalog.freeThemes);
   ConsensusWebView.preload();
   SmartGenStore.instance.load();
+  await Drafts.load(); // unsent messages, as they were left (Claude, 2026-10-21)
   runApp(const ColliderApp());
 }
 
@@ -67,10 +69,14 @@ class ColliderApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
-        textTheme: GoogleFonts.instrumentSansTextTheme(ThemeData.dark().textTheme),
+        // the same face, applied by name: google_fonts' text-theme helper still builds the SDK's own TextTheme
+        textTheme: ThemeData.dark().textTheme.apply(fontFamily: GoogleFonts.instrumentSans().fontFamily),
       ),
       // Theme pictures from the bucket load through Image.asset like the built-in ones.
-      builder: (context, child) => DefaultAssetBundle(bundle: ThemeMediaAssetBundle.instance, child: child!),
+      // The bridge lets packages that still use the SDK's built-in Material work with material_ui (Flutter 3.47 notes;
+      // Claude, 2026-10-21).
+      builder: (context, child) =>
+          MaterialUiCompatibilityBridge(child: DefaultAssetBundle(bundle: ThemeMediaAssetBundle.instance, child: child!)),
       home: const ColliderHomeScreen(),
     );
   }

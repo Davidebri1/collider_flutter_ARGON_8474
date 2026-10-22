@@ -8,7 +8,7 @@
 //  - everything made is also in Files > Generated, under the model that made it.
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/api/collider_api.dart';

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'vision_kit.dart';
 
 /// Durable work-surface frame shared by Smart Gen, Discover and Files

@@ -3,7 +3,7 @@
 // David, 21 Oct: Discover "needs to extract the cinematic effect. Through dimming the background", and Remix hands the
 // picture to the media chat as its reference ("Grok merely transfers you to the chat window when you hit remix").
 // Actions: keep it (My Gallery), Files, share, remix. No words of Grok's.
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/platform/open_url.dart';

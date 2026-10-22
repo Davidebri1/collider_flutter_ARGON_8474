@@ -7,7 +7,7 @@
 // live in the app (David: "the live wallpapers are for in app use only ... here, you can put music").
 // A song plays in the music bar.
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../core/api/collider_api.dart';
