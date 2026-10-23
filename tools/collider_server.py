@@ -204,42 +204,9 @@ def _init_caches():
     except Exception:
         _smartgen_mem = []
 
-    def _is_trivial_prompt(p_str):
-        pl = (p_str or "").strip().lower().rstrip("?.!")
-        return pl in ("who are you", "what is 2+2", "what is 2 + 2", "hi", "hello", "test")
-
-    if _smartgen_mem:
-        cleaned_sg = []
-        sg_dirty = False
-        sess_by_id = {s.get("id"): s for s in (_history_mem or []) if s.get("id")}
-        buckets = ("High", "Medium", "Low")
-        for idx, c in enumerate(_smartgen_mem):
-            if _is_trivial_prompt(c.get("prompt")) or (c.get("title") or "").strip().lower() in ("four", "i am glm by z.ai"):
-                sg_dirty = True
-                continue
-            if not c.get("list"):
-                c["list"] = buckets[len(cleaned_sg) % len(buckets)]
-                sg_dirty = True
-            sid = c.get("session_id")
-            linked = sess_by_id.get(sid)
-            if linked:
-                cons = linked.get("consensus") or {}
-                better_title = fit_words(cons.get("summary") or linked.get("prompt") or c.get("title") or "Synthesis", TUNING["smartgen_title_chars"])
-                if better_title and len(c.get("title") or "") <= 34 and len(better_title) > len(c.get("title") or ""):
-                    c["title"] = better_title
-                    sg_dirty = True
-                if cons.get("score") and c.get("score") != cons.get("score"):
-                    c["score"] = cons["score"]
-                    sg_dirty = True
-            cleaned_sg.append(c)
-        _smartgen_mem = cleaned_sg
-        if sg_dirty:
-            _save_smartgen()
-
     if not _smartgen_mem and _history_mem:
         for sess in reversed(_history_mem[:TUNING["smartgen_backfill"]]):
-            if not _is_trivial_prompt(sess.get("prompt")):
-                _extract_smartgen_card(sess, save=False)
+            _extract_smartgen_card(sess, save=False)
         _save_smartgen()
 
 
@@ -866,8 +833,6 @@ def _extract_smartgen_card(job, save=True):
     if _smartgen_mem is None:
         _smartgen_mem = []
     prompt_text = (job.get("prompt") or "").strip()
-    if prompt_text.lower().rstrip("?.!") in ("who are you", "what is 2+2", "what is 2 + 2", "hi", "hello", "test"):
-        return
     cons = job.get("consensus") or {}
     results = job.get("results") or {}
     summary = (cons.get("summary") or "").strip()
@@ -902,6 +867,36 @@ def _extract_smartgen_card(job, save=True):
     _smartgen_mem.insert(0, card)
     if save:
         _save_smartgen()
+        threading.Thread(target=_smartgen_agent, args=(job, card["id"]), daemon=True).start()
+
+
+def _smartgen_agent(job, card_id):
+    """The Smart Gen agent (Claude, 2026-10-23): the consensus agent writes the card by SMARTGEN_PROMPT, which is in the
+    configuration. Until it has, or if it cannot, the card keeps what was made from the consensus directly."""
+    cons, results = job.get("consensus") or {}, job.get("results") or {}
+    each = "\n".join(f"- {LABEL.get(m, m)}: {r.get('essence') or ''}" for m, r in results.items() if r.get("essence"))
+    user = (f"Question:\n{job.get('prompt') or ''}\n\nConsensus ({cons.get('score') or ''}):\n{cons.get('summary') or ''}"
+            f"\n\nDissent:\n" + "\n".join(str(d) for d in (cons.get("dissent") or [])) + f"\n\nEach model:\n{each}")
+    n = TUNING["smartgen_title_chars"]
+    msgs = [{"role": "system", "content": SMARTGEN_PROMPT.replace("{n}", str(n))}, {"role": "user", "content": user}]
+    for agent in AGENT_CHAIN:
+        try:
+            raw = call_model(agent, msgs, TUNING["agent_tokens"], timeout=TUNING["agent_timeout"])
+            m = re.search(r"\{.*\}", re.sub(r"```(?:json)?", "", raw), flags=re.S)
+            out = json.loads(m.group(0)) if m else {}
+            title, content = str(out.get("title") or "").strip(), str(out.get("content") or "").strip()
+            if not (title or content):
+                continue
+            for c in _smartgen_mem or []:
+                if c.get("id") == card_id:
+                    if title:
+                        c["title"] = fit_words(title, n)
+                    if content:
+                        c["content"] = content
+            _save_smartgen()
+            return
+        except Exception as e:
+            print("smartgen agent failed", agent, e)
 
 
 def save_session(job):
@@ -1264,6 +1259,10 @@ def _themes():
 # window. The values below are only what a configuration starts with; from then on the file is what is read.
 DEADLINE = {"chat": 100, "internet": 120, "research": 180, "deep": 240}
 SILENCE = 45
+SMARTGEN_PROMPT = """From the finished multi-model conversation below, write one Smart Gen card.
+title: what was settled, in at most {n} characters.
+content: the consensus, then any dissent, in plain words.
+Return ONLY JSON: {"title": "...", "content": "..."}"""
 ESSENCE_PROMPT = ("Reduce the answer below to its essence: one standalone sentence stating what it says, "
                   "in service of the question's need. Never mention who wrote it. Reply with the sentence only.")
 # Every other number the server works by. These are the values it has always run on.
@@ -1284,7 +1283,7 @@ TUNING = {
 }
 SETTINGS = ("consensus_agent", "agent_chain", "agent_prompt", "lines_prompt", "essence_prompt", "plan_prompt", "models",
             "depth", "line_rule", "line_length", "search", "plan_queries", "source_chars", "max_tokens", "deadline",
-            "silence", "tuning", "pack_price", "tracks_per_pack")
+            "silence", "tuning", "pack_price", "tracks_per_pack", "smartgen_prompt")
 
 
 def own_system(mid):
@@ -1310,6 +1309,7 @@ def settings_defaults():
             "search": {k: list(v) for k, v in SEARCH.items()}, "max_tokens": dict(MAX_TOKENS), "deadline": dict(DEADLINE),
             "silence": SILENCE, "plan_queries": dict(PLAN_QUERIES), "plan_prompt": PLAN_PROMPT,
             "source_chars": dict(SOURCE_CHARS), "agent_prompt": AGENT_PROMPT, "lines_prompt": LINES_PROMPT,
+            "smartgen_prompt": SMARTGEN_PROMPT,
             "pack_price": PACK_PRICE, "tracks_per_pack": TRACKS_PER_PACK, "imagine": dict(cimagine.DEFAULTS)}
 
 
@@ -1318,7 +1318,7 @@ def apply_settings(cfg):
     Returns True when a line was missing (the file is then saved complete)."""
     global CONSENSUS_AGENT, AGENT_CHAIN, DEPTH, LINE_RULE, LINE_DEFAULT, SEARCH, MAX_TOKENS, DEADLINE, SILENCE
     global AGENT_PROMPT, LINES_PROMPT, PACK_PRICE, TRACKS_PER_PACK, _BUILT_IN, PLAN_QUERIES, SOURCE_CHARS, PLAN_PROMPT
-    global ESSENCE_PROMPT, TUNING
+    global ESSENCE_PROMPT, TUNING, SMARTGEN_PROMPT
     missing = False
     for k, v in settings_defaults().items():
         if k not in cfg:
@@ -1342,6 +1342,7 @@ def apply_settings(cfg):
     SOURCE_CHARS = {k: int(v) for k, v in cfg["source_chars"].items()}
     PLAN_PROMPT = str(cfg["plan_prompt"])
     ESSENCE_PROMPT = str(cfg["essence_prompt"])
+    SMARTGEN_PROMPT = str(cfg["smartgen_prompt"])
     for m in cfg["models"]:  # every model row shows its own instruction and temperature, empty until set
         if "system" not in m or "temperature" not in m:
             missing = True
@@ -1482,6 +1483,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({"sessions": load_history()})
         if p == "/api/smartgen":
             return self._json({"cards": _smartgen_mem or []})
+        if p == "/config":
+            return self._config_page()
         if p == "/api/page":
             return self._page()
         if p == "/api/fetch":
@@ -1612,6 +1615,31 @@ class Handler(SimpleHTTPRequestHandler):
             return self._send(200, "text/html; charset=utf-8", html.encode("utf-8"))
         self._send(200, ctype, data)
 
+    def _config_page(self):
+        """The configuration form, online (Claude, 2026-10-23): the same page as the launch window, without the host."""
+        from collider_form import FORM
+        provs = CONFIG.get("providers", [])
+        initial = {"host": "", "providers": provs, "themes": CONFIG.get("themes") or ccfg.THEMES,
+                   "bypass": bool(CONFIG.get("store_bypass", True)),
+                   "uses": [uses(r) if (r.get("key") or "").strip() else "Not read: no key" for r in provs],
+                   "settings": {k: CONFIG[k] for k in SETTINGS if k in CONFIG}}
+        html = FORM.replace("WHERE", json.dumps(ccfg.path(DATA))).replace("INITIAL", json.dumps(initial))
+        return self._send(200, "text/html; charset=utf-8", html.encode("utf-8"))
+
+    def _config_save(self, b):
+        """Saves the form and runs on it at once."""
+        cfg = dict(CONFIG)
+        cfg["providers"] = [r for r in b.get("providers", []) if any((r.get(k) or "").strip() for k in ("name", "endpoint", "key"))]
+        cfg["themes"] = (b.get("themes") or "").strip() or ccfg.THEMES
+        cfg["store_bypass"] = bool(b.get("bypass", True))
+        cfg.update(b.get("settings") or {})
+        ccfg.save(DATA, cfg)
+        CONFIG.clear()
+        CONFIG.update(cfg)
+        apply_settings(CONFIG)
+        _extend_roster()
+        return {"ok": True}
+
     def do_HEAD(self):
         if not self._let_in():
             return self._send(403, "text/plain", b"")
@@ -1622,6 +1650,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._send(403, "text/plain", b"")
         p = self.path.split("?")[0]
         try:
+            if p == "/api/config":
+                return self._json(self._config_save(self._body()))
             if p == "/api/ask":
                 job = new_job(self._body())
                 return self._json({"id": job["id"]})
