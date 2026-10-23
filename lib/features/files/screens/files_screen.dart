@@ -1,11 +1,4 @@
-// Files. Made by Claude.
-// Layout and styling from Figma: Nimo Spatial OS Design System, node 2012-218019 (file browser).
-// Files holds four sources: what was uploaded, generated, purchased and downloaded.
-// The tiles at the top are those four places. The side menu sorts the same files another way, by kind
-// (David, 4 Oct 2026: "the side nav bar is just duplicating your top area ... how about filetype").
-// Purchased holds the songs that came with the live wallpapers that were bought; the wallpapers themselves
-// live in the app (David: "the live wallpapers are for in app use only ... here, you can put music").
-// A song plays in the music bar.
+// Files — Nimo Spatial OS file browser + ambient music library.
 import '../../../core/drafts.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
@@ -16,20 +9,16 @@ import 'package:intl/intl.dart';
 import '../../../core/api/collider_api.dart';
 import '../../../core/audio/generated_songs.dart';
 import '../../../core/audio/music_player.dart';
+import '../../../core/media/theme_cloud.dart';
 import '../../../core/media/video_window.dart';
 import '../../../core/platform/open_url.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../models/theme_def.dart';
 import '../../theme/theme_pack_store.dart';
 
-/// Colours for this surface. The frame this was built from is a light one, and carrying that light
-/// palette in made Files an opaque panel that hid the room around it, which is the opposite of
-/// what a window is for (HIG, Windows: "using an opaque background obscures people's surroundings
-/// and can make a window feel constricting and heavy"). The frame's relationships stay in the type
-/// sizes and the layout. The colour comes from the glass and from the source gradients.
 class _N {
   static const titleBar = VColors.glassResting;
-  static const body = Color(0x00000000); // the glass shows the wallpaper through
+  static const body = Color(0x00000000);
   static const card = VColors.fillCell;
   static const chip = VColors.fillCell;
   static const chipOn = VColors.fillActive;
@@ -58,7 +47,6 @@ const _sources = [
   _Source('downloaded', 'Downloaded', Icons.download_rounded, [Color(0xFF2C9472), Color(0xFF2EC68E)]),
 ];
 
-/// The kinds of file, for the side menu. Glyphs and colours are the frame's.
 const _kinds = [
   _Source('documents', 'Documents', Icons.insert_drive_file_rounded, [Color(0xFF338C97), Color(0xFF4AC3DA)]),
   _Source('images', 'Images', Icons.image_rounded, [Color(0xFF2E5FC1), Color(0xFF6489DF)]),
@@ -75,10 +63,6 @@ bool _isKind(String place, ColliderFile f) => switch (place) {
       _ => true,
     };
 
-/// One place in the browser (Claude, 2026-10-20): where files came from (Home: everywhere), which kind (null: every
-/// kind), in Generated which model made them (null: All), and an opened file.
-/// David: "segregated by file type/category, file origin (uploaded vs generated), and for generated we need a per
-/// model segregation (and All)".
 class _View {
   final String source;
   final String? kind;
@@ -93,11 +77,7 @@ class _View {
 
 class FilesScreen extends StatefulWidget {
   final VoidCallback onClose;
-
-  /// Where it opens: 'home', or 'music' when the Music Player is asked for.
   final String initialPlace;
-
-  /// A Word, PDF, Markdown, web page or text file opens in Documents for editing (Claude, 2026-10-20).
   final void Function(String url, String name)? onOpenDocument;
   const FilesScreen({super.key, required this.onClose, this.initialPlace = 'home', this.onOpenDocument});
 
@@ -111,7 +91,6 @@ class _FilesScreenState extends State<FilesScreen> {
   Map<String, List<ColliderFile>> _files = {for (final s in _sources) s.key: const []};
   late final List<_View> _history = [_View.start(widget.initialPlace)];
 
-  /// Purchased songs: which theme each belongs to and where it stands in that theme's list.
   final Map<ColliderFile, (WallpaperTheme, int)> _songs = {};
   int _at = 0;
   bool _grid = true;
@@ -119,35 +98,56 @@ class _FilesScreenState extends State<FilesScreen> {
   String _q = '';
   bool _uploading = false;
 
-  /// The frame's unit on this screen: every space, size and radius below is the frame's number times this.
-  double _u = 0.6;
+  double _u = 0.62;
 
   _View get _view => _history[_at];
 
-  /// Music and Purchased hold songs: a song list is rows of titles, whatever the grid button says elsewhere.
   bool get _songsOnly => _view.file == null && (_view.kind == 'music' || _view.source == 'purchased');
 
   @override
   void initState() {
     super.initState();
+    ThemeCloud.instance.addListener(_onThemesChanged);
+    ThemeCloud.instance.init();
     _populateSync();
     _load();
   }
 
   @override
   void dispose() {
+    ThemeCloud.instance.removeListener(_onThemesChanged);
     super.dispose();
+  }
+
+  void _onThemesChanged() {
+    if (!mounted) return;
+    setState(() {
+      _files = {
+        ..._files,
+        'purchased': _buildPurchased(),
+      };
+    });
   }
 
   List<ColliderFile> _buildPurchased() {
     final owned = ThemePackStore.instance.unlocked;
+    final bypass = ThemePackStore.instance.bypass;
     final never = DateTime.fromMillisecondsSinceEpoch(0);
     final purchased = <ColliderFile>[];
+    final seenTrackUrls = <String>{};
     _songs.clear();
-    for (final t in WallpaperCatalog.premiumThemes) {
-      if (!owned.contains(t.id) && t.priceLabel != null) continue;
+
+    // Include free built-in themes + unlocked/bypassed cloud themes so Music & Purchased always have playable tracks
+    final allThemes = <WallpaperTheme>[
+      ...WallpaperCatalog.freeThemes,
+      ...ThemeCloud.instance.themes,
+    ];
+    for (final t in allThemes) {
+      if (!bypass && !owned.contains(t.id) && t.priceLabel != null) continue;
       final songs = MusicPlayer.forTheme(t);
       for (int i = 0; i < songs.length; i++) {
+        final trackKey = '${songs[i].title.toLowerCase()}|${songs[i].file}';
+        if (!seenTrackUrls.add(trackKey)) continue;
         final f = ColliderFile(songs[i].title, 'purchased', 0, never, 'audio', songs[i].file, asset: true);
         purchased.add(f);
         _songs[f] = (t, i);
@@ -183,20 +183,19 @@ class _FilesScreenState extends State<FilesScreen> {
   void _open(ColliderFile f) => _go(_View(_view.source, kind: _view.kind, model: _view.model, file: f));
 
   void _go(_View v) {
-    // A purchased song plays in the music bar; it does not open as a page.
     final song = v.file == null ? null : _songs[v.file!];
     if (song != null) {
       MusicPlayer.instance.play(song.$2, list: MusicPlayer.forTheme(song.$1), id: song.$1.id);
       return;
     }
     final f = v.file;
-    if (f != null && !f.asset && widget.onOpenDocument != null &&
+    if (f != null &&
+        !f.asset &&
+        widget.onOpenDocument != null &&
         RegExp(r'\.(docx|pdf|md|markdown|html?|txt)$', caseSensitive: false).hasMatch(f.name)) {
       widget.onOpenDocument!(f.url, f.name);
       return;
     }
-    // A song a model made plays here, in Files > Music, in its own row; never in the music bar (David, 20 Oct).
-    // Songs uploaded or downloaded do not play in the app; they open to their cover. (Claude, 2026-10-21)
     if (f != null && !f.asset && f.kind == 'audio' && f.source == 'generated') {
       if (_view.kind != 'music') {
         setState(() {
@@ -213,12 +212,9 @@ class _FilesScreenState extends State<FilesScreen> {
       _history.add(v);
       _at++;
     });
-    // A file Collider does not open itself: its preview here, and the device's app picker for the rest.
     if (f != null && !f.asset && _outside(f)) _appPicker(f);
   }
 
-  /// Collider opens pictures, videos (its player), documents (Documents) and the songs the models made (Files >
-  /// Music). Everything else goes to the device's own apps. (Claude, 2026-10-21)
   bool _outside(ColliderFile f) => f.kind != 'image' && f.kind != 'video' && f.kind != 'text';
 
   final Map<String, List<int>> _bytes = {};
@@ -236,11 +232,21 @@ class _FilesScreenState extends State<FilesScreen> {
   static String _mime(String name) {
     final e = name.contains('.') ? name.split('.').last.toLowerCase() : '';
     return const {
-          'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'aac': 'audio/aac', 'wav': 'audio/wav', 'flac': 'audio/flac', 'ogg': 'audio/ogg',
-          'zip': 'application/zip', 'csv': 'text/csv', 'json': 'application/json', 'stl': 'model/stl', 'obj': 'model/obj',
+          'mp3': 'audio/mpeg',
+          'm4a': 'audio/mp4',
+          'aac': 'audio/aac',
+          'wav': 'audio/wav',
+          'flac': 'audio/flac',
+          'ogg': 'audio/ogg',
+          'zip': 'application/zip',
+          'csv': 'text/csv',
+          'json': 'application/json',
+          'stl': 'model/stl',
+          'obj': 'model/obj',
           'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-          'svg': 'image/svg+xml', 'exe': 'application/vnd.microsoft.portable-executable',
+          'svg': 'image/svg+xml',
+          'exe': 'application/vnd.microsoft.portable-executable',
         }[e] ??
         'application/octet-stream';
   }
@@ -260,8 +266,8 @@ class _FilesScreenState extends State<FilesScreen> {
     }
   }
 
-  /// The models (and Documents) that made the generated files, by name.
-  List<String> get _models => {for (final f in _files['generated'] ?? const <ColliderFile>[]) if (f.model.isNotEmpty) f.model}.toList()..sort();
+  List<String> get _models =>
+      {for (final f in _files['generated'] ?? const <ColliderFile>[]) if (f.model.isNotEmpty) f.model}.toList()..sort();
 
   List<ColliderFile> _shown() {
     final v = _view;
@@ -273,7 +279,6 @@ class _FilesScreenState extends State<FilesScreen> {
     if (_byName) {
       list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     } else {
-      // newest first; files with no date (the songs) keep the order they came in
       final order = {for (int i = 0; i < list.length; i++) list[i]: i};
       list.sort((a, b) {
         final c = b.modified.compareTo(a.modified);
@@ -288,38 +293,40 @@ class _FilesScreenState extends State<FilesScreen> {
     final size = MediaQuery.of(context).size;
     final compact = size.width < 768;
     return LayoutBuilder(builder: (context, box) {
-      // Frame: the side menu is 66 wide and lies 4 over the window's left edge; the window starts 15.2% down
-      // the screen and is 54.6% of its height. u is the frame's unit on this screen.
-      const rail = 44.0;
-      final overlap = compact ? 4 * (box.maxWidth - 8 - rail - 10) / 576 : 6.0;
-      final winW = compact ? box.maxWidth - 24 - (rail - overlap) - 24 : (box.maxWidth - 120).clamp(420.0, 880.0);
-      _u = compact ? winW / 576 : 0.62;
-      final winH = compact ? size.height * 919 / 1684 : (box.maxHeight * 0.74).clamp(380.0, 614.0);
-      final railH = 2 * 20 * _u + (_kinds.length + 1) * 30 + _kinds.length * 16 * _u;
+      const railW = 46.0;
+      const railGap = 10.0;
+      final winW = compact
+          ? (box.maxWidth - 32 - railW - railGap).clamp(260.0, 640.0)
+          : (box.maxWidth - 140).clamp(460.0, 880.0);
+      _u = compact ? (winW / 576).clamp(0.48, 0.65) : 0.64;
+      final winH = compact ? size.height * 0.62 : (box.maxHeight * 0.78).clamp(400.0, 640.0);
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onClose,
         child: Align(
-          alignment: compact ? Alignment.topLeft : Alignment.center,
-          child: Padding(
-            padding: EdgeInsets.only(left: compact ? 24 : 0, top: compact ? size.height * 256 / 1684 : 0),
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: 1),
-              duration: const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              builder: (_, t, child) => Opacity(opacity: t, child: Transform.scale(scale: 0.96 + 0.04 * t, child: child)),
-              child: GestureDetector(
-                onTap: () {},
-                child: SizedBox(
-                  width: winW + rail - overlap,
-                  height: winH,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Positioned(left: rail - overlap, top: 0, right: 0, bottom: 0, child: _window(compact)),
-                      Positioned(left: 0, top: (winH - railH) / 2, child: _sideMenu()),
-                    ],
-                  ),
+          alignment: Alignment.center,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            builder: (_, t, child) => Opacity(opacity: t, child: Transform.scale(scale: 0.96 + 0.04 * t, child: child)),
+            child: GestureDetector(
+              onTap: () {},
+              child: SizedBox(
+                width: winW + railW + railGap,
+                height: winH,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _sideMenu(),
+                    const SizedBox(width: railGap),
+                    Expanded(
+                      child: SizedBox(
+                        height: winH,
+                        child: _window(compact),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -332,7 +339,7 @@ class _FilesScreenState extends State<FilesScreen> {
   Widget _window(bool compact) {
     return VGlass(
       material: VMaterial.work,
-      radius: 20,
+      radius: 22,
       child: Column(
         children: [
           _titleBar(compact),
@@ -354,61 +361,51 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  // ---------------- title bar ----------------
   Widget _titleBar(bool compact) {
     final title = _view.file?.name ?? _sourceOf(_view.source == 'home' && _view.kind != null ? _view.kind! : _view.source).label;
     final nav = Row(mainAxisSize: MainAxisSize.min, children: [
       _RoundButton(icon: Icons.chevron_left_rounded, enabled: _at > 0, tooltip: 'Back', onTap: () => setState(() => _at--)),
-      SizedBox(width: compact ? 0 : 6),
+      SizedBox(width: compact ? 4 : 6),
       _RoundButton(icon: Icons.chevron_right_rounded, enabled: _at < _history.length - 1, tooltip: 'Forward', onTap: () => setState(() => _at++)),
     ]);
     final actions = Row(mainAxisSize: MainAxisSize.min, children: [
       if (!_songsOnly) ...[
-        _SquareButton(icon: _grid ? Icons.grid_view_rounded : Icons.view_list_rounded, on: true, tooltip: _grid ? 'Grid' : 'List', onTap: () => setState(() => _grid = !_grid)),
-        SizedBox(width: compact ? 0 : 6),
+        _SquareButton(
+          icon: _grid ? Icons.grid_view_rounded : Icons.view_list_rounded,
+          on: true,
+          tooltip: _grid ? 'Grid' : 'List',
+          onTap: () => setState(() => _grid = !_grid),
+        ),
+        SizedBox(width: compact ? 4 : 6),
       ],
-      _SquareButton(icon: Icons.swap_vert_rounded, on: _byName, tooltip: _byName ? 'By name' : 'Newest first', onTap: () => setState(() => _byName = !_byName)),
-      SizedBox(width: compact ? 0 : 6),
-      _SquareButton(icon: _uploading ? Icons.more_horiz_rounded : Icons.upload_rounded, tooltip: 'Upload', onTap: _uploading ? null : _upload),
-      SizedBox(width: compact ? 0 : 6),
+      _SquareButton(
+        icon: Icons.swap_vert_rounded,
+        on: _byName,
+        tooltip: _byName ? 'By name' : 'Newest first',
+        onTap: () => setState(() => _byName = !_byName),
+      ),
+      SizedBox(width: compact ? 4 : 6),
+      _SquareButton(
+        icon: _uploading ? Icons.more_horiz_rounded : Icons.upload_rounded,
+        tooltip: 'Upload',
+        onTap: _uploading ? null : _upload,
+      ),
+      SizedBox(width: compact ? 4 : 6),
       _SquareButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose),
     ]);
-    final search = VRecessed(
-      height: 32,
-      radius: 16,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: Row(children: [
-        const Icon(Icons.search_rounded, size: 17, color: _N.hint),
-        const SizedBox(width: 6),
-        Expanded(
-          child: TextField(
-            controller: _search,
-            onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
-            cursorColor: _N.title,
-            style: _N.text(11, FontWeight.w400, _N.title),
-            decoration: InputDecoration(
-              hintText: 'Search',
-              hintStyle: _N.text(11, FontWeight.w400, VColors.textTertiary),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-        ),
-      ]),
+    final search = VSearchField(
+      controller: _search,
+      hint: 'Search files & music...',
+      onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
     );
-    final name = Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(17, FontWeight.w600, _N.title));
+    final name = Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(16, FontWeight.w600, _N.title));
     return Container(
       color: _N.titleBar,
-      padding: EdgeInsets.all(20 * _u),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: compact
           ? Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              Row(children: [nav, const Spacer(), actions]),
-              if (title.isNotEmpty) ...[
-                SizedBox(height: 10 * _u),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(22, FontWeight.w700, _N.title)),
-              ],
-              SizedBox(height: 14 * _u),
+              Row(children: [nav, const SizedBox(width: 8), Expanded(child: name), actions]),
+              const SizedBox(height: 8),
               search,
             ])
           : Row(children: [
@@ -419,31 +416,43 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  // ---------------- browse: source cards, then the files ----------------
   Widget _browse() {
     final home = _view.source == 'home';
     final list = _shown();
-    // The list recedes at its far end only while more lies below, and at the top once rows have gone up past it.
     return EdgeFade(
       focus: FadeFocus.top,
       child: ListView(
-        padding: EdgeInsets.fromLTRB(20 * _u, 20 * _u, 20 * _u, 28),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
         physics: const BouncingScrollPhysics(),
         children: [
           if (home) ...[
             Row(children: [
               for (int i = 0; i < _sources.length; i++) ...[
-                if (i > 0) SizedBox(width: 20 * _u),
-                Expanded(child: _SourceCard(u: _u, source: _sources[i], onTap: () => _go(_View(_sources[i].key, kind: _view.kind)))),
+                if (i > 0) const SizedBox(width: 10),
+                Expanded(
+                  child: _SourceCard(
+                    source: _sources[i],
+                    count: (_files[_sources[i].key] ?? const []).length,
+                    onTap: () => _go(_View(_sources[i].key, kind: _view.kind)),
+                  ),
+                ),
               ],
             ]),
-            SizedBox(height: 30 * _u),
-            // The frame's line and heading stand over a list; with nothing to list they are left out.
+            const SizedBox(height: 16),
             if (list.isNotEmpty) ...[
-              Container(height: 1, color: VColors.borderLight),
-              SizedBox(height: 30 * _u),
-              Text('Recents', style: _N.text(17, FontWeight.w600, _N.title)),
-              SizedBox(height: 30 * _u),
+              Container(height: 0.5, color: VColors.borderLight),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Text(
+                    _view.kind != null ? _sourceOf(_view.kind!).label : 'Recents',
+                    style: _N.text(15, FontWeight.w600, _N.title),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('${list.length} items', style: _N.text(11, FontWeight.w500, _N.hint)),
+                ],
+              ),
+              const SizedBox(height: 12),
             ],
           ],
           if (_view.source == 'generated' && _models.isNotEmpty) ...[
@@ -452,17 +461,36 @@ class _FilesScreenState extends State<FilesScreen> {
               for (final m in _models)
                 VChip(label: m, selected: _view.model == m, onTap: () => _go(_View('generated', kind: _view.kind, model: m))),
             ]),
-            SizedBox(height: 24 * _u),
+            const SizedBox(height: 14),
           ],
-          if (_grid && !_songsOnly)
+          if (list.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              child: Center(
+                child: Text(
+                  'No files in this view yet.',
+                  style: _N.text(12, FontWeight.w500, _N.hint),
+                ),
+              ),
+            )
+          else if (_grid && !_songsOnly)
             LayoutBuilder(builder: (context, c) {
-              // frame: cells 68 wide, 50 apart; here the cell follows the type (68 x 0.79) and the gap takes the rest
-              // each file shown large enough to recognise by its own picture
-              final cols = ((c.maxWidth + 50 * _u) / (88 + 50 * _u)).floor().clamp(3, 12);
+              final cols = ((c.maxWidth + 16) / 112).floor().clamp(3, 8);
               final w = c.maxWidth / cols;
               return Wrap(
-                runSpacing: 30 * _u,
-                children: [for (final f in list) SizedBox(width: w, child: _FileCell(file: f, api: _api, onTap: () => _open(f), onLongPress: f.asset ? null : () => _detail(f)))],
+                runSpacing: 18,
+                children: [
+                  for (final f in list)
+                    SizedBox(
+                      width: w,
+                      child: _FileCell(
+                        file: f,
+                        api: _api,
+                        onTap: () => _open(f),
+                        onLongPress: f.asset ? null : () => _detail(f),
+                      ),
+                    ),
+                ],
               );
             })
           else
@@ -478,7 +506,6 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  // ---------------- a file held: the app's detail view (Claude, 2026-10-23) ----------------
   Future<void> _send(ColliderFile f) async {
     final bytes = _bytes[f.url] ??= (await _api.fileBytes(f)) ?? const [];
     if (bytes.isNotEmpty && await shareFile(bytes, f.name, _mime(f.name))) return;
@@ -509,17 +536,21 @@ class _FilesScreenState extends State<FilesScreen> {
                 builder: (_, snap) => VFadeScroll(
                   fade: 30,
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 26),
-                  child: SelectableText(snap.data ?? '',
-                      style: VType.body().copyWith(fontSize: 11, height: 1.5, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 14)])),
+                  child: SelectableText(
+                    snap.data ?? '',
+                    style: VType.body().copyWith(fontSize: 11, height: 1.5, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 14)]),
+                  ),
                 ),
               ),
             ),
           _ => Column(mainAxisSize: MainAxisSize.min, children: [
               DetailRaised(radius: 12, child: _Thumb(file: f, api: _api, width: math.min(220.0, size.width * 0.5))),
               const SizedBox(height: 14),
-              Text(f.name,
-                  textAlign: TextAlign.center,
-                  style: VType.callout().copyWith(shadows: const [Shadow(color: Color(0x99000000), blurRadius: 12)])),
+              Text(
+                f.name,
+                textAlign: TextAlign.center,
+                style: VType.callout().copyWith(shadows: const [Shadow(color: Color(0x99000000), blurRadius: 12)]),
+              ),
             ]),
         };
         return DetailView(
@@ -544,7 +575,6 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  // ---------------- an opened file ----------------
   Widget _preview(ColliderFile f) {
     if (f.kind == 'audio') return Center(child: _Thumb(file: f, api: _api, width: 180));
     if (f.kind == 'video' && !f.asset) {
@@ -590,39 +620,44 @@ class _FilesScreenState extends State<FilesScreen> {
     );
   }
 
-  // ---------------- side menu: Home and the kinds of file ----------------
   Widget _sideMenu() {
     return SizedBox(
-      width: 44,
+      width: 46,
       child: VGlass(
         material: VMaterial.elevated,
-        radius: 22,
-        padding: EdgeInsets.symmetric(vertical: 20 * _u),
+        radius: 23,
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-        for (final s in [_home, ..._kinds]) ...[
-          if (s.key != 'home') SizedBox(height: 16 * _u),
-          VPress(
-            tooltip: s.label,
-            onTap: () {
-              final next = s.key == 'home' ? const _View('home') : _View(_view.source, kind: _view.kind == s.key ? null : s.key, model: _view.model);
-              if (!next.same(_view)) _go(next);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(color: (s.key == 'home' ? _view.source == 'home' && _view.kind == null : _view.kind == s.key) ? _N.chip : Colors.transparent, shape: BoxShape.circle),
-              child: Center(child: _GradientIcon(s.icon, s.colors, 19)),
+          for (final s in [_home, ..._kinds]) ...[
+            if (s.key != 'home') const SizedBox(height: 10),
+            VPress(
+              tooltip: s.label,
+              onTap: () {
+                final next = s.key == 'home'
+                    ? const _View('home')
+                    : _View(_view.source, kind: _view.kind == s.key ? null : s.key, model: _view.model);
+                if (!next.same(_view)) _go(next);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: (s.key == 'home' ? _view.source == 'home' && _view.kind == null : _view.kind == s.key)
+                      ? _N.chipOn
+                      : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(child: _GradientIcon(s.icon, s.colors, 18)),
+              ),
             ),
-          ),
-        ],
-      ]),
+          ],
+        ]),
       ),
     );
   }
 }
 
-/// Icon filled with the source's gradient, top to bottom, as the Figma icons are.
 class _GradientIcon extends StatelessWidget {
   final IconData icon;
   final List<Color> colors;
@@ -678,42 +713,68 @@ class _SquareButton extends StatelessWidget {
       );
 }
 
-/// Source card: gradient icon top left, name at the bottom. The frame's count line is not carried
-/// (David: "no counting").
 class _SourceCard extends StatelessWidget {
-  final double u;
   final _Source source;
+  final int count;
   final VoidCallback onTap;
-  const _SourceCard({required this.u, required this.source, required this.onTap});
+  const _SourceCard({required this.source, required this.count, required this.onTap});
 
   @override
   Widget build(BuildContext context) => VPress(
         onTap: onTap,
         child: Container(
-          height: 146 * u,
-          padding: EdgeInsets.all(12 * u),
+          height: 68,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: _N.card,
-            borderRadius: BorderRadius.circular(20 * u),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: VColors.borderSubtle, width: 0.5),
             boxShadow: VShadow.subtle,
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _GradientIcon(source.icon, source.colors, 38 * u),
-            const Spacer(),
-            Text(source.label, maxLines: 1, softWrap: false, overflow: TextOverflow.visible, style: _N.text(11, FontWeight.w600, _N.label)),
-          ]),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: source.colors.first.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(child: _GradientIcon(source.icon, source.colors, 20)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      source.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _N.text(11.5, FontWeight.w600, _N.title),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$count ${count == 1 ? 'item' : 'items'}',
+                      maxLines: 1,
+                      style: _N.text(10, FontWeight.w500, _N.hint),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       );
 }
 
-/// Thumbnail: the picture itself for images, otherwise the kind's icon on a tile.
 class _Thumb extends StatelessWidget {
   final ColliderFile file;
   final ColliderApi api;
   final double width;
   const _Thumb({required this.file, required this.api, required this.width});
 
-  // Each kind of file its own glyph and its own colour (Apple's system colours), the same everywhere (Claude, 2026-10-20).
   static const _word = (Icons.description_rounded, [Color(0xFF6CC8FF), Color(0xFF0A63F0)]);
   static const _pdf = (Icons.picture_as_pdf_rounded, [Color(0xFFFF7A70), Color(0xFFE0221B)]);
   static const _note = (Icons.notes_rounded, [Color(0xFFD1D1D6), Color(0xFF8E8E93)]);
@@ -729,52 +790,102 @@ class _Thumb extends StatelessWidget {
   static const _picture = (Icons.image_rounded, [Color(0xFFFFD95A), Color(0xFFFF8A00)]);
   static const _other = (Icons.insert_drive_file_rounded, [Color(0xFFD1D1D6), Color(0xFF8E8E93)]);
   static const _byEnding = {
-    'docx': _word, 'doc': _word, 'rtf': _word, 'odt': _word, 'pages': _word,
+    'docx': _word,
+    'doc': _word,
+    'rtf': _word,
+    'odt': _word,
+    'pages': _word,
     'pdf': _pdf,
-    'md': _note, 'markdown': _note, 'txt': _note, 'log': _note,
-    'html': _web, 'htm': _web,
-    'py': _code, 'dart': _code, 'js': _code, 'ts': _code, 'css': _code, 'sh': _code, 'bat': _code, 'ps1': _code,
-    'c': _code, 'cpp': _code, 'h': _code, 'java': _code, 'go': _code, 'rs': _code, 'sql': _code,
-    'json': _data, 'xml': _data, 'yaml': _data, 'yml': _data, 'toml': _data, 'ini': _data,
-    'csv': _sheet, 'xlsx': _sheet, 'xls': _sheet, 'ods': _sheet, 'numbers': _sheet,
-    'pptx': _slides, 'ppt': _slides, 'key': _slides, 'odp': _slides,
-    'zip': _zip, '7z': _zip, 'rar': _zip, 'gz': _zip, 'tar': _zip,
-    'exe': _app, 'msi': _app, 'apk': _app, 'dmg': _app,
+    'md': _note,
+    'markdown': _note,
+    'txt': _note,
+    'log': _note,
+    'html': _web,
+    'htm': _web,
+    'py': _code,
+    'dart': _code,
+    'js': _code,
+    'ts': _code,
+    'css': _code,
+    'sh': _code,
+    'bat': _code,
+    'ps1': _code,
+    'c': _code,
+    'cpp': _code,
+    'h': _code,
+    'java': _code,
+    'go': _code,
+    'rs': _code,
+    'sql': _code,
+    'json': _data,
+    'xml': _data,
+    'yaml': _data,
+    'yml': _data,
+    'toml': _data,
+    'ini': _data,
+    'csv': _sheet,
+    'xlsx': _sheet,
+    'xls': _sheet,
+    'ods': _sheet,
+    'numbers': _sheet,
+    'pptx': _slides,
+    'ppt': _slides,
+    'key': _slides,
+    'odp': _slides,
+    'zip': _zip,
+    '7z': _zip,
+    'rar': _zip,
+    'gz': _zip,
+    'tar': _zip,
+    'exe': _app,
+    'msi': _app,
+    'apk': _app,
+    'dmg': _app,
   };
   static (IconData, List<Color>) iconFor(ColliderFile f) {
     final dot = f.name.lastIndexOf('.');
     final ending = dot < 0 ? '' : f.name.substring(dot + 1).toLowerCase();
     return _byEnding[ending] ??
-        switch (f.kind) { 'audio' => _song, 'video' => _film, 'image' => _picture, 'pdf' => _pdf, 'text' => _note, _ => _other };
+        switch (f.kind) {
+          'audio' => _song,
+          'video' => _film,
+          'image' => _picture,
+          'pdf' => _pdf,
+          'text' => _note,
+          _ => _other,
+        };
   }
 
   @override
   Widget build(BuildContext context) {
-    // Square, so a page, a photo and a model each show at their own shape inside it (Claude, 2026-10-20).
     final h = width;
     Widget tile() {
-      // The tile carries the kind's colour and the glyph sits white on it, as the app icons do.
       final (icon, colors) = iconFor(file);
       return Container(
         decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: colors)),
         child: Center(
-          child: Icon(icon, size: h * 0.46, color: Colors.white, shadows: const [Shadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))]),
+          child: Icon(
+            icon,
+            size: h * 0.46,
+            color: Colors.white,
+            shadows: const [Shadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))],
+          ),
         ),
       );
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(10),
       child: SizedBox(
         width: width,
         height: h,
-        // The file's own picture (made by the server, collider_thumbs.py): a photo, a video's frame, a PDF's first page,
-        // a model, a document's page, a program's icon. Until it arrives, or when a file has none, the kind's tile.
         child: file.asset
             ? (file.kind == 'image' ? Image.asset(file.url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => tile()) : tile())
             : Image.network(
                 api.thumbUrl(file),
-                fit: (file.kind == 'image' && !file.name.toLowerCase().endsWith('.svg')) || file.kind == 'video' ? BoxFit.cover : BoxFit.contain,
+                fit: (file.kind == 'image' && !file.name.toLowerCase().endsWith('.svg')) || file.kind == 'video'
+                    ? BoxFit.cover
+                    : BoxFit.contain,
                 filterQuality: FilterQuality.high,
                 frameBuilder: (_, child, frame, sync) => frame == null && !sync
                     ? tile()
@@ -793,14 +904,18 @@ class _FileCell extends StatelessWidget {
   final VoidCallback? onLongPress;
   const _FileCell({required this.file, required this.api, required this.onTap, this.onLongPress});
 
-  /// The name on one line and its ending on the next, so a name never breaks inside a word.
   List<Widget> _name() {
     final dot = file.name.lastIndexOf('.');
     final hasEnding = dot > 0 && file.name.length - dot <= 6;
     final style = _N.text(11, FontWeight.w400, _N.label, height: 1.27);
     return [
-      Text(hasEnding ? file.name.substring(0, dot) : file.name,
-          maxLines: hasEnding ? 1 : 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: style),
+      Text(
+        hasEnding ? file.name.substring(0, dot) : file.name,
+        maxLines: hasEnding ? 1 : 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: style,
+      ),
       if (hasEnding) Text(file.name.substring(dot), maxLines: 1, style: style),
     ];
   }
@@ -809,24 +924,22 @@ class _FileCell extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
         onLongPress: onLongPress,
         child: VPress(
-        onTap: onTap,
-        tooltip: file.name,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            file.kind == 'audio' && file.source == 'generated'
-                ? _SongState(url: api.fileUrl(file), child: _Thumb(file: file, api: api, width: 88))
-                : _Thumb(file: file, api: api, width: 88),
-            const SizedBox(height: 10),
-            ..._name(),
-          ]),
+          onTap: onTap,
+          tooltip: file.name,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              file.kind == 'audio' && file.source == 'generated'
+                  ? _SongState(url: api.fileUrl(file), child: _Thumb(file: file, api: api, width: 84))
+                  : _Thumb(file: file, api: api, width: 84),
+              const SizedBox(height: 8),
+              ..._name(),
+            ]),
+          ),
         ),
-      ),
       );
 }
 
-/// A song row, as in David's map row 20 (417-6219): the theme's art as the cover, the title, and the theme it comes
-/// with under it. The song playing is drawn in the music colour. Made by Claude (2026-10-17).
 class _SongRow extends StatelessWidget {
   final String title;
   final WallpaperTheme theme;
@@ -843,21 +956,58 @@ class _SongRow extends StatelessWidget {
         final on = p.queueId == theme.id && p.index == index && p.playing;
         return VPress(
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: on ? const Color(0x22D65983) : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Row(children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: Image.asset(theme.assetPath, width: 40, height: 40, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: theme.assetPath.startsWith('http')
+                      ? Image.network(
+                          theme.assetPath,
+                          fit: BoxFit.cover,
+                          filterQuality: FilterQuality.medium,
+                          errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF282C34)),
+                        )
+                      : Image.asset(
+                          theme.assetPath,
+                          fit: BoxFit.cover,
+                          filterQuality: FilterQuality.medium,
+                          errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF282C34)),
+                        ),
+                ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(11, FontWeight.w600, on ? const Color(0xFFD65983) : _N.label)),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _N.text(11.5, FontWeight.w600, on ? const Color(0xFFFF7A95) : _N.title),
+                  ),
                   const SizedBox(height: 2),
-                  Text(theme.name.replaceAll(RegExp(r'\s*4K$'), '').trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(11, FontWeight.w500, _N.hint)),
+                  Text(
+                    theme.name.replaceAll(RegExp(r'\s*4K$'), '').trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _N.text(10.5, FontWeight.w500, _N.hint),
+                  ),
                 ]),
               ),
+              Icon(
+                on ? CupertinoIcons.pause_fill : CupertinoIcons.play_arrow_solid,
+                size: 15,
+                color: on ? const Color(0xFFFF7A95) : _N.hint,
+              ),
+              const SizedBox(width: 4),
             ]),
           ),
         );
@@ -887,32 +1037,30 @@ class _FileRow extends StatelessWidget {
     return GestureDetector(
       onLongPress: onLongPress,
       child: VPress(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(children: [
-          file.kind == 'audio' && file.source == 'generated'
-              ? _SongState(url: api.fileUrl(file), child: _Thumb(file: file, api: api, width: 44))
-              : _Thumb(file: file, api: api, width: 44),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(11, FontWeight.w600, _N.label)),
-              if (meta.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(meta, style: _N.text(11, FontWeight.w500, _N.hint)),
-              ],
-            ]),
-          ),
-        ]),
-      ),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(children: [
+            file.kind == 'audio' && file.source == 'generated'
+                ? _SongState(url: api.fileUrl(file), child: _Thumb(file: file, api: api, width: 44))
+                : _Thumb(file: file, api: api, width: 44),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(11, FontWeight.w600, _N.label)),
+                if (meta.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(meta, style: _N.text(11, FontWeight.w500, _N.hint)),
+                ],
+              ]),
+            ),
+          ]),
+        ),
       ),
     );
   }
 }
 
-/// A generated song's cover with its state on it: a pause glyph while it plays and the line of how far it has got.
-/// Made by Claude (2026-10-21).
 class _SongState extends StatelessWidget {
   final String url;
   final Widget child;

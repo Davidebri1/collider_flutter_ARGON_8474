@@ -11,25 +11,20 @@ import '../../../models/theme_def.dart';
 import '../../media/generations_pane.dart' show BreathingTile;
 import '../../media/picture_viewer.dart';
 
-/// Discover Market. Rebuilt by Claude (2026-10-21) to David's direction of 21 Oct: "Discover market is just images for
-/// now. But Unsplash has shown that can be displayed well"; it "needs to match grok imagine market in terms of color
-/// sharpness, layout, design, features, but also needs to extract the cinematic effect. Through dimming the background";
-/// and remix goes to the media chat, as Grok's does ("Grok merely transfers you to the chat window when you hit remix
-/// ... it's the same chat window and agent and you type in a prompt. We should be the same").
-/// References (Mobbin, iOS): Grok's Imagine feed (pictures edge to edge on black, hairline gaps, the box to type in
-/// floating at the foot) and its picture view; Unsplash's feed (each picture at its own shape, never cropped).
-///  - the room behind dims to nearly black; the window is black, the pictures the only light in it;
-///  - two columns on a phone, more on wider screens, each picture at its own shape (Unsplash), 2-point gaps (Grok);
-///  - the pictures: what the picture models made here (newest first), then the live wallpapers' pictures;
-///  - a picture opens large (PictureViewer): keep it in My Gallery, Files, share, remix;
-///  - the box at the foot sends its words to the media chat, which makes the pictures (one place for making).
+/// Discover Market — Grok Imagine + Unsplash masonry showcase with lazy viewport building and title captions.
 class MarketScreen extends StatefulWidget {
   final VoidCallback onClose;
   final String view; // 'discover' or 'gallery'
-  final ValueChanged<String> onImagine; // words for the media chat
-  final ValueChanged<String> onRemix; // a picture's place in Files, as the media chat's reference
+  final ValueChanged<String> onImagine;
+  final ValueChanged<String> onRemix;
 
-  const MarketScreen({super.key, required this.onClose, required this.onImagine, required this.onRemix, this.view = 'discover'});
+  const MarketScreen({
+    super.key,
+    required this.onClose,
+    required this.onImagine,
+    required this.onRemix,
+    this.view = 'discover',
+  });
 
   @override
   State<MarketScreen> createState() => _MarketScreenState();
@@ -37,11 +32,19 @@ class MarketScreen extends StatefulWidget {
 
 class _Item {
   final String id;
+  final String title;
   final String url;
   final double aspect;
   final String? fileRef;
   final WallpaperTheme? theme;
-  const _Item({required this.id, required this.url, required this.aspect, this.fileRef, this.theme});
+  const _Item({
+    required this.id,
+    required this.title,
+    required this.url,
+    required this.aspect,
+    this.fileRef,
+    this.theme,
+  });
 }
 
 class _MarketScreenState extends State<MarketScreen> {
@@ -51,7 +54,7 @@ class _MarketScreenState extends State<MarketScreen> {
   final Set<String> _saved = {..._savedCache};
   List<Creation> _made = const [];
   Timer? _poll;
-  final _text = Drafts.text('discover'); // kept when Discover closes (Claude, 2026-10-21)
+  final _text = Drafts.text('discover');
 
   @override
   void initState() {
@@ -93,6 +96,7 @@ class _MarketScreenState extends State<MarketScreen> {
 
   List<_Item> get _items {
     final api = ColliderApi.instance;
+    final seenTitles = <String>{};
     final out = <_Item>[
       for (final c in _made)
         if (c.kind == 'image' && c.status == 'done')
@@ -100,12 +104,16 @@ class _MarketScreenState extends State<MarketScreen> {
             if (m['kind'] != 'video')
               _Item(
                 id: 'c:${m['name']}',
+                title: c.prompt.isNotEmpty ? c.prompt : '${m['name']}',
                 url: api.fileUrl(ColliderFile('${m['name']}', 'generated', 0, DateTime.now(), 'image', '${m['url']}')),
-                aspect: (m['width'] is num && m['height'] is num && (m['height'] as num) > 0) ? (m['width'] as num) / (m['height'] as num) : 9 / 16,
+                aspect: (m['width'] is num && m['height'] is num && (m['height'] as num) > 0)
+                    ? (m['width'] as num) / (m['height'] as num)
+                    : 9 / 16,
                 fileRef: 'generated/${m['name']}',
               ),
-      // the wallpapers' pictures are 1168 x 1728 (measured 2026-10-21)
-      for (final t in ThemeCloud.instance.themes) _Item(id: t.id, url: t.assetPath, aspect: 1168 / 1728, theme: t),
+      for (final t in ThemeCloud.instance.themes)
+        if (seenTitles.add(t.name.toLowerCase().trim()))
+          _Item(id: t.id, title: t.name, url: t.assetPath, aspect: 1168 / 1728, theme: t),
     ];
     return widget.view == 'gallery' ? [for (final i in out) if (_saved.contains(i.id)) i] : out;
   }
@@ -123,7 +131,6 @@ class _MarketScreenState extends State<MarketScreen> {
     (await SharedPreferences.getInstance()).setStringList(_savedKey, _saved.toList()..sort());
   }
 
-  /// A wallpaper's picture is not in Files yet: it is saved there first (Files > Downloaded), so it can be a reference.
   Future<String?> _ref(ViewedPicture p) async {
     if (p.fileRef != null) return p.fileRef;
     final name = await ColliderApi.instance.download(p.url);
@@ -138,7 +145,9 @@ class _MarketScreenState extends State<MarketScreen> {
           url: it.url,
           aspect: it.aspect,
           fileRef: it.fileRef,
-          builder: it.theme == null ? null : (fit) => Image(image: _poster(it.theme!.assetPath), fit: fit, filterQuality: FilterQuality.high, gaplessPlayback: true),
+          builder: it.theme == null
+              ? null
+              : (fit) => Image(image: _poster(it.theme!.assetPath), fit: fit, filterQuality: FilterQuality.high, gaplessPlayback: true),
         ),
     ];
     showGeneralDialog(
@@ -170,55 +179,99 @@ class _MarketScreenState extends State<MarketScreen> {
     widget.onImagine(t);
   }
 
-  /// A wallpaper's picture: from the theme server, or packed in the app.
   static ImageProvider _poster(String path) => path.startsWith('http') ? NetworkImage(path) as ImageProvider : AssetImage(path);
 
-  /// Unsplash's feed: each picture at its own shape, laid into the shortest column.
-  Widget _feed(List<_Item> items, double width) {
-    final cols = width >= 1000 ? 4 : (width >= 600 ? 3 : 2);
-    const gap = 2.0;
-    final colW = (width - gap * (cols - 1)) / cols;
-    final px = (colW * MediaQuery.devicePixelRatioOf(context)).round();
-    final heights = List<double>.filled(cols, 0);
-    final columns = List.generate(cols, (_) => <Widget>[]);
-    for (int i = 0; i < items.length; i++) {
-      final it = items[i];
-      int c = 0;
-      for (int k = 1; k < cols; k++) {
-        if (heights[k] < heights[c]) c = k;
-      }
-      final h = colW / it.aspect;
-      heights[c] += h + gap;
-      final index = i;
-      columns[c].add(Padding(
-        padding: const EdgeInsets.only(bottom: gap),
-        child: VPress(
-          onTap: () => _open(items, index),
-          child: SizedBox(
-            width: colW,
-            height: h,
-            // Each tile is decoded at the size it is shown (no blur work, no full-size textures), so a phone's browser
-            // keeps the whole feed in memory. (Claude, 2026-10-21)
-            child: it.theme != null
-                ? Image(
-                    image: ResizeImage(_poster(it.theme!.assetPath), width: px, policy: ResizeImagePolicy.fit),
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.medium,
-                    gaplessPlayback: true,
-                    frameBuilder: (_, child, frame, sync) => frame == null && !sync ? const BreathingTile() : child,
-                    errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0B0B0D)))
-                : Image.network(it.url, fit: BoxFit.cover, filterQuality: FilterQuality.medium, gaplessPlayback: true, cacheWidth: px,
-                    frameBuilder: (_, child, frame, sync) => frame == null && !sync ? const BreathingTile() : child,
-                    errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0B0B0D))),
-          ),
+  Widget _buildGrid(List<_Item> items, double width, bool phone) {
+    if (items.isEmpty) {
+      return Center(
+        child: Text(
+          widget.view == 'gallery' ? 'No saved creations in My Gallery yet.' : 'Loading Discover Market...',
+          style: VType.callout(color: VColors.textSecondary),
         ),
-      ));
+      );
     }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (int c = 0; c < cols; c++) ...[if (c > 0) const SizedBox(width: gap), SizedBox(width: colW, child: Column(children: columns[c]))],
-      ],
+    final cols = width >= 1000 ? 4 : (width >= 600 ? 3 : 2);
+    const gap = 4.0;
+    final colW = (width - gap * (cols - 1)) / cols;
+    final px = (colW * MediaQuery.devicePixelRatioOf(context)).round().clamp(240, 720);
+    return GridView.builder(
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.only(top: phone ? 56 : 64, bottom: 104, left: 4, right: 4),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: cols,
+        mainAxisSpacing: gap,
+        crossAxisSpacing: gap,
+        childAspectRatio: 1168 / 1728,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final it = items[index];
+        final isSaved = _saved.contains(it.id);
+        return VPress(
+          onTap: () => _open(items, index),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                it.theme != null
+                    ? Image(
+                        image: ResizeImage(_poster(it.theme!.assetPath), width: px, policy: ResizeImagePolicy.fit),
+                        fit: BoxFit.cover,
+                        filterQuality: FilterQuality.medium,
+                        gaplessPlayback: true,
+                        frameBuilder: (_, child, frame, sync) => frame == null && !sync ? const BreathingTile() : child,
+                        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0B0B0D)),
+                      )
+                    : Image.network(
+                        it.url,
+                        fit: BoxFit.cover,
+                        filterQuality: FilterQuality.medium,
+                        gaplessPlayback: true,
+                        cacheWidth: px,
+                        frameBuilder: (_, child, frame, sync) => frame == null && !sync ? const BreathingTile() : child,
+                        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0B0B0D)),
+                      ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 52,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [Colors.black.withValues(alpha: 0.78), Colors.transparent],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              it.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: VType.caption(color: const Color(0xEBFFFFFF), weight: FontWeight.w500).copyWith(fontSize: 11),
+                            ),
+                          ),
+                          if (isSaved)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 4),
+                              child: Icon(CupertinoIcons.heart_fill, size: 13, color: Color(0xFFFF375F)),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -228,15 +281,12 @@ class _MarketScreenState extends State<MarketScreen> {
     final phone = size.width < 768;
     final items = _items;
     return Stack(children: [
-      // The room dims to nearly black: the cinema goes dark around the screen.
       Positioned.fill(
         child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose, child: const ColoredBox(color: Color(0xE6000000))),
       ),
       SafeArea(
         bottom: false,
         child: Padding(
-          // on a phone the pictures run edge to edge, as Grok's feed; the side rail (Discover, My Gallery) floats over them
-          // (Claude, 2026-10-21)
           padding: EdgeInsets.fromLTRB(0, phone ? 0 : 8, 0, phone ? 0 : 8),
           child: Center(
             child: ConstrainedBox(
@@ -250,82 +300,98 @@ class _MarketScreenState extends State<MarketScreen> {
                   child: LayoutBuilder(builder: (context, box) {
                     return Stack(children: [
                       Positioned.fill(
-                        child: SingleChildScrollView(
-                          physics: const BouncingScrollPhysics(),
-                          // on a phone the pictures start under the head, which floats over them (Grok)
-                          padding: EdgeInsets.only(top: phone ? 0 : 60, bottom: 96),
-                          child: _feed(items, box.maxWidth),
-                        ),
+                        child: _buildGrid(items, box.maxWidth, phone),
                       ),
-                      // the head: fades from black so the feed passes under it
                       Positioned(
                         left: 0,
                         right: 0,
                         top: 0,
-                        height: 72,
+                        height: 68,
                         child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
-                                colors: [Colors.black.withValues(alpha: 0.85), Colors.black.withValues(alpha: 0.4), Colors.transparent],
+                                colors: [Colors.black.withValues(alpha: 0.88), Colors.black.withValues(alpha: 0.45), Colors.transparent],
                               ),
                             ),
                           ),
                         ),
                       ),
                       Positioned(
-                        left: 10,
-                        top: 8,
-                        right: 10,
+                        left: 12,
+                        top: 10,
+                        right: 12,
                         child: Row(children: [
                           VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', floating: true, onTap: widget.onClose),
                           const SizedBox(width: 10),
-                          Text('Discover Market', style: VType.headline(color: Colors.white)),
+                          Text(
+                            widget.view == 'gallery' ? 'My Gallery' : 'Discover Market',
+                            style: VType.headline(color: Colors.white),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0x28FFFFFF),
+                              borderRadius: BorderRadius.circular(VRadius.full),
+                            ),
+                            child: Text(
+                              '${items.length} items',
+                              style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w500),
+                            ),
+                          ),
                         ]),
                       ),
-                      // the foot: the box to type in, floating over the feed, which fades out beneath it
                       Positioned(
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        height: 110,
+                        height: 104,
                         child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 begin: Alignment.bottomCenter,
                                 end: Alignment.topCenter,
-                                colors: [Colors.black.withValues(alpha: 0.9), Colors.black.withValues(alpha: 0.5), Colors.transparent],
+                                colors: [Colors.black.withValues(alpha: 0.92), Colors.black.withValues(alpha: 0.52), Colors.transparent],
                               ),
                             ),
                           ),
                         ),
                       ),
                       Positioned(
-                        left: phone ? 76 : 10, // clear of the side rail's foot on a phone
-                        right: 10,
+                        left: phone ? 76 : 16,
+                        right: 16,
                         bottom: 12,
                         child: VGlass(
                           material: VMaterial.elevated,
-                          radius: 28,
-                          padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+                          radius: 26,
+                          padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
                           child: Row(children: [
+                            const Icon(CupertinoIcons.sparkles, size: 16, color: VColors.textSecondary),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: TextField(
                                 controller: _text,
                                 minLines: 1,
-                                maxLines: 4,
+                                maxLines: 3,
                                 cursorColor: VColors.textPrimary,
                                 textInputAction: TextInputAction.send,
                                 onSubmitted: (_) => _send(),
                                 style: VType.callout(weight: FontWeight.w500),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 13)),
+                                decoration: InputDecoration(
+                                  hintText: 'Describe an image to imagine or remix...',
+                                  hintStyle: VType.callout(color: const Color(0x99FFFFFF), weight: FontWeight.w400),
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 6),
-                            VCircleButton(icon: Icons.arrow_upward_rounded, size: 44, selected: true, onTap: _send),
+                            VCircleButton(icon: Icons.arrow_upward_rounded, size: 34, selected: true, onTap: _send),
                           ]),
                         ),
                       ),

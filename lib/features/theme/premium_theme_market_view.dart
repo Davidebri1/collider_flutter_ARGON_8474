@@ -16,23 +16,7 @@ import '../../models/theme_def.dart';
 import 'theme_living_media.dart';
 import 'theme_pack_store.dart';
 
-/// Premium Theme Market. Ported by Claude (2026-10-17) from David's Premium Theme Market source
-/// (Figma Make bundle "Premium Theme Market", src/app): App.tsx, CoverFlow.tsx, SearchBar.tsx, Player.tsx and
-/// SimpleBackgroundVideo.tsx, line by line, with the music swapped for his live wallpapers:
-///  - the songs are his live wallpapers, read from his Cloudflare bucket (ThemeCloud; tools/collider_server.py themes());
-///  - an album cover is the wallpaper's poster, and the wallpaper itself plays in the covers nearest the centre;
-///  - the YouTube background video is the wallpaper's loop (ThemeLivingBackdrop with builderAmbient, in main.dart);
-///  - the YouTube audio is the wallpaper's own song, when it has one.
-/// Left out of the source because nothing called it, or it only served the music: AlbumCoverAdmin, BackgroundVideo,
-/// the iTunes and AudioDB services, three of the four cover hooks, the 50-song list, the artist and album lines, the
-/// "Loading..." / "Now Playing" / "Tap to play" line, the count line that was computed and never shown, and the empty
-/// header bar. Changed for speed: only the covers on screen are built (the source built all fifty), covers load from
-/// the bucket as they come into view, and only the centre cover and its neighbours play.
-/// Kept from David's earlier notes: the row goes round ("a looping carousel, like all carousels"), the theme's songs
-/// are listed under its name, and the theme is applied with the round check.
-/// Added 2026-10-17 on David's request: each pack's five preview tracks under the player, the chosen one in focus at
-/// the centre and the rest blurring away toward the edges, so a buyer hears what the pack holds; and the pack's price,
-/// bought through the App Store or Google Play (ThemePackStore), with the platform's own notices (PurchaseNotice).
+/// Premium Theme Market — 3D CoverFlow showcase with spatial reflections, 5-track preview wheel, and store unlock.
 class PremiumThemeMarketView extends StatefulWidget {
   final WallpaperTheme currentTheme;
   final ValueChanged<WallpaperTheme> onApplyTheme;
@@ -52,12 +36,10 @@ class PremiumThemeMarketView extends StatefulWidget {
 }
 
 class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with SingleTickerProviderStateMixin {
-  // App.tsx state
   String _query = '';
   List<WallpaperTheme> _shown = const [];
-  int _index = 0; // unbounded: the row goes round, so the theme is _shown[_index mod length]
+  int _index = 0;
 
-  // CoverFlow.tsx state
   bool _dragging = false;
   double _dragStart = 0, _dragOffset = 0, _velocity = 0;
   int _lastDragTime = 0;
@@ -65,10 +47,10 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
   double _from = 0, _to = 0;
   final FocusNode _keys = FocusNode();
   final Map<int, LiveFrames> _live = {};
-  int _track = 0; // the preview track in focus
+  int _track = 0;
   bool _buying = false;
 
-  static const _ease = Cubic(0.23, 1, 0.32, 1); // cubic-bezier(0.23, 1, 0.32, 1)
+  static const _ease = Cubic(0.23, 1, 0.32, 1);
 
   WallpaperTheme? get _selected => _shown.isEmpty ? null : _at(_index);
   WallpaperTheme _at(int i) => _shown[((i % _shown.length) + _shown.length) % _shown.length];
@@ -77,7 +59,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
   @override
   void initState() {
     super.initState();
-    PremiumAmbient.playing.value = true; // the source starts playing the middle song
+    PremiumAmbient.playing.value = true;
     ThemeCloud.instance.addListener(_reload);
     ThemeCloud.instance.init();
     ThemePackStore.instance.addListener(_storeChanged);
@@ -104,14 +86,10 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     if (mounted) setState(() {});
   }
 
-  // ---------------------------------------------------------------- App.tsx: loading and search
-
-  /// The list could not be read. It says so in plain words and offers another try, rather than
-  /// leaving a spinner running for ever with nothing behind it.
   Widget _empty() {
     if (!ThemeCloud.instance.failed) {
       return const Center(
-        child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF9CA3AF))),
+        child: CupertinoActivityIndicator(radius: 14, color: Color(0xFF9CA3AF)),
       );
     }
     return Center(
@@ -132,15 +110,20 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
   }
 
   void _reload() {
-    final all = WallpaperCatalog.premiumThemes;
+    // Deduplicate by title so consecutive identical theme names never clutter the CoverFlow carousel
+    final rawAll = WallpaperCatalog.premiumThemes;
+    final seenNames = <String>{};
+    final all = <WallpaperTheme>[
+      for (final t in rawAll)
+        if (seenNames.add(t.name.toLowerCase().trim())) t,
+    ];
     ThemePackStore.instance.loadPrices(all);
     final q = _query.trim().toLowerCase();
     var found = q.isEmpty ? all : all.where((t) => t.name.toLowerCase().contains(q) || t.id.contains(q)).toList();
-    if (found.isEmpty) found = all; // localAlbumService: nothing found shows the whole list again
+    if (found.isEmpty) found = all;
     final keep = _selected?.id;
     setState(() {
       _shown = found;
-      // App.tsx starts on the middle song; after a refresh the theme on show stays on show
       final i = keep == null ? -1 : found.indexWhere((t) => t.id == keep);
       _index = i >= 0 ? i : found.length ~/ 2;
       _from = _to = _index.toDouble();
@@ -154,7 +137,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
 
   Timer? _search;
 
-  /// SearchBar.tsx: searches 500 ms after typing stops; clearing shows everything.
   void _onSearch(String v) {
     _search?.cancel();
     if (v.trim().isEmpty) return;
@@ -169,8 +151,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     _query = '';
     _reload();
   }
-
-  // ---------------------------------------------------------------- CoverFlow.tsx: moving
 
   void _select(int i) {
     if (_shown.isEmpty || (i == _index && !_dragging)) return;
@@ -211,7 +191,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
 
   void _dragEnd() {
     if (!_dragging) return;
-    // the source's momentum: 50 px or 0.5 px/ms moves one; fast or long drags move more
     const threshold = 50.0, velocityThreshold = 0.5, highVelocityThreshold = 2.0;
     var target = _index;
     final distance = _dragOffset.abs(), speed = _velocity.abs();
@@ -247,10 +226,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     return KeyEventResult.handled;
   }
 
-  // ---------------------------------------------------------------- Player.tsx
-
-
-  /// The preview track in focus plays with the wallpaper, as the source's song played with its video.
   void _playSong(WallpaperTheme t) {
     final p = MusicPlayer.instance;
     if (t.tracks.isEmpty) {
@@ -268,11 +243,8 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     _playSong(t);
   }
 
-  // ---------------------------------------------------------------- live covers
-
-  /// The centre cover and its two neighbours play; the rest show their posters.
   ValueNotifier<ui.Image?>? _framesFor(int i, WallpaperTheme t) {
-    if ((i - _index).abs() > 4 || t.videoPath == null) return null; // every cover on screen plays (David, 21 Oct)
+    if ((i - _index).abs() > 4 || t.videoPath == null) return null;
     return (_live[i] ??= LiveFrames(themeMediaUrl(t.videoPath!), fps: 20)).frame;
   }
 
@@ -283,12 +255,10 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     }
   }
 
-  // ---------------------------------------------------------------- layout (App.tsx)
-
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final isMobile = size.width < 768; // useResponsive
+    final isMobile = size.width < 768;
     final t = _selected;
     return Focus(
       focusNode: _keys,
@@ -296,9 +266,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Tapping the room closes the market.
           Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose)),
-          // The source's floor: a faint light laid back in perspective along the lower half.
           Positioned(
             left: 0,
             right: 0,
@@ -312,7 +280,11 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                   ..rotateX(60 * math.pi / 180),
                 child: const DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Color(0x05FFFFFF), Color(0x00FFFFFF)]),
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [Color(0x05FFFFFF), Color(0x00FFFFFF)],
+                    ),
                   ),
                 ),
               ),
@@ -322,8 +294,22 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: Center(child: _SearchBar(onSearch: _onSearch, onClear: _clearSearch)),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(width: 40),
+                      Expanded(child: Center(child: _SearchBar(onSearch: _onSearch, onClear: _clearSearch))),
+                      const SizedBox(width: 10),
+                      VCircleButton(
+                        icon: Icons.close_rounded,
+                        size: 34,
+                        tooltip: 'Close',
+                        floating: true,
+                        onTap: widget.onClose,
+                      ),
+                    ],
+                  ),
                 ),
                 Expanded(
                   child: _shown.isEmpty
@@ -332,24 +318,25 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                           builder: (context, box) {
                             final availH = box.maxHeight;
                             final compactH = availH < 780;
-                            final coverH = (availH * 0.42).clamp(220.0, 340.0);
-                            final gapTitle = (availH * 0.025).clamp(10.0, 24.0);
-                            final gapPlayer = (availH * 0.018).clamp(8.0, 16.0);
+                            final coverH = (availH * 0.44).clamp(240.0, 350.0);
+                            final gapTitle = (availH * 0.025).clamp(12.0, 24.0);
                             final gapTracks = (availH * 0.02).clamp(10.0, 18.0);
                             return SingleChildScrollView(
                               physics: const BouncingScrollPhysics(),
-                              padding: EdgeInsets.fromLTRB(isMobile ? 16 : 32, 0, isMobile ? 16 : 32, 20),
+                              padding: EdgeInsets.fromLTRB(isMobile ? 16 : 32, 18, isMobile ? 16 : 32, 20),
                               child: Column(
                                 children: [
                                   _coverFlow(isMobile, size.width, coverH: coverH, compactH: compactH),
                                   if (t != null) ...[
                                     SizedBox(height: gapTitle),
-                                    Text(t.name,
-                                        textAlign: TextAlign.center,
-                                        style: VType.title2(color: Colors.white).copyWith(
-                                          fontWeight: FontWeight.w300,
-                                          shadows: const [Shadow(color: Color(0x80000000), blurRadius: 8, offset: Offset(0, 2))],
-                                        )),
+                                    Text(
+                                      t.name,
+                                      textAlign: TextAlign.center,
+                                      style: VType.title2(color: Colors.white).copyWith(
+                                        fontWeight: FontWeight.w400,
+                                        shadows: const [Shadow(color: Color(0x80000000), blurRadius: 8, offset: Offset(0, 2))],
+                                      ),
+                                    ),
                                     if (t.tracks.isNotEmpty) ...[SizedBox(height: gapTracks), _tracks(t, compactH: compactH)],
                                   ],
                                 ],
@@ -358,11 +345,9 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                           },
                         ),
                 ),
-                // The price is the only way to buy the pack, so it stands at the bottom of the screen
-                // and is never left below the fold by the covers and the tracks.
                 if (t != null)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.only(bottom: 84),
                     child: Center(child: _apply(t)),
                   ),
               ],
@@ -373,14 +358,11 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     );
   }
 
-  // ---------------------------------------------------------------- CoverFlow.tsx: drawing
-
   Widget _coverFlow(bool isMobile, double width, {double coverH = 340, bool compactH = false}) {
-    final albumSize = isMobile ? 160.0 : (compactH ? 180.0 : 200.0);
+    final albumSize = isMobile ? 156.0 : (compactH ? 176.0 : 196.0);
     final spacing = isMobile ? 120.0 : 160.0;
     final drag = _dragging ? _dragOffset / 100 : 0.0;
     final pos = _pos - drag;
-    // Only the covers that can be on screen are built (the source built every song).
     final reach = math.min(math.min(4, (width / spacing / 2).ceil() + 1), (_shown.length - 1) ~/ 2);
     final order = [for (int k = -reach; k <= reach; k++) _index + k]..sort((a, b) => (b - pos).abs().compareTo((a - pos).abs()));
     return SizedBox(
@@ -407,20 +389,19 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     final t = _at(i);
     final center = offset.abs() < 0.1;
     final d = offset.abs();
-    // perspective 1500px. Flutter's z runs the other way to CSS's, so the source's translateZ values are negated.
     final m = Matrix4.identity()..setEntry(3, 2, 1 / 1500);
     if (center) {
       m
-        ..translate(0.0, 0.0, -300.0)
-        ..scale(1.3, 1.3, 1.3);
+        ..translate(0.0, 0.0, -260.0)
+        ..scale(1.24, 1.24, 1.24);
     } else {
-      final k = math.max(0.8, 1.15 - d * 0.04);
+      final k = math.max(0.8, 1.12 - d * 0.04);
       m
         ..translate(offset * spacing, 0.0, 80.0 * d)
         ..rotateY((offset < 0 ? 55 : -55) * math.pi / 180)
         ..scale(k, k, 1.0);
     }
-    const opacity = 1.0; // covers are always fully lit (David, 21 Oct)
+    const opacity = 1.0;
     final isCurrent = i == _index;
     final frames = _framesFor(i, t);
     Widget picture() => frames == null
@@ -442,21 +423,19 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // the cover
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       boxShadow: const [
                         BoxShadow(color: Color(0xE6000000), blurRadius: 50, spreadRadius: -12, offset: Offset(0, 25)),
                         BoxShadow(color: Color(0x99000000), blurRadius: 32, offset: Offset(0, 8)),
                       ],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       child: Stack(fit: StackFit.expand, children: [
                         picture(),
-                        // glass reflection across the face
                         const DecoratedBox(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
@@ -475,13 +454,12 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                   child: IgnorePointer(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white.withValues(alpha: isCurrent ? 0.30 : 0.10), width: 1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withValues(alpha: isCurrent ? 0.35 : 0.12), width: 1),
                       ),
                     ),
                   ),
                 ),
-                // the reflection under it (the same picture, so a playing cover's reflection plays too)
                 Positioned(
                   top: size,
                   left: 0,
@@ -489,7 +467,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                   height: size,
                   child: IgnorePointer(
                     child: Opacity(
-                      opacity: isCurrent ? 0.9 : 0.75,
+                      opacity: isCurrent ? 0.85 : 0.7,
                       child: Transform(
                         alignment: Alignment.center,
                         transform: Matrix4.diagonal3Values(1, -1, 1),
@@ -502,21 +480,19 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                             stops: [0, 0.2, 0.4, 0.6],
                           ).createShader(r),
                           child: ColorFiltered(
-                            // brightness(0.6) contrast(1.3)
                             colorFilter: const ColorFilter.matrix(<double>[
                               0.78, 0, 0, 0, -38.25,
                               0, 0.78, 0, 0, -38.25,
                               0, 0, 0.78, 0, -38.25,
                               0, 0, 0, 1, 0,
                             ]),
-                            child: ClipRRect(borderRadius: BorderRadius.circular(8), child: picture()),
+                            child: ClipRRect(borderRadius: BorderRadius.circular(10), child: picture()),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-                // floor highlight
                 Positioned(
                   top: size + 6,
                   left: 0,
@@ -539,22 +515,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                     ),
                   ),
                 ),
-                if (isCurrent) ...[
-                  Positioned(
-                    top: 0,
-                    left: size / 4,
-                    right: size / 4,
-                    height: 4,
-                    child: IgnorePointer(
-                      child: ImageFiltered(
-                        imageFilter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -563,7 +523,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     );
   }
 
-  /// The pack's preview tracks. The one playing (or chosen) sits in focus; changing pack fades one set into the next.
   Widget _tracks(WallpaperTheme t, {bool compactH = false}) {
     final p = MusicPlayer.instance;
     return AnimatedSwitcher(
@@ -586,8 +545,6 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     );
   }
 
-  /// A pack not yet owned shows its price; a tap buys it through the store, and once owned it is applied.
-  /// An owned pack (or one without a price) shows the round check that applies it.
   Widget _apply(WallpaperTheme t) {
     final store = ThemePackStore.instance;
     final price = store.priceFor(t);
@@ -604,15 +561,26 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
         },
         child: AnimatedContainer(
           duration: VMotion.fast,
-          height: 36,
-          constraints: const BoxConstraints(minWidth: 84),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
+          height: 38,
+          constraints: const BoxConstraints(minWidth: 112),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            color: const Color(0x38FFFFFF),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: const Color(0x4DFFFFFF), width: 0.8),
+          ),
           child: Center(
             widthFactor: 1,
             child: _buying
                 ? const CupertinoActivityIndicator(color: Colors.white, radius: 8)
-                : Text(price, style: VType.callout(color: Colors.white, weight: FontWeight.w600)),
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(CupertinoIcons.lock_open, size: 14, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text('Unlock $price', style: VType.callout(color: Colors.white, weight: FontWeight.w600)),
+                    ],
+                  ),
           ),
         ),
       );
@@ -620,18 +588,25 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     return VPress(
       onTap: () => widget.onApplyTheme(t),
       child: Container(
-        width: 40,
-        height: 40,
-        decoration: const BoxDecoration(color: Color(0x33FFFFFF), shape: BoxShape.circle),
-        child: const Icon(Icons.check_rounded, size: 20, color: Colors.white),
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          color: VColors.accentBlue,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_rounded, size: 18, color: Colors.white),
+            const SizedBox(width: 6),
+            Text('Apply Theme', style: VType.callout(color: Colors.white, weight: FontWeight.w600)),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Five rows on a wheel that goes round, so every track of the pack is always in view. The row in focus is sharp and
-/// full size at the centre; each step away is smaller, fainter and more blurred, and the top and bottom edges dissolve.
-/// A tap or a vertical drag brings a row to the centre.
 class _TrackWheel extends StatefulWidget {
   final List<AmbientTrack> tracks;
   final int selected;
@@ -644,7 +619,7 @@ class _TrackWheel extends StatefulWidget {
 }
 
 class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderStateMixin {
-  double get _rowH => widget.compactH ? 28.0 : 36.0;
+  double get _rowH => widget.compactH ? 28.0 : 34.0;
   int get _rows => widget.compactH ? 3 : 5;
   late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 560));
   double _from = 0, _to = 0, _drag = 0;
@@ -666,7 +641,6 @@ class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderState
     super.didUpdateWidget(old);
     final at = _to.round();
     if (_wrap(at) != widget.selected && !_dragging) {
-      // the nearest turn of the wheel that puts that track in the centre
       final k = ((at - widget.selected) / _n).round();
       _glide(widget.selected + k * _n);
     }
@@ -674,6 +648,7 @@ class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderState
 
   @override
   void dispose() {
+    _c.dispose();
     super.dispose();
   }
 
@@ -691,7 +666,7 @@ class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderState
   @override
   Widget build(BuildContext context) {
     final pos = _pos;
-    final base = VType.callout(color: Colors.white, weight: FontWeight.w400).copyWith(fontSize: widget.compactH ? 15 : 17, height: 1.2);
+    final base = VType.callout(color: Colors.white, weight: FontWeight.w400).copyWith(fontSize: widget.compactH ? 14 : 16, height: 1.2);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onVerticalDragStart: (_) => setState(() {
@@ -731,7 +706,6 @@ class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderState
     );
   }
 
-  /// Where track i sits from the centre, going round: within half a turn either way.
   double _offset(int i, double pos) {
     final half = _n / 2;
     return ((i - pos + half) % _n + _n) % _n - half;
@@ -772,7 +746,6 @@ class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderState
   }
 }
 
-/// A theme's poster from the bucket or pre-decoded cache; until it arrives, the source's dark placeholder.
 class _Poster extends StatelessWidget {
   final WallpaperTheme theme;
   const _Poster({required this.theme});
@@ -780,7 +753,9 @@ class _Poster extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const empty = DecoratedBox(
-      decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF030712), Colors.black])),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF030712), Colors.black]),
+      ),
     );
     if (theme.assetPath.isEmpty) return empty;
     return ListenableBuilder(
@@ -794,7 +769,7 @@ class _Poster extends StatelessWidget {
             filterQuality: FilterQuality.medium,
           );
         }
-        ThemeBlurCache.instance.ensurePoster(theme.assetPath); // a cover needs no blurred copies (Claude, 2026-10-21)
+        ThemeBlurCache.instance.ensurePoster(theme.assetPath);
         return Image.asset(
           theme.assetPath,
           fit: BoxFit.cover,
@@ -808,7 +783,6 @@ class _Poster extends StatelessWidget {
   }
 }
 
-/// The source's small white indicator on the centre cover (animate-pulse).
 class _SearchBar extends StatefulWidget {
   final ValueChanged<String> onSearch;
   final VoidCallback onClear;
@@ -829,52 +803,18 @@ class _SearchBarState extends State<_SearchBar> {
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 448), // max-w-md
-      child: Container(
-        height: 46,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFF374151)),
-          gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0x66000000), Color(0x05FFFFFF)]),
-          boxShadow: const [BoxShadow(color: Color(0x0DFFFFFF), blurRadius: 2, offset: Offset(0, 1))],
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 12),
-            const Icon(Icons.search_rounded, size: 16, color: Color(0xFF9CA3AF)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _c,
-                cursorColor: Colors.white70,
-                style: VType.callout(color: Colors.white, weight: FontWeight.w300).copyWith(fontSize: 11),
-                decoration: InputDecoration(
-                  hintText: 'Search...',
-                  hintStyle: VType.callout(color: const Color(0xFF6B7280), weight: FontWeight.w300).copyWith(fontSize: 11),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onChanged: (v) {
-                  setState(() {});
-                  widget.onSearch(v);
-                },
-                onSubmitted: (v) => widget.onSearch(v),
-              ),
-            ),
-            if (_c.text.isNotEmpty)
-              VPress(
-                onTap: () {
-                  _c.clear();
-                  setState(() {});
-                  widget.onClear();
-                },
-                child: const Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Icon(Icons.close_rounded, size: 16, color: Color(0xFF9CA3AF))),
-              )
-            else
-              const SizedBox(width: 12),
-          ],
-        ),
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: VSearchField(
+        controller: _c,
+        hint: 'Search premium themes...',
+        onChanged: (v) {
+          setState(() {});
+          if (v.trim().isEmpty) {
+            widget.onClear();
+          } else {
+            widget.onSearch(v);
+          }
+        },
       ),
     );
   }

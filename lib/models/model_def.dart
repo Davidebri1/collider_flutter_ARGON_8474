@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
-enum ModelCategory { general, image, video, audio, writing }
+enum ModelCategory { general, image, video, audio }
 enum ModelTier { free, pro, elite }
 
 class ModelDef {
@@ -26,147 +26,221 @@ class ModelDef {
 }
 
 class ModelRoster {
+  static Color colorForProvider(String hint) {
+    final s = hint.toLowerCase();
+    if (s.contains('glm') || s.contains('z-ai') || s.contains('z.ai')) {
+      return const Color(0xFF60A5FA);
+    }
+    if (s.contains('nemotron') || s.contains('nvidia')) {
+      return const Color(0xFF4ADE80);
+    }
+    if (s.contains('gemma') || s.contains('gemini') || s.contains('google') || s.contains('veo') || s.contains('lyria')) {
+      return const Color(0xFF7FD8C4);
+    }
+    if (s.contains('muse') || s.contains('llama') || s.contains('meta')) {
+      return const Color(0xFFA78BFA);
+    }
+    if (s.contains('deepseek')) {
+      return const Color(0xFF38BDF8);
+    }
+    if (s.contains('gpt') || s.contains('openai') || s.contains('sora')) {
+      return const Color(0xFF10B981);
+    }
+    if (s.contains('claude') || s.contains('anthropic')) {
+      return const Color(0xFFF59E0B);
+    }
+    if (s.contains('qwen') || s.contains('alibaba')) {
+      return const Color(0xFF818CF8);
+    }
+    if (s.contains('flux') || s.contains('forest')) {
+      return const Color(0xFF22D3EE);
+    }
+    if (s.contains('grok') || s.contains('xai') || s.contains('fal')) {
+      return const Color(0xFFF43F5E);
+    }
+    if (s.contains('seedream') || s.contains('seedance') || s.contains('bytedance')) {
+      return const Color(0xFFEC4899);
+    }
+    if (s.contains('kling')) {
+      return const Color(0xFFFB7185);
+    }
+    if (s.contains('runway')) {
+      return const Color(0xFFC084FC);
+    }
+    if (s.contains('suno')) {
+      return const Color(0xFFF472B6);
+    }
+    if (s.contains('udio')) {
+      return const Color(0xFF2DD4BF);
+    }
+    if (s.contains('eleven')) {
+      return const Color(0xFFFBBF24);
+    }
+    return const Color(0xFF94A3B8);
+  }
+
   static const List<ModelDef> _seed = [
-    // General - Free
+    // General Models (aligned with live server roster + high-tier reasoning)
     ModelDef(
-      id: 'free/gemini-3-6-flash-lite',
-      label: 'Gemini 3.6 Flash Lite',
-      short: 'G36L',
-      desc: 'Google lightweight flash reasoning engine.',
+      id: 'z-ai/glm-5.3',
+      label: 'GLM 5.3',
+      short: 'GLM5',
+      desc: 'Z.ai flagship multi-step analytical & general reasoning model.',
+      tier: ModelTier.free,
+      categories: [ModelCategory.general],
+      providerColor: Color(0xFF60A5FA),
+    ),
+    ModelDef(
+      id: 'nvidia/nemotron-3.5-lightning',
+      label: 'Nemotron 3.5 Lightning',
+      short: 'N35L',
+      desc: 'NVIDIA ultra-low-latency high-precision synthesis engine.',
+      tier: ModelTier.free,
+      categories: [ModelCategory.general],
+      providerColor: Color(0xFF4ADE80),
+    ),
+    ModelDef(
+      id: 'nvidia/nemotron-3-ultra',
+      label: 'Nemotron 3 Ultra',
+      short: 'N3U',
+      desc: 'NVIDIA deep frontier reasoning & high-consensus verifier.',
+      tier: ModelTier.free,
+      categories: [ModelCategory.general],
+      providerColor: Color(0xFF84CC16),
+    ),
+    ModelDef(
+      id: 'z-ai/glm-5.3-flash',
+      label: 'GLM 5.3 Flash',
+      short: 'GLM5F',
+      desc: 'Z.ai rapid-response general intelligence model.',
+      tier: ModelTier.free,
+      categories: [ModelCategory.general],
+      providerColor: Color(0xFF38BDF8),
+    ),
+    ModelDef(
+      id: 'meta/muse-glimmer-30b',
+      label: 'Muse Glimmer 30B',
+      short: 'MG30',
+      desc: 'Meta expressive 30B dense reasoning & synthesis architecture.',
+      tier: ModelTier.free,
+      categories: [ModelCategory.general],
+      providerColor: Color(0xFFA78BFA),
+    ),
+    ModelDef(
+      id: 'nvidia/nemotron-3-super-120b-a12b',
+      label: 'Nemotron 3 Super',
+      short: 'N3S',
+      desc: 'NVIDIA 120B MoE hybrid reasoning model.',
+      tier: ModelTier.free,
+      categories: [ModelCategory.general],
+      providerColor: Color(0xFF22C55E),
+    ),
+    ModelDef(
+      id: 'google/gemma-4-31b-it',
+      label: 'Gemma 4 31B',
+      short: 'Gm4',
+      desc: 'Google open-weights 31B instruction-tuned reasoning model.',
       tier: ModelTier.free,
       categories: [ModelCategory.general],
       providerColor: Color(0xFF7FD8C4),
     ),
     ModelDef(
-      id: 'free/gpt-5-nano',
-      label: 'GPT-5 Nano',
-      short: 'G5N',
-      desc: 'OpenAI ultra-fast responsive mini engine.',
+      id: 'openai/gpt-oss-20b',
+      label: 'GPT OSS 20B',
+      short: 'G20B',
+      desc: 'OpenAI open-weights compact general reasoning engine.',
       tier: ModelTier.free,
       categories: [ModelCategory.general],
       providerColor: Color(0xFF10B981),
     ),
     ModelDef(
-      id: 'free/mistral-small',
-      label: 'Mistral Small 3.2',
-      short: 'MS3',
-      desc: 'Mistral efficient high-throughput reasoning.',
-      tier: ModelTier.free,
-      categories: [ModelCategory.general],
-      providerColor: Color(0xFFF97316),
-    ),
-    ModelDef(
-      id: 'free/qwen-3-6-27b',
-      label: 'Qwen 3.6 27B',
-      short: 'QW36',
-      desc: 'Alibaba high-performance general model.',
-      tier: ModelTier.free,
-      categories: [ModelCategory.general],
-      providerColor: Color(0xFF6366F1),
-    ),
-    ModelDef(
-      id: 'free/minimax-m3',
-      label: 'MiniMax M3',
-      short: 'MM3',
-      desc: 'MiniMax flagship with 1M context window.',
-      tier: ModelTier.free,
-      categories: [ModelCategory.general],
-      providerColor: Color(0xFFF97316),
-    ),
-    ModelDef(
-      id: 'free/grok-3-mini',
-      label: 'Grok 3 Mini',
-      short: 'GrokM',
-      desc: 'xAI rapid reasoning model with real-time knowledge.',
-      tier: ModelTier.free,
-      categories: [ModelCategory.general],
-      providerColor: Color(0xFFEF4444),
-    ),
-    ModelDef(
-      id: 'free/deepseek-v3',
-      label: 'DeepSeek V3',
-      short: 'DS-V3',
-      desc: 'DeepSeek MoE generalist with sparse attention.',
+      id: 'deepseek-ai/deepseek-v4.1-flash',
+      label: 'DeepSeek V4.1 Flash',
+      short: 'DS41',
+      desc: 'DeepSeek sparse-attention high-throughput reasoning engine.',
       tier: ModelTier.free,
       categories: [ModelCategory.general],
       providerColor: Color(0xFF0EA5E9),
     ),
-    ModelDef(
-      id: 'free/llama-3-3-70b',
-      label: 'Llama 3.3 70B',
-      short: 'L70B',
-      desc: 'Meta open-weights flagship general reasoning.',
-      tier: ModelTier.free,
-      categories: [ModelCategory.general],
-      providerColor: Color(0xFF3B82F6),
-    ),
-
-    // Advanced Writing & Analysis - Pro & Elite
-    ModelDef(
-      id: 'pro/claude-3-7-sonnet',
-      label: 'Claude 3.7 Sonnet',
-      short: 'Sonnet',
-      desc: 'Anthropic deep reasoning & thoughtful synthesis.',
-      tier: ModelTier.pro,
-      categories: [ModelCategory.general, ModelCategory.writing],
-      providerColor: Color(0xFFD97706),
-    ),
-    ModelDef(
-      id: 'pro/deepseek-r1',
-      label: 'DeepSeek R1',
-      short: 'DS-R1',
-      desc: 'DeepSeek open reasoning engine with structured problem breakdown.',
-      tier: ModelTier.pro,
-      categories: [ModelCategory.general, ModelCategory.writing],
-      providerColor: Color(0xFF0284C7),
-    ),
-    ModelDef(
-      id: 'pro/mistral-large',
-      label: 'Mistral Large',
-      short: 'MLg',
-      desc: 'Mistral high-fidelity editorial and comprehensive analysis.',
-      tier: ModelTier.pro,
-      categories: [ModelCategory.general, ModelCategory.writing],
-      providerColor: Color(0xFFEA580C),
-    ),
-    ModelDef(
-      id: 'pro/gpt-4o',
-      label: 'GPT-4o Omni',
-      short: 'GPT-4o',
-      desc: 'OpenAI multi-modal high-intelligence model.',
-      tier: ModelTier.pro,
-      categories: [ModelCategory.general, ModelCategory.writing],
-      providerColor: Color(0xFF059669),
-    ),
 
     // Generative Media - Image
     ModelDef(
-      id: 'image/flux-1-1-pro',
-      label: 'FLUX 1.1 Pro',
-      short: 'FLUX',
-      desc: 'High-coherence 3D visual and photorealistic synthesis.',
-      tier: ModelTier.pro,
+      id: 'Cloudflare:@cf/black-forest-labs/flux-2-dev',
+      label: 'FLUX.2 Dev',
+      short: 'FLX2',
+      desc: 'Black Forest Labs next-gen photorealistic spatial synthesis.',
+      tier: ModelTier.free,
+      categories: [ModelCategory.image],
+      providerColor: Color(0xFF22D3EE),
+      isMedia: true,
+    ),
+    ModelDef(
+      id: 'Cloudflare:@cf/black-forest-labs/flux-1-schnell',
+      label: 'FLUX.1 Schnell',
+      short: 'FLX1',
+      desc: 'Black Forest Labs ultra-fast distilled image generator.',
+      tier: ModelTier.free,
       categories: [ModelCategory.image],
       providerColor: Color(0xFF06B6D4),
       isMedia: true,
     ),
     ModelDef(
-      id: 'image/midjourney-v6',
-      label: 'Midjourney v6.1',
-      short: 'MJ',
-      desc: 'Artistic photorealistic generative studio.',
+      id: 'fal:xai/grok-imagine-image',
+      label: 'Grok Imagine',
+      short: 'Grok',
+      desc: 'xAI high-contrast cinematic image synthesis studio.',
       tier: ModelTier.pro,
       categories: [ModelCategory.image],
-      providerColor: Color(0xFFA855F7),
+      providerColor: Color(0xFFF43F5E),
+      isMedia: true,
+    ),
+    ModelDef(
+      id: 'fal:fal-ai/flux-2-pro',
+      label: 'FLUX.2 Pro',
+      short: 'FLXP',
+      desc: 'Black Forest Labs studio-grade commercial image synthesis.',
+      tier: ModelTier.pro,
+      categories: [ModelCategory.image],
+      providerColor: Color(0xFF38BDF8),
+      isMedia: true,
+    ),
+    ModelDef(
+      id: 'fal:fal-ai/bytedance/seedream/v5/lite/text-to-image',
+      label: 'Seedream 5.0 Lite',
+      short: 'SD5',
+      desc: 'ByteDance high-coherence artistic & editorial image engine.',
+      tier: ModelTier.pro,
+      categories: [ModelCategory.image],
+      providerColor: Color(0xFFEC4899),
       isMedia: true,
     ),
 
     // Generative Media - Video
     ModelDef(
+      id: 'video/veo-3-1',
+      label: 'Veo 3.1 Cinema',
+      short: 'Veo3',
+      desc: 'Google DeepMind 4K cinematic temporal video & physics engine.',
+      tier: ModelTier.elite,
+      categories: [ModelCategory.video],
+      providerColor: Color(0xFF7FD8C4),
+      isMedia: true,
+    ),
+    ModelDef(
+      id: 'video/seedance-2-0',
+      label: 'Seedance 2.0 Pro',
+      short: 'SDnc',
+      desc: 'ByteDance fluid motion & multi-shot cinema generator.',
+      tier: ModelTier.elite,
+      categories: [ModelCategory.video],
+      providerColor: Color(0xFFEC4899),
+      isMedia: true,
+    ),
+    ModelDef(
       id: 'video/kling-video',
-      label: 'Kling 1.5 Video',
+      label: 'Kling 2.0 Master',
       short: 'Kling',
-      desc: 'Temporal cinematic text-to-video generator.',
+      desc: 'Temporal cinematic text-to-video & camera motion studio.',
       tier: ModelTier.elite,
       categories: [ModelCategory.video],
       providerColor: Color(0xFFF43F5E),
@@ -175,7 +249,7 @@ class ModelRoster {
     ModelDef(
       id: 'video/runway-gen3',
       label: 'Runway Gen-3 Alpha',
-      short: 'Runway',
+      short: 'Rnwy',
       desc: 'High-fidelity cinematic motion video engine.',
       tier: ModelTier.elite,
       categories: [ModelCategory.video],
@@ -183,12 +257,22 @@ class ModelRoster {
       isMedia: true,
     ),
 
-    // Audio & Music
+    // Generative Media - Audio & Music
+    ModelDef(
+      id: 'audio/lyria-3-pro',
+      label: 'Lyria 3 Pro',
+      short: 'Lyria',
+      desc: 'Google DeepMind spatial soundtrack & instrumental composer.',
+      tier: ModelTier.pro,
+      categories: [ModelCategory.audio],
+      providerColor: Color(0xFF7FD8C4),
+      isMedia: true,
+    ),
     ModelDef(
       id: 'audio/suno-v4',
-      label: 'Suno v4 Music',
+      label: 'Suno v4.5 Studio',
       short: 'Suno',
-      desc: 'Full-track studio song and vocal production.',
+      desc: 'Full-track studio song, lyrics, and vocal production.',
       tier: ModelTier.pro,
       categories: [ModelCategory.audio],
       providerColor: Color(0xFFEC4899),
@@ -206,9 +290,9 @@ class ModelRoster {
     ),
     ModelDef(
       id: 'audio/elevenlabs-music',
-      label: 'ElevenLabs Audio',
+      label: 'ElevenLabs Spatial Audio',
       short: '11Labs',
-      desc: 'Ultra-realistic voice cloning and ambient soundtrack studio.',
+      desc: 'Ultra-realistic voice synthesis and ambient soundscape studio.',
       tier: ModelTier.pro,
       categories: [ModelCategory.audio],
       providerColor: Color(0xFFF59E0B),
@@ -216,14 +300,46 @@ class ModelRoster {
     ),
   ];
 
-  /// Live roster. Starts from the seed; replaced by the server's models at launch.
-  static List<ModelDef> allModels = [for (final m in _seed) if (!m.isMedia) m];
+  static const Map<String, ModelDef> _legacyModels = {
+    'moonshotai/kimi-k3': ModelDef(
+      id: 'moonshotai/kimi-k3',
+      label: 'Kimi K3',
+      short: 'Kimi',
+      desc: 'Moonshot AI long-context reasoning model.',
+      tier: ModelTier.free,
+      categories: [ModelCategory.general],
+      providerColor: Color(0xFF38BDF8),
+    ),
+    'mistralai/mistral-nemotron': ModelDef(
+      id: 'mistralai/mistral-nemotron',
+      label: 'Mistral Nemotron',
+      short: 'MNem',
+      desc: 'Mistral & NVIDIA joint instruction model.',
+      tier: ModelTier.free,
+      categories: [ModelCategory.general],
+      providerColor: Color(0xFFF97316),
+    ),
+  };
 
-  /// Live text models from the Collider server replace the seed text models.
-  /// Media models stay listed under their own categories.
+  /// Live roster. Starts from the full seed (including General, Image, Video, Audio).
+  static List<ModelDef> allModels = List<ModelDef>.from(_seed);
+
+  /// Live text & picture models from the Collider server replace General/Image while preserving Video & Audio categories.
   static void setLive(List<ModelDef> live) {
-    // The seed's media models were names with nothing behind them; the live picture models come from the server.
-    allModels = [...live];
+    final hasImage = live.any((m) => m.categories.contains(ModelCategory.image));
+    final hasVideo = live.any((m) => m.categories.contains(ModelCategory.video));
+    final hasAudio = live.any((m) => m.categories.contains(ModelCategory.audio));
+    final merged = <ModelDef>[
+      ...live,
+      if (!hasImage) ..._seed.where((m) => m.categories.contains(ModelCategory.image)),
+      if (!hasVideo) ..._seed.where((m) => m.categories.contains(ModelCategory.video)),
+      if (!hasAudio) ..._seed.where((m) => m.categories.contains(ModelCategory.audio)),
+    ];
+    final seen = <String>{};
+    allModels = [
+      for (final m in merged)
+        if (seen.add(m.id)) m,
+    ];
   }
 
   static List<ModelDef> forCategory(ModelCategory category) {
@@ -231,10 +347,28 @@ class ModelRoster {
   }
 
   static ModelDef? byId(String id) {
-    try {
-      return allModels.firstWhere((m) => m.id == id);
-    } catch (_) {
-      return null;
+    for (final m in allModels) {
+      if (m.id == id) return m;
     }
+    for (final m in _seed) {
+      if (m.id == id) return m;
+    }
+    if (_legacyModels.containsKey(id)) return _legacyModels[id];
+    if (id.isEmpty) return null;
+    final rawName = id.contains('/') ? id.split('/').last : id;
+    final cleanLabel = rawName
+        .split(RegExp(r'[-_]'))
+        .where((s) => s.isNotEmpty)
+        .map((s) => s.length <= 3 ? s.toUpperCase() : '${s[0].toUpperCase()}${s.substring(1)}')
+        .join(' ');
+    return ModelDef(
+      id: id,
+      label: cleanLabel,
+      short: cleanLabel.split(' ').map((w) => w.isEmpty ? '' : w[0]).take(4).join(),
+      desc: id.contains('/') ? id.split('/').first : 'Collider Model',
+      tier: ModelTier.free,
+      categories: const [ModelCategory.general],
+      providerColor: colorForProvider(id),
+    );
   }
 }

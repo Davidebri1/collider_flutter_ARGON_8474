@@ -59,7 +59,7 @@ class ModelResult {
   final String text;
   final String essence;
   final String? error;
-  final String line; // the complete answer on one line that fits the ticker row
+  final String line; // the complete summary (up to 2 lines) that fits the ticker row
   final List<Map<String, String>> messages; // full multi-turn thread [{role, content}, ...]
   const ModelResult(this.status, this.text, this.essence, this.error, [this.line = '', this.messages = const []]);
   factory ModelResult.fromJson(Map<String, dynamic> j) => ModelResult(
@@ -81,7 +81,7 @@ class ConsensusResult {
   final List<List<String>> groups;
   final Map<String, int> chains;
   final String tieBasis;
-  final String line; // the winning group's line, word for word
+  final String line; // the winning group's summary line, word for word
   const ConsensusResult(this.status, this.summary, this.score, this.dissent, this.need,
       [this.groups = const [], this.chains = const {}, this.tieBasis = '', this.line = '']);
   factory ConsensusResult.fromJson(Map<String, dynamic>? j) {
@@ -191,14 +191,11 @@ class ColliderApi {
   ColliderApi._();
   static final ColliderApi instance = ColliderApi._();
 
-  /// Where Collider's server is. On the web: the address the page came from. On a phone, tablet or desktop run from
-  /// Flutter's runner: --dart-define=COLLIDER_SERVER=<address>, else the server on this computer at host 47801
-  /// (seen as 10.0.2.2 from inside Android's emulator). (Claude, 2026-10-23)
   static final String base = () {
     const named = String.fromEnvironment('COLLIDER_SERVER');
     if (named.isNotEmpty) return named;
     if (kIsWeb) return Uri.base.origin;
-    return defaultTargetPlatform == TargetPlatform.android ? 'http://10.0.2.2:47801' : 'http://127.0.0.1:47801';
+    return defaultTargetPlatform == TargetPlatform.android ? 'http://10.0.2.2:48210' : 'http://127.0.0.1:48210';
   }();
   final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 8), receiveTimeout: const Duration(seconds: 180)));
 
@@ -222,23 +219,11 @@ class ColliderApi {
       final list = (r.data['models'] as List).cast<Map>();
       webSearch = r.data['search'] == true;
       nvidiaKeys = (r.data['keys'] as num?)?.toInt() ?? 0;
-      // The picture models (Claude, 2026-10-21): the Image category, from the providers that have keys.
       var pictures = const <Map>[];
       try {
         pictures = ((await _dio.get('$_base/api/imagine')).data['models'] as List? ?? const []).cast<Map>();
       } catch (_) {}
       ModelRoster.setLive([
-        for (final m in pictures)
-          ModelDef(
-            id: '${m['id']}',
-            label: '${m['label']}',
-            short: '${m['label']}'.split(' ').map((w) => w.isEmpty ? '' : w[0]).join(),
-            desc: '${m['provider']}',
-            tier: ModelTier.free,
-            categories: const [ModelCategory.image],
-            providerColor: const Color(0xFF8E8E93),
-            isMedia: true,
-          ),
         for (final m in list)
           ModelDef(
             id: m['id'] as String,
@@ -247,7 +232,22 @@ class ColliderApi {
             desc: m['provider'] as String,
             tier: ModelTier.free,
             categories: const [ModelCategory.general],
-            providerColor: _hex(m['color'] as String),
+            providerColor: (m['color'] != null &&
+                    '${m['color']}'.toUpperCase() != '#8E8E93' &&
+                    '${m['color']}'.isNotEmpty)
+                ? _hex(m['color'] as String)
+                : ModelRoster.colorForProvider('${m['id']} ${m['label']} ${m['provider']}'),
+          ),
+        for (final m in pictures)
+          ModelDef(
+            id: '${m['id']}',
+            label: '${m['label']}',
+            short: '${m['label']}'.split(' ').map((w) => w.isEmpty ? '' : w[0]).join(),
+            desc: '${m['provider']}',
+            tier: ModelTier.free,
+            categories: const [ModelCategory.image],
+            providerColor: ModelRoster.colorForProvider('${m['id']} ${m['label']} ${m['provider']}'),
+            isMedia: true,
           ),
       ]);
       online = true;
@@ -276,7 +276,6 @@ class ColliderApi {
   String thumbUrl(ColliderFile f) =>
       '$_base/api/files/thumb?source=${Uri.encodeQueryComponent(f.source)}&name=${Uri.encodeQueryComponent(f.name)}&v=${f.modified.millisecondsSinceEpoch}';
 
-  /// Full address of a file for viewing.
   /// Discover Market (Claude, 2026-10-20): what has been made through fal, newest first.
   Future<List<Creation>> creations() async {
     try {
@@ -394,7 +393,7 @@ class ColliderApi {
     required bool autosave,
     required bool incognito,
     List<String> attachments = const [],
-    int line = 28,
+    int line = 115,
     String? sessionId,
   }) async {
     final r = await _dio.post('$_base/api/ask', data: {
@@ -434,7 +433,7 @@ class ColliderApi {
     required List<Map<String, String>> messages,
     required AskMode mode,
     List<String> attachments = const [],
-    int line = 28,
+    int line = 115,
     String? jobId,
   }) async* {
     final r = await _dio.post('$_base/api/reply/start', data: {
@@ -473,7 +472,7 @@ class ColliderApi {
     required List<Map<String, String>> messages,
     required AskMode mode,
     List<String> attachments = const [],
-    int line = 28,
+    int line = 115,
     String? jobId,
   }) async {
     final r = await _dio.post('$_base/api/reply', data: {
@@ -502,7 +501,7 @@ class ColliderApi {
     );
   }
 
-  /// One-line forms for a saved conversation that has none, or has them for a wider row.
+  /// Summary lines for a saved conversation that has none, or has them for a wider row.
   Future<JobState?> lines(String id, int line) async {
     final key = '$id:$line';
     if (_linesResolvedCache.contains(key)) return null;

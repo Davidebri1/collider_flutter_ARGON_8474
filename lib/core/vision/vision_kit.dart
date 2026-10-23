@@ -1,11 +1,22 @@
 import 'dart:math' as math;
 import 'dart:ui';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import '../theme/edge_fade.dart';
 import 'vision_tokens.dart';
 import 'hues.dart';
 
+export 'package:cupertino_ui/cupertino_ui.dart'
+    show
+        CupertinoIcons,
+        CupertinoSwitch,
+        CupertinoSlidingSegmentedControl,
+        CupertinoSearchTextField,
+        CupertinoScrollbar,
+        CupertinoActivityIndicator,
+        CupertinoButton,
+        CupertinoColors;
 export 'vision_tokens.dart';
 export 'hues.dart';
 export '../theme/edge_fade.dart';
@@ -23,7 +34,6 @@ extension VMaterialX on VMaterial {
         VMaterial.modal => VColors.glassModal,
         VMaterial.work => VColors.glassWork,
       };
-  // The room behind, blurred but still there (Claude, 2026-10-23; was 50, which left a flat grey).
   double get blur => 28;
 
   /// Pane glass carries a top highlight; kit glass carries the kit hairline.
@@ -37,7 +47,7 @@ extension VMaterialX on VMaterial {
   List<BoxShadow> get shadow => pane ? VShadow.pane : VShadow.ornament;
 }
 
-/// Saturation 1.6 (Claude, 2026-10-23): the colour of what is behind the glass comes through it.
+/// Saturation 1.6: the colour of what is behind the glass comes through it.
 const List<double> _vibrancy = <double>[
   1.4724, -0.4288, -0.0436, 0, 0,
   -0.1276, 1.1712, -0.0436, 0, 0,
@@ -73,8 +83,10 @@ class VGlass extends StatelessWidget {
       child: ClipRRect(
         borderRadius: r,
         child: BackdropFilter(
-          // vibrancy: the blurred room's own colours, lifted, as Apple's glass keeps them
-          filter: ImageFilter.compose(outer: const ColorFilter.matrix(_vibrancy), inner: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur)),
+          filter: ImageFilter.compose(
+            outer: const ColorFilter.matrix(_vibrancy),
+            inner: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur),
+          ),
           child: CustomPaint(
             foregroundPainter: VGlassStroke(radius: radius, pane: material.pane),
             child: Container(
@@ -89,9 +101,7 @@ class VGlass extends StatelessWidget {
   }
 }
 
-/// The hairline of a glass surface, copied from the nodes.
-/// Kit glass (alert 130:75006, tab bar 97:34752): white 40% > 0 > 0 > 10% top to bottom, weight 1.4.
-/// Pane glass (417:6826): a one-pixel top highlight, white 60%.
+/// The hairline of a glass surface.
 class VGlassStroke extends CustomPainter {
   final double radius;
   final bool pane;
@@ -120,8 +130,7 @@ class VGlassStroke extends CustomPainter {
   bool shouldRepaint(covariant VGlassStroke old) => old.radius != radius || old.pane != pane;
 }
 
-/// Recessed capsule (prompt capsule 1:240, Safari address 1:71): #000000 30%, inner shadow 2/2/6 black 30%,
-/// lower edge highlight white 50%.
+/// Recessed capsule (prompt capsule, Safari address bar).
 class VRecessed extends StatelessWidget {
   final Widget child;
   final double radius;
@@ -139,7 +148,6 @@ class VRecessed extends StatelessWidget {
         padding: padding,
         decoration: BoxDecoration(
           borderRadius: r,
-          // the fill, darker towards the upper-left: the inner shadow
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -177,16 +185,12 @@ class _RecessedEdge extends CustomPainter {
   bool shouldRepaint(covariant _RecessedEdge old) => old.radius != radius;
 }
 
-/// Click-away layer behind an overlay: a light, unblurred dim (VOverlay.scrim)
-/// so the wallpaper and resting content stay readable around the menu.
+/// Click-away layer behind an overlay.
 class VScrim extends StatelessWidget {
   final VoidCallback? onTap;
   final bool blur;
-
-  /// A small menu does not take the screen over: what is behind it stays recognisable.
   final bool soft;
 
-  // Focus windows push the world back with depth of field: blur by default.
   const VScrim({super.key, this.onTap, this.blur = true, this.soft = false});
 
   @override
@@ -199,8 +203,6 @@ class VScrim extends StatelessWidget {
         child: dim,
       );
     }
-    // Flutter's own backdrop blur of whatever is behind (Claude, 2026-10-23: this showed a stored blurred copy of the
-    // wallpaper alone, so the windows behind vanished instead of going out of focus).
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -214,21 +216,24 @@ class VScrim extends StatelessWidget {
   }
 }
 
-/// Press physics from the kit: scale 0.97, opacity 0.9.
+/// Press physics from the kit: scale 0.97, look glow on hover/press.
 class VPress extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final String? tooltip;
-  const VPress({super.key, required this.child, this.onTap, this.tooltip});
+  final double minHitSize;
+  const VPress({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.tooltip,
+    this.minHitSize = 0,
+  });
 
   @override
   State<VPress> createState() => _VPressState();
 }
 
-/// Light on a control (Claude, 2026-10-20), after Apple's visionOS "Look Glow" (the Default Action hover layer in
-/// Apple's visionOS kit, the Sketch file David linked: white at 15%, added onto the glass, softly blurred, sitting where
-/// the eyes are). The pointer brings it on a desktop; a press brings it brighter, where the finger lands, on any device,
-/// since phones have no hover. The control's own label and glyph never change; only the light on it does.
 class _GlowPainter extends CustomPainter {
   final ValueNotifier<Offset?> at;
   final Animation<double> amount;
@@ -249,7 +254,11 @@ class _GlowPainter extends CustomPainter {
       Paint()
         ..blendMode = BlendMode.plus
         ..shader = RadialGradient(
-          colors: [Colors.white.withValues(alpha: 0.2 * a), Colors.white.withValues(alpha: 0.07 * a), Colors.white.withValues(alpha: 0)],
+          colors: [
+            Colors.white.withValues(alpha: 0.2 * a),
+            Colors.white.withValues(alpha: 0.07 * a),
+            Colors.white.withValues(alpha: 0),
+          ],
           stops: const [0, 0.45, 1],
         ).createShader(Rect.fromCircle(center: c, radius: r)),
     );
@@ -266,8 +275,11 @@ class _VPressState extends State<VPress> with SingleTickerProviderStateMixin {
   final ValueNotifier<Offset?> _at = ValueNotifier(null);
   late final AnimationController _glow = AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
 
-  void _light() => _glow.animateTo(_down ? 1.0 : (_over ? 0.6 : 0.0),
-      duration: Duration(milliseconds: _down ? 90 : 320), curve: _down ? Curves.easeOut : Curves.easeOutCubic);
+  void _light() => _glow.animateTo(
+        _down ? 1.0 : (_over ? 0.6 : 0.0),
+        duration: Duration(milliseconds: _down ? 90 : 320),
+        curve: _down ? Curves.easeOut : Curves.easeOutCubic,
+      );
 
   @override
   void dispose() {
@@ -279,6 +291,18 @@ class _VPressState extends State<VPress> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onTap != null;
+    Widget inner = AnimatedScale(
+      scale: _down ? VMotion.pressedScale : 1,
+      duration: _down ? VMotion.fast : const Duration(milliseconds: 340),
+      curve: _down ? Curves.easeOutCubic : Curves.easeOutBack,
+      child: CustomPaint(foregroundPainter: _GlowPainter(_at, _glow), child: widget.child),
+    );
+    if (widget.minHitSize > 0) {
+      inner = ConstrainedBox(
+        constraints: BoxConstraints(minWidth: widget.minHitSize, minHeight: widget.minHitSize),
+        child: Center(widthFactor: 1, heightFactor: 1, child: inner),
+      );
+    }
     Widget w = MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onEnter: enabled
@@ -318,26 +342,24 @@ class _VPressState extends State<VPress> with SingleTickerProviderStateMixin {
                 _light();
               }
             : null,
-        // Apple's minimum touch target, 44 x 44 points: a smaller control keeps its look and the finger gets the room
-        // around it (Claude, 2026-10-20).
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-          child: Center(
-            widthFactor: 1,
-            heightFactor: 1,
-            // pressed in quickly, sprung back out with a slight overshoot, as a physical key would
-            child: AnimatedScale(
-              scale: _down ? VMotion.pressedScale : 1,
-              duration: _down ? VMotion.fast : const Duration(milliseconds: 340),
-              curve: _down ? Curves.easeOutCubic : Curves.easeOutBack,
-              child: CustomPaint(foregroundPainter: _GlowPainter(_at, _glow), child: widget.child),
-            ),
-          ),
-        ),
+        child: inner,
       ),
     );
     if (widget.tooltip != null && widget.tooltip!.isNotEmpty) {
-      w = Tooltip(message: widget.tooltip!, waitDuration: const Duration(milliseconds: 400), child: w);
+      w = Tooltip(
+        message: widget.tooltip!,
+        excludeFromSemantics: true,
+        waitDuration: const Duration(milliseconds: 550),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xEB141620),
+          borderRadius: BorderRadius.circular(VRadius.full),
+          border: Border.all(color: const Color(0x38FFFFFF), width: 0.6),
+          boxShadow: VShadow.subtle,
+        ),
+        textStyle: VType.caption(color: VColors.textPrimary, weight: FontWeight.w500),
+        child: w,
+      );
     }
     return w;
   }
@@ -372,6 +394,7 @@ class VCircleButton extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: selected ? VColors.fillActive : (floating ? VColors.glassElevated : VColors.fillCell),
+        border: Border.all(color: selected ? const Color(0x4DFFFFFF) : const Color(0x22FFFFFF), width: 0.6),
       ),
       alignment: Alignment.center,
       child: Icon(
@@ -388,7 +411,11 @@ class VCircleButton extends StatelessWidget {
             ),
           )
         : core;
-    return Semantics(button: true, label: tooltip, child: VPress(onTap: onTap, tooltip: tooltip, child: body));
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: VPress(onTap: onTap, tooltip: tooltip, child: body),
+    );
   }
 }
 
@@ -480,45 +507,43 @@ class VRailItem {
   const VRailItem(this.icon, this.label);
 }
 
-/// Side navigation: its items as words, because an icon alone does not say what it opens. (2026-10-04)
-/// Every name stands one word to a line, at a size that reads. The bar is as wide as its longest word.
+/// Side navigation rail: visionOS glass capsule floating beside the main spatial window.
 class VOrnamentRail extends StatelessWidget {
   final List<VRailItem> items;
   final int active;
   final ValueChanged<int> onSelect;
   final double size;
-
-  /// Items that cannot be used just now.
   final Set<int> dim;
-  const VOrnamentRail({super.key, required this.items, required this.active, required this.onSelect, this.size = 36, this.dim = const {}});
+  const VOrnamentRail({
+    super.key,
+    required this.items,
+    required this.active,
+    required this.onSelect,
+    this.size = 36,
+    this.dim = const {},
+  });
 
   @override
   Widget build(BuildContext context) {
-    // visionOS tab bar: a capsule of glass floating off the window's edge, raised by its shadow; each place a lit
-    // capsule of its own when chosen, never under 44 points (Claude, 2026-10-23; was a 4-point rim, square-ish
-    // corners and 33-point rows).
     return DecoratedBox(
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.full), boxShadow: VShadow.ornament),
       child: VGlass(
-      material: VMaterial.elevated,
-      radius: VRadius.full,
-      padding: const EdgeInsets.all(6),
-      child: IntrinsicWidth(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (int i = 0; i < items.length; i++) ...[
-              if (i > 0) const SizedBox(height: 4),
-              Semantics(
-                button: true,
-                label: items[i].label,
-                child: VPress(
+        material: VMaterial.elevated,
+        radius: VRadius.full,
+        padding: const EdgeInsets.all(6),
+        child: IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < items.length; i++) ...[
+                if (i > 0) const SizedBox(height: 4),
+                VPress(
                   onTap: dim.contains(i) ? null : () => onSelect(i),
                   child: AnimatedContainer(
                     duration: VMotion.fast,
-                    constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    constraints: const BoxConstraints(minHeight: 42, minWidth: 46),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(VRadius.full),
@@ -527,27 +552,27 @@ class VOrnamentRail extends StatelessWidget {
                     child: Text(
                       items[i].label.replaceAll(' ', '\n'),
                       textAlign: TextAlign.center,
-                      softWrap: false, // lines break only between words, never inside one
+                      softWrap: false,
                       overflow: TextOverflow.visible,
                       style: VType.caption(
-                        color: dim.contains(i) ? const Color(0x59FFFFFF) : (i == active ? const Color(0xF5FFFFFF) : const Color(0xD9FFFFFF)),
+                        color: dim.contains(i)
+                            ? const Color(0x59FFFFFF)
+                            : (i == active ? const Color(0xF5FFFFFF) : const Color(0xD9FFFFFF)),
                         weight: FontWeight.w600,
                       ).copyWith(fontSize: 11, height: 15 / 12),
                     ),
                   ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
-      ),
       ),
     );
   }
 }
 
-/// One conversation in a history list: its title on one line and when it was. Nothing else. (2026-10-04)
-/// A title longer than the row dissolves at the edge; it is not cut with dots.
+/// One conversation in a history list: its title on one line and when it was.
 class VHistoryRow extends StatelessWidget {
   final String title;
   final String? time;
@@ -563,7 +588,15 @@ class VHistoryRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         child: Row(
           children: [
-            Expanded(child: Text(title, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.callout(weight: FontWeight.w500))),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.fade,
+                style: VType.callout(weight: FontWeight.w500),
+              ),
+            ),
             if (time != null) ...[
               const SizedBox(width: 10),
               Text(time!, style: VType.caption(color: VColors.textTertiary)),
@@ -575,16 +608,53 @@ class VHistoryRow extends StatelessWidget {
   }
 }
 
-/// Segmented capsule (bottom ornament tabs, filters). Scrolls when it overflows.
+/// Segmented capsule (CupertinoSlidingSegmentedControl / spatial segmented track).
 class VSegmented extends StatelessWidget {
   final List<String> labels;
   final int active;
   final ValueChanged<int> onSelect;
   final bool ornament; // true: floating glass capsule; false: recessed in-window track
-  const VSegmented({super.key, required this.labels, required this.active, required this.onSelect, this.ornament = true});
+  const VSegmented({
+    super.key,
+    required this.labels,
+    required this.active,
+    required this.onSelect,
+    this.ornament = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (!ornament && labels.length >= 2 && labels.length <= 5) {
+      final safeActive = active.clamp(0, labels.length - 1);
+      return SizedBox(
+        width: double.infinity,
+        child: CupertinoSlidingSegmentedControl<int>(
+          groupValue: safeActive,
+          backgroundColor: VColors.fillRecessed,
+          thumbColor: const Color(0x47FFFFFF),
+          padding: const EdgeInsets.all(3),
+          onValueChanged: (v) {
+            if (v != null) onSelect(v);
+          },
+          children: {
+            for (int i = 0; i < labels.length; i++)
+              i: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Text(
+                  labels[i],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: VType.callout(
+                    color: i == safeActive ? VColors.textPrimary : VColors.textSecondary,
+                    weight: i == safeActive ? FontWeight.w600 : FontWeight.w500,
+                  ).copyWith(fontSize: 12),
+                ),
+              ),
+          },
+        ),
+      );
+    }
+
     final row = SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
@@ -652,11 +722,13 @@ class VChip extends StatelessWidget {
               Container(width: 7, height: 7, decoration: BoxDecoration(shape: BoxShape.circle, color: dot)),
               const SizedBox(width: 6),
             ],
-            Text(label,
-                style: VType.callout(
-                  color: selected ? VColors.textPrimary : VColors.textSecondary,
-                  weight: selected ? FontWeight.w600 : FontWeight.w500,
-                )),
+            Text(
+              label,
+              style: VType.callout(
+                color: selected ? VColors.textPrimary : VColors.textSecondary,
+                weight: selected ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -664,7 +736,7 @@ class VChip extends StatelessWidget {
   }
 }
 
-/// Recessed capsule search field.
+/// Recessed capsule search field using CupertinoSearchTextField styling.
 class VSearchField extends StatelessWidget {
   final TextEditingController? controller;
   final String hint;
@@ -676,27 +748,19 @@ class VSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     return VRecessed(
       height: height,
-      padding: const EdgeInsets.symmetric(horizontal: VSpace.sm),
-      child: Row(
-        children: [
-          const Icon(Icons.search_rounded, size: 17, color: VColors.textTertiary),
-          const SizedBox(width: VSpace.xs),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              cursorColor: VColors.textPrimary,
-              style: VType.callout(weight: FontWeight.w400),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: VType.callout(color: VColors.textTertiary, weight: FontWeight.w400),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: VSpace.xs),
+      child: Center(
+        child: CupertinoSearchTextField(
+          controller: controller,
+          onChanged: onChanged,
+          placeholder: hint,
+          backgroundColor: Colors.transparent,
+          itemColor: VColors.textTertiary,
+          itemSize: 16,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          style: VType.callout(weight: FontWeight.w400),
+          placeholderStyle: VType.callout(color: VColors.textTertiary, weight: FontWeight.w400),
+        ),
       ),
     );
   }
@@ -770,7 +834,12 @@ class VListRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(title, maxLines: titleLines, overflow: TextOverflow.ellipsis, style: VType.body(weight: FontWeight.w500).copyWith(height: VType.normal)),
+                Text(
+                  title,
+                  maxLines: titleLines,
+                  overflow: TextOverflow.ellipsis,
+                  style: VType.body(weight: FontWeight.w500).copyWith(height: VType.normal),
+                ),
                 if (subtitle != null && subtitle!.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(subtitle!, maxLines: subtitleLines, overflow: TextOverflow.ellipsis, style: VType.footnote()),
@@ -785,7 +854,7 @@ class VListRow extends StatelessWidget {
           if (trailing != null) ...[const SizedBox(width: VSpace.xs), trailing!],
           if (chevron) ...[
             const SizedBox(width: VSpace.xxs),
-            const Icon(Icons.chevron_right_rounded, size: 20, color: VColors.textTertiary),
+            const Icon(CupertinoIcons.chevron_right, size: 16, color: VColors.textTertiary),
           ],
         ],
       ),
@@ -825,13 +894,15 @@ class VSidebarItem extends StatelessWidget {
             ),
             const SizedBox(width: VSpace.sm),
             Expanded(
-              child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: VType.callout(
-                    color: selected ? VColors.textPrimary : VColors.textSecondary,
-                    weight: selected ? FontWeight.w600 : FontWeight.w500,
-                  )),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: VType.callout(
+                  color: selected ? VColors.textPrimary : VColors.textSecondary,
+                  weight: selected ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
             ),
             if (trailing != null) trailing!,
           ],
@@ -902,7 +973,7 @@ class VTile extends StatelessWidget {
   }
 }
 
-/// Kit toggle: accent blue track when on.
+/// Kit toggle using CupertinoSwitch styled for spatial glass.
 class VToggle extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
@@ -910,26 +981,16 @@ class VToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return VPress(
-      onTap: onChanged == null ? null : () => onChanged!(!value),
-      child: AnimatedContainer(
-        duration: VMotion.fast,
-        width: 44,
-        height: 26,
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: value ? VColors.accentBlue : VColors.overlayDark,
-          borderRadius: BorderRadius.circular(VRadius.full),
-        ),
-        child: AnimatedAlign(
-          duration: VMotion.fast,
-          curve: Curves.easeOutCubic,
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            width: 22,
-            height: 22,
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white, boxShadow: VShadow.subtle),
-          ),
+    return SizedBox(
+      width: 44,
+      height: 26,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: CupertinoSwitch(
+          value: value,
+          activeTrackColor: VColors.accentBlue,
+          inactiveTrackColor: VColors.overlayDark,
+          onChanged: onChanged,
         ),
       ),
     );
@@ -991,12 +1052,15 @@ class VWindow extends StatelessWidget {
                   if (actions.isNotEmpty)
                     Align(
                       alignment: Alignment.centerRight,
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        for (int i = 0; i < actions.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 6),
-                          actions[i],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (int i = 0; i < actions.length; i++) ...[
+                            if (i > 0) const SizedBox(width: 6),
+                            actions[i],
+                          ],
                         ],
-                      ]),
+                      ),
                     ),
                 ],
               ),
@@ -1022,7 +1086,7 @@ class VWindow extends StatelessWidget {
   }
 }
 
-/// Alert (Prime Video visionOS 130:75006): icon, title, message, stacked actions.
+/// Alert (Prime Video visionOS): icon, title, message, stacked actions.
 class VAlertAction {
   final String label;
   final VoidCallback onTap;
@@ -1040,8 +1104,6 @@ class VAlert extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Values copied from the node: 320 wide, radius 32, padding 20, gap 8; icon 52; title 700 19/24;
-    // description 400 15/20; separator; buttons 44 high, radius 16, label 590 17/20.
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 320),
       child: VGlass(
@@ -1094,7 +1156,7 @@ class VAlert extends StatelessWidget {
   }
 }
 
-/// Section title (window content headings: "My Albums", "Good morning").
+/// Section title (window content headings).
 class VSectionTitle extends StatelessWidget {
   final String text;
   final Widget? trailing;
@@ -1112,14 +1174,21 @@ class VSectionTitle extends StatelessWidget {
   }
 }
 
-/// Scroll view whose content dissolves at its edges (the faded-edge technique).
+/// Scroll view whose content dissolves at its edges.
 class VFadeScroll extends StatelessWidget {
   final Widget child;
   final double fade;
   final EdgeInsetsGeometry padding;
   final Axis axis;
   final FadeFocus focus;
-  const VFadeScroll({super.key, required this.child, this.fade = 18, this.padding = EdgeInsets.zero, this.axis = Axis.vertical, this.focus = FadeFocus.top});
+  const VFadeScroll({
+    super.key,
+    required this.child,
+    this.fade = 14,
+    this.padding = EdgeInsets.zero,
+    this.axis = Axis.vertical,
+    this.focus = FadeFocus.top,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1133,33 +1202,32 @@ class VFadeScroll extends StatelessWidget {
   }
 }
 
-/// One line that fits its box. Made by Claude (2026-10-04).
-/// The text is written to the box's length at the source (the app sends [charsFor] with every question),
-/// so this never cuts, wraps or scrolls it. A line that is a little over is drawn slightly smaller instead.
+/// Summary text helper for 2-line ticker summaries.
 class VOneLine extends StatelessWidget {
   final String text;
   final TextStyle? style;
   const VOneLine({super.key, required this.text, this.style});
 
-  static TextStyle get rowStyle => VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11, height: 15 / 11);
+  static TextStyle get rowStyle => VType.callout(weight: FontWeight.w500).copyWith(fontSize: 12, height: 16 / 12);
 
-  /// How many characters one line of [width] holds in the row style.
+  /// How many characters two lines of [width] hold in the row style.
   static int charsFor(double width) {
     const sample = 'Seal leaks and lower the thermostat. Water boils at 100 C at sea level. Yes, with a cold-climate model.';
     final p = TextPainter(text: TextSpan(text: sample, style: rowStyle), maxLines: 1, textDirection: TextDirection.ltr)..layout();
     final per = p.width / sample.length;
     p.dispose();
-    return (width / per * 0.92).floor(); // 8% spare, so a line written to this length never reaches the edge
+    return ((width / per) * 1.85).floor().clamp(90, 135);
   }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: Text(text, maxLines: 1, softWrap: false, style: style ?? rowStyle),
+      child: Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: style ?? rowStyle,
       ),
     );
   }
@@ -1171,13 +1239,10 @@ class VMenuItem {
   final String label;
   final VoidCallback onTap;
   final bool checked;
-
-  /// Set apart from the rows above it by a little space.
   final bool apart;
   const VMenuItem(this.icon, this.label, this.onTap, {this.checked = false, this.apart = false});
 }
 
-/// Where a press menu sits against the point it was asked for.
 enum VMenuAlign { start, center, end }
 
 class _VMenuLayout extends SingleChildLayoutDelegate {
@@ -1207,8 +1272,6 @@ class _VMenuLayout extends SingleChildLayoutDelegate {
 }
 
 /// A press menu: a small glass list that opens where it was asked for and closes on a choice or a tap elsewhere.
-/// Made by Claude (2026-10-04). Used for what a message, a conversation or the music bar can do.
-/// It is as wide as its longest row and no wider.
 Future<void> showVMenu(BuildContext context, Offset at, List<VMenuItem> items, {VMenuAlign align = VMenuAlign.center}) {
   final ticks = items.any((it) => it.checked);
   return showGeneralDialog<void>(
@@ -1253,7 +1316,15 @@ Future<void> showVMenu(BuildContext context, Offset at, List<VMenuItem> items, {
                           Text(it.label, maxLines: 1, softWrap: false, style: VType.callout(weight: FontWeight.w500)),
                           if (ticks) ...[
                             const Spacer(),
-                            SizedBox(width: 26, child: it.checked ? const Align(alignment: Alignment.centerRight, child: Icon(Icons.check_rounded, size: 16, color: VColors.textPrimary)) : null),
+                            SizedBox(
+                              width: 26,
+                              child: it.checked
+                                  ? const Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Icon(CupertinoIcons.checkmark_alt, size: 16, color: VColors.textPrimary),
+                                    )
+                                  : null,
+                            ),
                           ],
                         ],
                       ),
@@ -1268,7 +1339,10 @@ Future<void> showVMenu(BuildContext context, Offset at, List<VMenuItem> items, {
     ),
     transitionBuilder: (ctx, a, _, child) => FadeTransition(
       opacity: a,
-      child: ScaleTransition(scale: Tween(begin: 0.96, end: 1.0).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)), child: child),
+      child: ScaleTransition(
+        scale: Tween(begin: 0.96, end: 1.0).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
+        child: child,
+      ),
     ),
   );
 }

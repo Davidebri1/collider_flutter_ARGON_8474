@@ -9,19 +9,13 @@ import '../browser_store.dart';
 import '../models/browser_tab.dart';
 import '../web_frame.dart';
 
-/// In-app browser. Made by Claude.
-/// Safari for visionOS, from Apple VisionOS Apps 1:71 (the frame is 3840 wide; its bar and window are 1280).
-///   bar 1280 x 80, radius 44, #808080 30%: three round buttons 60 across and 20 apart, 48, the address field
-///   724 x 64 (#000000 30%), 48, three round buttons; the window 1280 x 853, radius 40, sits 40 under the bar.
-/// The nine options, left to right: sidebar, back, forward | Aa (text size), lock and address, reload |
-/// share, new tab, tabs. The sidebar holds the open tabs, Save and Close. One browser; tabs replace the page.
-/// Where sizes depart from the frame, docs\DEVIATIONS.md says where and why.
+/// In-app browser — visionOS Safari glass bar + page window with top-bar Close action.
 class InAppBrowserSheet extends StatefulWidget {
   final String initialTabId;
   final List<BrowserTab> tabs;
   final Function(BrowserTab updatedTab)? onTabUpdated;
   final Function(BrowserTab newTab)? onNewUserTab;
-  final bool incognito; // the app's Incognito: pages are not kept in History
+  final bool incognito;
 
   const InAppBrowserSheet({
     super.key,
@@ -37,7 +31,6 @@ class InAppBrowserSheet extends StatefulWidget {
 }
 
 class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
-  // Bing: a search engine whose results the app's page loader can show. Google's results page comes back empty through it.
   static const _homePage = 'https://www.google.com/';
   static const _search = 'https://www.google.com/search?q=';
 
@@ -48,12 +41,11 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   final Map<String, List<String>> _forward = {};
   int _reload = 0;
   bool _sidebar = false;
-  String? _side; // the sidebar's open section: bookmarks, history or settings
+  String? _side;
   double _zoom = 1;
   String? _shownUrl;
-  String? _savedName; // set for a moment after something was saved to Files
+  String? _savedName;
 
-  // The sheet keeps its own list: the app may replace its list while the browser is open.
   late final List<BrowserTab> _tabs = List.of(widget.tabs);
 
   BrowserTab get _tab => _tabs.firstWhere((t) => t.id == _activeTabId, orElse: () => _tabs.first);
@@ -92,7 +84,6 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
 
   String _host(String url) => url.replaceFirst(RegExp(r'^https?://'), '');
 
-  /// The site's name alone, as the address field shows it.
   String _site(String url) {
     final h = Uri.tryParse(url)?.host ?? '';
     return h.isEmpty ? _host(url) : h.replaceFirst(RegExp(r'^www\.'), '');
@@ -107,7 +98,6 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     setState(() => _overview = false);
   }
 
-  /// Address bar: a web address opens directly; anything else is searched.
   void _go(String input) {
     final q = input.trim();
     if (q.isEmpty) return;
@@ -122,7 +112,6 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     _show(url, title: isUrl ? null : q);
   }
 
-  /// The page followed a link, sent a form or was redirected.
   void _onNavigated(String url, String title) {
     final tab = _tab;
     if (url != tab.url) {
@@ -156,7 +145,6 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     });
   }
 
-  /// Saves the page being shown to Files > Downloaded.
   Future<void> _save() async => _flashSaved(await ColliderApi.instance.download(_tab.url));
 
   @override
@@ -171,7 +159,6 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     final canBack = (_back[tab.id] ?? const []).isNotEmpty;
     final canForward = (_forward[tab.id] ?? const []).isNotEmpty;
 
-    // Deviation D6: the round buttons are 30 across, not 60 x k (18 on a phone): a finger has to hit them.
     Widget round(IconData icon, String tip, VoidCallback? onTap, {bool on = false}) => VCircleButton(
           icon: icon,
           size: 30,
@@ -181,9 +168,6 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
           onTap: onTap,
         );
 
-    // On a phone (Claude, 2026-10-21; David: "proper mobile aspect ratio. And responsive design to match"): Safari's
-    // iPhone layout. The address takes the whole bar so the site's name shows, and the buttons sit in their own bar
-    // under the page, spread across it. Wider than a phone, the one bar as before.
     final phone = size.width < 768;
     final address = VRecessed(
       height: phone ? 36 : 30,
@@ -195,9 +179,9 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
             onTap: () => setState(() => _zoom = _zoom >= 1.3 ? 1 : _zoom + 0.15),
             child: Text('Aa', style: VType.caption(color: VColors.textPrimary, weight: FontWeight.w500).copyWith(fontSize: phone ? 14 : 12)),
           ),
-          const SizedBox(width: 3),
+          const SizedBox(width: 4),
           const Icon(Icons.lock_rounded, size: 10, color: Color(0x99FFFFFF)),
-          const SizedBox(width: 3),
+          const SizedBox(width: 4),
           Expanded(
             child: TextField(
               controller: _addr,
@@ -231,9 +215,10 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     final forward = round(Icons.chevron_right_rounded, 'Forward', canForward ? _goForward : null);
     final share = round(Icons.ios_share_rounded, 'Share', _share);
     final newTab = round(Icons.add_rounded, 'New Tab', _newTab);
-    final tabs = round(Icons.filter_none_rounded, 'Tabs', () => setState(() => _overview = !_overview), on: _overview);
+    final tabs = round(Icons.filter_none_rounded, 'Tabs (${_tabs.length})', () => setState(() => _overview = !_overview), on: _overview);
+    final closeBtn = round(Icons.close_rounded, 'Close Browser', () => Navigator.of(context).pop());
+
     Widget capsule(Widget child) => GestureDetector(
-          // A downward swipe on a bar closes the browser.
           onVerticalDragEnd: (d) {
             if ((d.primaryVelocity ?? 0) > 250) Navigator.of(context).pop();
           },
@@ -268,16 +253,17 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           alignment: Alignment.topCenter,
-          insetPadding: phone ? const EdgeInsets.fromLTRB(VSpace.md, 52, VSpace.md, 92) : const EdgeInsets.fromLTRB(VSpace.xl, 56, VSpace.xl, 92),
+          insetPadding: phone
+              ? const EdgeInsets.fromLTRB(VSpace.md, 52, VSpace.md, 92)
+              : const EdgeInsets.fromLTRB(VSpace.xl, 44, VSpace.xl, 92),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
+            constraints: const BoxConstraints(maxWidth: 920),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: phone
                   ? [
-                      capsule(address),
+                      capsule(Row(children: [Expanded(child: address), const SizedBox(width: 6), closeBtn])),
                       const SizedBox(height: 10),
-                      // the screen less the insets (52 + 92), the two bars (48 + 56) and the gaps between them (20)
                       SizedBox(height: math.max(size.height - 268, 280.0), child: window),
                       const SizedBox(height: 10),
                       capsule(Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [back, forward, share, newTab, tabs, sidebar])),
@@ -285,18 +271,20 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
                   : [
                       capsule(Row(children: [
                         sidebar,
-                        const SizedBox(width: 3),
+                        const SizedBox(width: 4),
                         back,
-                        const SizedBox(width: 3),
+                        const SizedBox(width: 4),
                         forward,
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                         Expanded(child: address),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                         share,
-                        const SizedBox(width: 3),
+                        const SizedBox(width: 4),
                         newTab,
-                        const SizedBox(width: 3),
+                        const SizedBox(width: 4),
                         tabs,
+                        const SizedBox(width: 4),
+                        closeBtn,
                       ])),
                       const SizedBox(height: 12),
                       SizedBox(height: h, child: window),
@@ -308,21 +296,18 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     );
   }
 
-  /// Shares the page's address; where the device has no share sheet, copies it.
   Future<void> _share() async {
     if (canShareText && await shareText(_tab.url)) return;
     await Clipboard.setData(ClipboardData(text: _tab.url));
     _flashSaved('Copied');
   }
 
-  /// The sidebar, as Safari's: the open tabs; Bookmarks, History and Settings, each opening in place; then Save (the
-  /// page, to Files) and Close. (Bookmarks, History and Settings: Claude, 2026-10-21.)
   Widget _sidebarPanel() {
     final store = BrowserStore.instance;
     Widget row(IconData? icon, String label, VoidCallback onTap, {bool on = false, Widget? trailing}) => VPress(
           onTap: onTap,
           child: Container(
-            height: 44,
+            height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(color: on ? const Color(0x24FFFFFF) : Colors.transparent, borderRadius: BorderRadius.circular(11)),
             child: Row(
@@ -347,7 +332,8 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
         children = [
           back('Bookmarks'),
           row(here ? Icons.bookmark_rounded : Icons.bookmark_add_outlined, _tab.title.isEmpty ? _host(_tab.url) : _tab.title,
-              () => setState(() => store.toggleBookmark(_tab.url, _tab.title)), on: here),
+              () => setState(() => store.toggleBookmark(_tab.url, _tab.title)),
+              on: here),
           const Divider(height: 10, color: Color(0x1FFFFFFF)),
           for (final b in store.bookmarks) page(b),
         ];
@@ -385,7 +371,6 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
           row(Icons.close_rounded, 'Close', () => Navigator.of(context).pop()),
         ];
     }
-    // Solid backing: the page under this panel is a web frame, which glass cannot blur.
     return DecoratedBox(
       decoration: BoxDecoration(color: const Color(0xFF1C2026), borderRadius: BorderRadius.circular(16)),
       child: VGlass(

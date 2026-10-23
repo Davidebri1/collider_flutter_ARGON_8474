@@ -5,16 +5,7 @@ import 'package:flutter/services.dart';
 import '../../../core/api/collider_api.dart';
 import '../../../core/vision/vision_kit.dart';
 
-/// Settings. Made by Claude (2026-10-04).
-/// It holds two switches, so it is a pane the size of two switches, sitting just above the dock. The screen behind stays recognisable. It closes like a pause menu: tap outside
-/// it, or the dock button again.
-/// Nothing here is for developers. The provider names that were listed (NVIDIA, Tavily) are gone:
-/// David never asked for them and they mean nothing to a user.
-///
-/// Account (2026-10-17, map row 18, David: "make sure the account tab isnt oversized or big. there's no profile picture
-/// so omit that section. no submenu should be larger than its menu"): a second tab in this same small pane, rows the
-/// same height as the switches, each opening what the app already holds for the account: what was bought (Files ›
-/// Purchased) and the upgrade. No picture, no name block, nothing the app does not have.
+/// Settings & Account Drawer.
 class SettingsDrawer extends StatefulWidget {
   final VoidCallback onClose;
   final bool incognito;
@@ -41,7 +32,7 @@ class SettingsDrawer extends StatefulWidget {
 
 class _SettingsDrawerState extends State<SettingsDrawer> {
   int _tab = 0;
-  String _phone = '', _qr = ''; // the phone link (Claude, 2026-10-21)
+  String _phone = '', _qr = '';
 
   @override
   void initState() {
@@ -56,7 +47,6 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
     });
   }
 
-  /// The phone link as a QR code for the phone's camera; a tap on it copies the link.
   void _showPhone() {
     final png = base64Decode(_qr.substring(_qr.indexOf(',') + 1));
     showDialog(
@@ -87,7 +77,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
         child: Row(
           children: [
             Text(label, maxLines: 1, style: VType.callout(color: const Color(0xF5FFFFFF), weight: FontWeight.w500).copyWith(fontSize: 11)),
-            const SizedBox(width: 16),
+            const SizedBox(width: 20),
             const Spacer(),
             trailing,
           ],
@@ -95,20 +85,29 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
       );
 
   Widget _tabs() => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.only(bottom: 6),
         child: Row(children: [
           for (final (i, t) in const ['Settings', 'Account'].indexed) ...[
-            if (i > 0) const SizedBox(width: 14),
+            if (i > 0) const SizedBox(width: 16),
             VPress(
               onTap: () => setState(() => _tab = i),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(t, style: VType.caption(color: i == _tab ? VColors.textPrimary : VColors.textSecondary, weight: i == _tab ? FontWeight.w600 : FontWeight.w500).copyWith(fontSize: 11)),
+                Text(
+                  t,
+                  style: VType.caption(
+                    color: i == _tab ? VColors.textPrimary : VColors.textSecondary,
+                    weight: i == _tab ? FontWeight.w600 : FontWeight.w500,
+                  ).copyWith(fontSize: 11),
+                ),
                 const SizedBox(height: 3),
                 AnimatedContainer(
                   duration: VMotion.fast,
-                  width: 14,
+                  width: 16,
                   height: 2,
-                  decoration: BoxDecoration(color: i == _tab ? VColors.accentBlue : Colors.transparent, borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(
+                    color: i == _tab ? VColors.accentBlue : Colors.transparent,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ]),
             ),
@@ -118,7 +117,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
 
   Widget _link(String label, VoidCallback onTap) => VPress(
         onTap: onTap,
-        child: _row(label, const Icon(Icons.chevron_right_rounded, size: 18, color: VColors.textSecondary)),
+        child: _row(label, const Icon(CupertinoIcons.chevron_forward, size: 14, color: VColors.textSecondary)),
       );
 
   @override
@@ -134,40 +133,43 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 86),
-              child: IntrinsicWidth(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 205, maxWidth: 240),
                 child: GestureDetector(
                   onTap: () {},
                   child: VGlass(
                     material: VMaterial.modal,
                     radius: 22,
-                    padding: const EdgeInsets.fromLTRB(20, 10, 14, 10),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _tabs(),
-                        // Both tabs keep the pane's size: the larger of the two sets it.
-                        Stack(children: [
-                          Visibility(
-                            visible: _tab == 0,
-                            maintainSize: true,
-                            maintainAnimation: true,
-                            maintainState: true,
-                            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                              _row('Incognito', VToggle(value: w.incognito, onChanged: w.onIncognito)),
-                              _row('Save to History', VToggle(value: w.autosave, onChanged: w.incognito ? null : w.onAutosave)),
-                            ]),
-                          ),
-                          if (_tab == 1)
-                            Positioned.fill(
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    padding: const EdgeInsets.fromLTRB(20, 12, 16, 10),
+                    child: AnimatedSize(
+                      duration: VMotion.fast,
+                      curve: Curves.easeOutCubic,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _tabs(),
+                          if (_tab == 0)
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _row('Incognito', VToggle(value: w.incognito, onChanged: w.onIncognito)),
+                                _row('Save to History', VToggle(value: w.autosave, onChanged: w.incognito ? null : w.onAutosave)),
+                              ],
+                            )
+                          else
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
                                 _link('Purchased', w.onOpenPurchased),
                                 _link('Upgrade', w.onOpenUpgrade),
                                 if (_phone.isNotEmpty && _qr.isNotEmpty) _link('Phone', _showPhone),
-                              ]),
+                              ],
                             ),
-                        ]),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),

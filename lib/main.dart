@@ -46,8 +46,6 @@ import 'core/platform/open_url.dart';
 import 'package:device_preview/device_preview.dart';
 
 Future<void> main() async {
-  // Device Preview 3.0: devices, sizes, orientation and screenshots from the device_preview tab in DevTools,
-  // debug and profile runs only (Claude, 2026-10-23).
   DevicePreview.enable();
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
@@ -56,11 +54,11 @@ Future<void> main() async {
       statusBarIconBrightness: Brightness.light,
     ),
   );
-  ThemeCloud.instance.init(); // the live wallpapers from the Cloudflare bucket, read while the app starts
+  ThemeCloud.instance.init();
   ThemeBlurCache.instance.prewarmThemes(WallpaperCatalog.freeThemes);
   ConsensusWebView.preload();
   SmartGenStore.instance.load();
-  await Drafts.load(); // unsent messages, as they were left (Claude, 2026-10-21)
+  await Drafts.load();
   runApp(const ColliderApp());
 }
 
@@ -74,12 +72,8 @@ class ColliderApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
-        // the same face, applied by name: google_fonts' text-theme helper still builds the SDK's own TextTheme
         textTheme: ThemeData.dark().textTheme.apply(fontFamily: GoogleFonts.instrumentSans().fontFamily),
       ),
-      // Theme pictures from the bucket load through Image.asset like the built-in ones.
-      // The bridge lets packages that still use the SDK's built-in Material work with material_ui (Flutter 3.47 notes;
-      // Claude, 2026-10-21).
       builder: (context, child) =>
           MaterialUiCompatibilityBridge(child: DefaultAssetBundle(bundle: ThemeMediaAssetBundle.instance, child: child!)),
       home: const ColliderHomeScreen(),
@@ -95,11 +89,9 @@ class ColliderHomeScreen extends StatefulWidget {
 }
 
 class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
-  // Wallpaper state: Uninterrupted, star of the product
   WallpaperTheme _currentTheme = WallpaperCatalog.defaultTheme;
   WallpaperTheme _savedThemeBeforePreview = WallpaperCatalog.defaultTheme;
 
-  // Selected Models (Max 9 active model rows)
   final List<String> _selectedModelIds = [
     'free/gpt-5-nano',
     'free/gemini-3-6-flash-lite',
@@ -112,42 +104,25 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     'pro/mistral-large',
   ];
 
-  // Active Model Category
   ModelCategory _activeCategory = ModelCategory.general;
-  // The Image category (Claude, 2026-10-21): the shape and number of pictures, and the generations pane.
   String _aspect = '9:16';
   int _count = 4;
   bool _mediaExpanded = false;
   int _mediaRefresh = 0;
 
-  // Active temporary pane / drawer: 'themes', 'settings', 'consensus', 'apps', 'history', 'market', 'smartgen', 'upgrade', 'skills', 'files', 'model_ladder'
   String? _activeDrawer;
-
-  // Local Model History modal state
   ModelDef? _localHistoryModel;
-
-  // Zoomed message overlay state
   TickerMessage? _zoomedMessage;
   ModelDef? _zoomedModelDef;
-
-  // Expanded accordion model IDs
   final Set<String> _expandedModelIds = {};
-
-  // Swipe/tap-summoned global broadcast composer
   bool _isComposerSummoned = false;
-
-  // Mobile slide-out contextual side nav state
   bool _isMobileSideNavOpen = false;
-
-  // Current floating user prompt (floats un-framed on wallpaper)
   String _currentPrompt = '';
 
-  // Consensus state: ratio of agreeing models (e.g. "7/7")
   String _consensusRatio = 'Consensus';
   String _consensusSummary = '';
   bool _isConsensusGenerating = false;
 
-  // Live session state (Collider server)
   AskMode _mode = AskMode.chat;
   bool _incognito = false;
   bool _autosave = true;
@@ -155,39 +130,31 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   DateTime? _promptTime;
   final Map<String, JobState> _jobsById = {};
   String? _currentJobId;
-  Offset? _musicPos; // where the user last put the music widget
+  Offset? _musicPos;
 
-  // Ticker items
   late List<TickerItem> _tickerItems;
-
-  // Global History Sessions
   late List<ConversationHistorySession> _globalHistorySessions;
-
-  // Local Model History Sessions map
   late Map<String, List<ConversationHistorySession>> _localHistorySessions;
-
-  // Browser Tabs (only 1 active at a time)
   late List<BrowserTab> _browserTabs;
 
-  // Contextual work surface state
   String _smartGenView = 'boards';
   int _smartGenNewCardTrigger = 0;
   String _smartGenBoardType = 'kanban';
   String _marketCategory = 'discover';
   String _themeSection = 'gallery';
   String _filesCategory = 'all';
-  String _filesPlace = 'home'; // where Files opens: Home, or Music when the Music Player is asked for
-  String? _docUrl; // the file Documents opens (Claude, 2026-10-20); null for a new document
-  bool _voiceChat = false; // Voice Chat (Claude, 2026-10-20): speak, the models answer, the answer is read aloud
-  String _voicePhase = ''; // listening, thinking, speaking, or '' waiting for a tap
-  bool _musicHeldForVoice = false; // the music bar was playing when Voice Chat came on
+  String _filesPlace = 'home';
+  String? _docUrl;
+  bool _voiceChat = false;
+  String _voicePhase = '';
+  bool _musicHeldForVoice = false;
   String? _docName;
   String _chatSection = 'history';
 
-  /// The rail ornament shows on the resting canvas and durable work surfaces only.
+  /// The rail ornament shows on the resting canvas and durable work surfaces.
   bool get _railVisible {
     if (_localHistoryModel != null || _zoomedMessage != null || _browserOpen) return false;
-    const surfaces = {null, 'smartgen', 'market', 'themes'}; // Files draws its own side menu
+    const surfaces = {null, 'smartgen', 'market', 'themes', 'premium'};
     return surfaces.contains(_activeDrawer);
   }
 
@@ -205,9 +172,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     ThemeBlurCache.instance.setActiveTheme(_currentTheme);
     if (Uri.base.queryParameters['drawer'] == 'premium' ||
         (Uri.base.queryParameters['drawer'] == 'market' && Uri.base.queryParameters['sub'] == 'themes')) {
-      _activeDrawer = 'premium'; // the market shows its middle theme as soon as the list is in
+      _activeDrawer = 'premium';
     } else if (Uri.base.queryParameters['drawer'] == 'music') {
-      // The Music Player is the music bar and the music in Files.
       _activeDrawer = 'files';
       _filesPlace = 'music';
     } else if (Uri.base.queryParameters['drawer'] != null) {
@@ -254,7 +220,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (!mounted || !ok) return;
     ColliderApi.instance.files();
     SmartGenStore.instance.syncAutonomousCards();
-    // Default selection: one model per provider, so every card carries a distinct colour.
     final seen = <String>{};
     final live = <String>[
       for (final m in ModelRoster.allModels.where((m) => !m.isMedia))
@@ -267,19 +232,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         ..addAll(ModelRoster.forCategory(ModelCategory.image).take(1).map((m) => m.id));
     });
     await _reloadHistory(restoreLatest: true);
-    // Deep links used by the launcher and the screenshot tour: ?ask=...&mode=research
     final qp = Uri.base.queryParameters;
     if (qp['mode'] != null) {
       _mode = AskMode.values.firstWhere((m) => m.wire == qp['mode'], orElse: () => AskMode.chat);
     }
     if (qp['ask'] != null && qp['ask']!.trim().isNotEmpty) _onSendPrompt(qp['ask']!);
     if (qp['music'] == '1') {
-      setState(() {
-        MusicPlayer.instance
-          ..queue = MusicPlayer.forTheme(_currentTheme)
-          ..queueId = _currentTheme.id
-          ..index = 0;
-      });
+      _ensureMusicQueue();
     }
     if (_tickerItems.isNotEmpty) {
       setState(() {
@@ -358,7 +317,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     );
   }
 
-  /// Maps a server job onto the ticker: one colour-coded card per model, consensus pinned on top.
   void _applyJob(JobState j, {bool restored = false}) {
     _jobsById[j.id] = j;
     _currentJobId = j.id;
@@ -369,8 +327,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       final def = ModelRoster.byId(mid);
       if (def == null) return;
       final prev = _tickerItems.where((t) => t.modelDef.id == mid).toList();
-      // A card shows its one line. A saved answer whose line is still being written keeps waiting
-      // rather than showing a cut sentence.
       final noLine = r.status == 'done' && r.line.isEmpty && !_lineFailed.contains(j.id);
       final waiting = r.status == 'pending' || noLine;
       final serverConv = _messagesFromResult(j, mid, r);
@@ -406,9 +362,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       ];
     }
     if (restored) {
-      _selectedModelIds
-        ..clear()
-        ..addAll(j.results.keys.where((k) => ModelRoster.byId(k) != null));
+      // Only mark models that actually answered as active/lit; unanswered models are dimmed below
+      final answeredIds = j.results.entries
+          .where((e) => e.value.status == 'done' && e.value.text.isNotEmpty && ModelRoster.byId(e.key) != null)
+          .map((e) => e.key)
+          .toList();
+      if (answeredIds.isNotEmpty) {
+        final mediaIds = _selectedModelIds.where((id) => ModelRoster.byId(id)?.isMedia ?? false).toList();
+        _selectedModelIds
+          ..clear()
+          ..addAll(answeredIds)
+          ..addAll(mediaIds);
+      }
     }
     final c = j.consensus;
     _isConsensusGenerating = !j.done;
@@ -417,20 +382,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (j.done && _needsLines(j)) _ensureLines(j);
   }
 
-  /// Characters one ticker row holds: the resting ticker is as wide as the dock, and the summary line
-  /// has the row's full width inside the pane's and the row's padding.
-  int get _lineChars => VOneLine.charsFor((MediaQuery.of(context).size.width < 768 ? 260.0 : 480.0) - 42) * 2;
+  /// 2-line summary budget (~115 chars on desktop, ~76 chars on mobile).
+  int get _lineChars => VOneLine.charsFor((MediaQuery.of(context).size.width < 768 ? 260.0 : 480.0) - 42, maxLines: 2);
 
   final Set<String> _lineAsked = {};
   final Set<String> _lineFailed = {};
 
   bool _needsLines(JobState j) {
     final n = _lineChars;
-    return j.results.values.any((r) => r.status == 'done' && r.text.isNotEmpty && (r.line.isEmpty || r.line.length > n + 2)) ||
-        (j.consensus.status == 'done' && (j.consensus.line.isEmpty || j.consensus.line.length > n + 2));
+    return j.results.values.any((r) => r.status == 'done' && r.text.isNotEmpty && (r.line.isEmpty || r.line.length > n + 6)) ||
+        (j.consensus.status == 'done' && (j.consensus.line.isEmpty || j.consensus.line.length > n + 6));
   }
 
-  /// Conversations saved before rows were one line get their lines written once, then keep them.
   Future<void> _ensureLines(JobState j) async {
     if (!_lineAsked.add(j.id)) return;
     final fresh = await ColliderApi.instance.lines(j.id, _lineChars);
@@ -451,13 +414,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   void _initializeBrowserTabs() {
-    // One user tab; research sources are added as tabs when a question uses the web.
     _browserTabs = [
       BrowserTab(id: 'user_default', title: 'Search', url: 'https://www.google.com/', isUserControlling: true),
     ];
   }
 
-  /// A summary line without markdown marks.
   static String _plain(String s) => s.replaceAll(RegExp(r'\*\*|__|`'), '').replaceFirst(RegExp(r'^\s*(#+|[-*>])\s+'), '').trim();
 
   void _closeAllPanes() {
@@ -469,18 +430,24 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   void _requestSwitchSurface(String? targetDrawer) {
-    // No "Unsaved Changes" prompt (removed 2026-09-27): switching surfaces just proceeds.
-    // Drafts and inputs are kept in memory as before.
     _proceedSwitchSurface(targetDrawer);
   }
 
   void _proceedSwitchSurface(String? targetDrawer) {
     setState(() {
+      if ((_activeDrawer == 'themes' || _activeDrawer == 'premium') &&
+          targetDrawer != 'themes' &&
+          targetDrawer != 'premium' &&
+          _locked(_currentTheme)) {
+        _currentTheme = _savedThemeBeforePreview;
+      }
       _closeAllPanes();
       _activeDrawer = targetDrawer;
       _isComposerSummoned = (targetDrawer == null);
-      if (targetDrawer == 'themes') {
-        _savedThemeBeforePreview = _currentTheme;
+      if (targetDrawer == 'themes' || targetDrawer == 'premium') {
+        if (!_locked(_currentTheme)) {
+          _savedThemeBeforePreview = _currentTheme;
+        }
       }
     });
   }
@@ -490,14 +457,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     _requestSwitchSurface(drawer);
   }
 
-  /// Documents: a new document, or [url] (as the server serves it) opened for editing.
   void _openDocument([String? url, String? name]) {
     _docUrl = url;
     _docName = name;
     _requestSwitchSurface('documents');
   }
 
-  /// Voice Chat on or off. On, it listens at once.
   void _setVoiceChat(bool on) {
     setState(() {
       _voiceChat = on;
@@ -516,8 +481,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
   }
 
-  /// One turn: listen until the speaker stops, ask every model, read the consensus aloud, then listen again.
-  /// When nothing is said it waits for a tap on the microphone.
   Future<void> _voiceTurn() async {
     if (!_voiceChat || _voicePhase.isNotEmpty || _busy) return;
     setState(() => _voicePhase = 'listening');
@@ -552,8 +515,28 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
   }
 
-  /// The Music Player: the music in Files, played by the music bar.
+  void _ensureMusicQueue() {
+    final p = MusicPlayer.instance;
+    if (p.queue.isNotEmpty) return;
+    WallpaperTheme target = _currentTheme;
+    if (target.tracks.isEmpty) {
+      final withTracks = ThemeCloud.instance.themes.where((t) => t.tracks.isNotEmpty).firstOrNull;
+      if (withTracks != null) target = withTracks;
+    }
+    final songs = MusicPlayer.forTheme(target);
+    if (songs.isNotEmpty) {
+      setState(() {
+        p
+          ..queue = songs
+          ..queueId = target.id
+          ..index = 0;
+      });
+    }
+  }
+
+  /// Opens the Music Player: queues ambient tracks for the top MusicWidget bar AND opens Files > Music.
   void _openMusic() {
+    _ensureMusicQueue();
     _filesPlace = 'music';
     _requestSwitchSurface('files');
   }
@@ -588,7 +571,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
   }
 
-  /// A summary opens its conversation under itself, one at a time; the window scrolls it into view (Claude, 2026-10-21).
   void _onTogglePill(String id) {
     final opening = !_expandedModelIds.contains(id);
     setState(() {
@@ -605,18 +587,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   final GlobalKey _openKey = GlobalKey();
 
-  /// A conversation as text: who said each part, then what was said.
   String _conversationText(TickerItem it) => [
         for (final m in it.conversation) '${m.sender == 'user' ? 'You' : it.modelDef.label}:\n${m.text}',
       ].join('\n\n');
 
-  /// The device's share sheet; where there is none, the text is copied.
   Future<void> _sendText(String text) async {
     if (!await shareText(text)) await Clipboard.setData(ClipboardData(text: text));
   }
 
-  /// Opens text in Documents: it is kept in Files > Generated first, so the document is a file like any other
-  /// (Claude, 2026-10-23).
   Future<void> _openTextAsDocument(String title, String text, String model) async {
     final words = text.replaceAll(RegExp(r'[#*_`>\[\]\n]'), ' ').trim().split(RegExp(r'\s+')).take(6).join(' ');
     final name = await ColliderApi.instance.saveGenerated('$title - $words.md', text, model: model);
@@ -645,7 +623,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       );
     });
     final conv = _tickerItems[idx].conversation;
-    // The answer drafts into the conversation as the model writes it and persists to the session (Claude, 2026-10-19).
     final draftId = 'm${now.microsecondsSinceEpoch}';
     try {
       await for (final d in ColliderApi.instance.replyStream(
@@ -714,7 +691,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
   }
 
-  /// The Image category: the words (and any reference pictures) go to the picture models chosen there.
   Future<void> _onSendImage(String prompt, [List<String> files = const []]) async {
     var models = _selectedModelIds.where((id) => ModelRoster.byId(id)?.categories.contains(ModelCategory.image) ?? false).toList();
     if (models.isEmpty) models = ModelRoster.forCategory(ModelCategory.image).take(1).map((m) => m.id).toList();
@@ -727,7 +703,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (mounted) setState(() => _mediaRefresh++);
   }
 
-  /// From Discover: to the chat's Image category, with words to make from, or a picture to remix (Grok's remix).
   void _toImageChat({String? text, String? reference}) {
     _requestSwitchSurface(null);
     setState(() {
@@ -746,14 +721,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }).toList();
     if (models.isEmpty) return;
     final now = DateTime.now();
-    // If a conversation is already active on screen, continue that multi-turn session across all models!
     final continuingSessionId = (_tickerItems.isNotEmpty && _currentJobId != null) ? _currentJobId : null;
     final prevConvByModel = <String, List<TickerMessage>>{
       for (final t in _tickerItems) t.modelDef.id: List<TickerMessage>.from(t.conversation),
     };
     setState(() {
       _busy = true;
-      _isComposerSummoned = _voiceChat; // in Voice Chat the composer stays, its button is the microphone
+      _isComposerSummoned = _voiceChat;
       _closeAllPanes();
       _currentPrompt = prompt;
       _promptTime = now;
@@ -796,7 +770,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       if (!mounted) return;
       setState(() {
         _isConsensusGenerating = false;
-        // The same words the model rows use when a model does not answer. No technical reason on screen.
         _consensusSummary = 'No answer';
         _tickerItems = [for (final t in _tickerItems) t.copyWith(isStreaming: false, summary: 'No answer')];
       });
@@ -805,7 +778,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
   }
 
-  // Load conversation and immediately send user there in expanded view
   void _loadAndExpandSession(ConversationHistorySession session) {
     final jobId = session.id.split('_').first;
     if (_jobsById.containsKey(jobId)) {
@@ -832,13 +804,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       _isMobileSideNavOpen = false;
 
       final targetId = session.targetModelId ?? (session.modelIds.isNotEmpty ? session.modelIds.first : _selectedModelIds.first);
-      
-      // Ensure target model is in selected list so it appears in the active rows
       if (!_selectedModelIds.contains(targetId)) {
         _selectedModelIds.insert(0, targetId);
       }
 
-      // Ensure active category matches target model's category
       final targetDef = ModelRoster.byId(targetId);
       if (targetDef != null && !targetDef.categories.contains(_activeCategory) && targetDef.categories.isNotEmpty) {
         _activeCategory = targetDef.categories.first;
@@ -860,7 +829,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   bool _browserOpen = false;
 
-  /// The web sources of the conversation on screen, numbered as its answers cite them.
   List<Map<String, dynamic>> get _currentSources => _jobsById[_currentJobId]?.sources ?? const [];
 
   void _openBrowserForTab(String tabId) {
@@ -870,7 +838,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     });
     showDialog(
       context: context,
-      barrierDismissible: true, // Two-Escape Law: clickaway backdrop dismisses
+      barrierDismissible: true,
       barrierColor: VOverlay.scrim,
       builder: (ctx) {
         return InAppBrowserSheet(
@@ -898,8 +866,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   bool _locked(WallpaperTheme t) => ThemePackStore.instance.priceFor(t) != null && !ThemePackStore.instance.isUnlocked(t.id);
 
   Widget _buildSideNav({required bool isMobile}) {
-    // REQ-21 visual language: a slim detached rail of circular glass buttons sits at
-    // the screen edge; the contextual panel content opens beside it when summoned.
     final surface = _currentActiveSurface;
     final String? railKey = switch (surface) {
       ActiveWorkSurface.chat => _activeDrawer == 'history' ? 'history' : (_isMobileSideNavOpen ? _chatSection : null),
@@ -978,97 +944,93 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             expandedModelId: _expandedModelIds.isNotEmpty ? _expandedModelIds.first : null,
             chatSection: _chatSection,
             onClose: () => setState(() => _isMobileSideNavOpen = false),
-      onSelectCategory: (cat) => setState(() => _activeCategory = cat),
-      onToggleModel: (modelId) {
-        setState(() {
-          if (_selectedModelIds.contains(modelId)) {
-            if (_selectedModelIds.length > 1) {
-              _selectedModelIds.remove(modelId);
-            }
-          } else {
-            if (_selectedModelIds.length < 9) {
-              _selectedModelIds.add(modelId);
-            }
-          }
-        });
-      },
-      onSelectSession: (sess) => _loadAndExpandSession(sess),
-      onOpenConsensus: () => _requestSwitchSurface('consensus'),
-      onNewConversation: _newConversation,
-      activeSmartGenView: _smartGenView,
-      activeSmartGenBoardType: _smartGenBoardType,
-      onSelectSmartGenView: (v) => setState(() => _smartGenView = v),
-      onSelectSmartGenBoardType: (b) => setState(() => _smartGenBoardType = b),
-      activeMarketCategory: _marketCategory,
-      onSelectMarketCategory: (c) => setState(() => _marketCategory = c),
-      activeThemeSection: _themeSection,
-      onSelectThemeSection: (s) {
-        setState(() {
-          _themeSection = s;
-          if (s == 'gallery') _activeDrawer = 'themes';
-          else if (s == 'premium') _activeDrawer = 'premium';
-        });
-      },
-      browserTabs: _browserTabs,
-      activeBrowserTabId: 'user_default',
-      onCloseBrowserTab: (id) => setState(() => _browserTabs.removeWhere((t) => t.id == id)),
-      
-      activeFilesCategory: _filesCategory,
-      onSelectFilesCategory: (c) => setState(() => _filesCategory = c),
-      onRequestSwitchSurface: (surface) {
-        final target = switch (surface) {
-          ActiveWorkSurface.chat => null,
-          ActiveWorkSurface.smartgen => 'smartgen',
-          ActiveWorkSurface.market => 'market',
-          ActiveWorkSurface.themes => 'themes',
-          ActiveWorkSurface.browser => null,
-          ActiveWorkSurface.files => 'files',
-        };
-        _requestSwitchSurface(target);
-      },
-      onPaneInteraction: () {},
+            onSelectCategory: (cat) => setState(() => _activeCategory = cat),
+            onToggleModel: (modelId) {
+              setState(() {
+                if (_selectedModelIds.contains(modelId)) {
+                  if (_selectedModelIds.length > 1) {
+                    _selectedModelIds.remove(modelId);
+                  }
+                } else {
+                  if (_selectedModelIds.length < 9) {
+                    _selectedModelIds.add(modelId);
+                  }
+                }
+              });
+            },
+            onSelectSession: (sess) => _loadAndExpandSession(sess),
+            onOpenConsensus: () => _requestSwitchSurface('consensus'),
+            onNewConversation: _newConversation,
+            activeSmartGenView: _smartGenView,
+            activeSmartGenBoardType: _smartGenBoardType,
+            onSelectSmartGenView: (v) => setState(() => _smartGenView = v),
+            onSelectSmartGenBoardType: (b) => setState(() => _smartGenBoardType = b),
+            activeMarketCategory: _marketCategory,
+            onSelectMarketCategory: (c) => setState(() => _marketCategory = c),
+            activeThemeSection: _themeSection,
+            onSelectThemeSection: (s) {
+              setState(() {
+                _themeSection = s;
+                if (s == 'gallery') {
+                  _activeDrawer = 'themes';
+                } else if (s == 'premium') {
+                  _activeDrawer = 'premium';
+                }
+              });
+            },
+            browserTabs: _browserTabs,
+            activeBrowserTabId: 'user_default',
+            onCloseBrowserTab: (id) => setState(() => _browserTabs.removeWhere((t) => t.id == id)),
+            activeFilesCategory: _filesCategory,
+            onSelectFilesCategory: (c) => setState(() => _filesCategory = c),
+            onRequestSwitchSurface: (surface) {
+              final target = switch (surface) {
+                ActiveWorkSurface.chat => null,
+                ActiveWorkSurface.smartgen => 'smartgen',
+                ActiveWorkSurface.market => 'market',
+                ActiveWorkSurface.themes => 'themes',
+                ActiveWorkSurface.browser => null,
+                ActiveWorkSurface.files => 'files',
+              };
+              _requestSwitchSurface(target);
+            },
+            onPaneInteraction: () {},
           ),
         ],
       ],
     );
   }
 
+  bool _isPillActive(TickerItem it) =>
+      _selectedModelIds.contains(it.modelDef.id) && it.summary != 'No answer';
+
   @override
   Widget build(BuildContext context) {
-    // Max 9 active model rows filtered by active category with fallback
-    var categoryPills = _tickerItems
-        .where((it) => it.modelDef.categories.contains(_activeCategory) && _selectedModelIds.contains(it.modelDef.id))
-        .take(9)
+    // Include all models in the current category that have a response or are selected,
+    // sorted with ACTIVE models at the top (lit) and INACTIVE models below (dimmed).
+    final categoryItems = _tickerItems
+        .where((it) => it.modelDef.categories.contains(_activeCategory))
         .toList();
 
-    if (categoryPills.isEmpty) {
-      categoryPills = _tickerItems
-          .where((it) => it.modelDef.categories.contains(_activeCategory))
-          .take(9)
-          .toList();
-    }
+    final litItems = categoryItems.where(_isPillActive).toList();
+    final dimItems = categoryItems.where((it) => !_isPillActive(it)).toList();
+    final activePills = [...litItems, ...dimItems].take(9).toList();
 
-    final activePills = categoryPills;
     final media = _activeCategory == ModelCategory.image;
     final isMobile = MediaQuery.of(context).size.width < 768;
 
-    // The opened conversation, if any.
     final openId = _expandedModelIds.isEmpty ? null : _expandedModelIds.first;
     final TickerItem? openItem = activePills.where((p) => p.modelDef.id == openId).firstOrNull;
-    // On a phone the opened conversation is wide; the side navigation steps aside for it.
-    // side by side: the rows as the left column and the conversation as a closeable pane beside them
     final sideBySide = openItem != null && !media;
-    // On a phone the window takes the side navigation's room while a conversation is open.
     final railVisible = _railVisible && !(isMobile && sideBySide);
     final screenW = MediaQuery.sizeOf(context).width;
 
-    // Expanded: that model's conversation, closeable, opened under its own summary (see the rows below).
     final Widget conversation = openItem == null
         ? const SizedBox.shrink()
         : ConversationView(
             key: ValueKey('conv-${openItem.modelDef.id}'),
             item: openItem,
-            fill: true, // the pane's full height, the entry box at its foot
+            fill: true,
             onClose: () => setState(() => _expandedModelIds.clear()),
             onSendReply: (reply, files) => _onSendInlineReply(openItem.modelDef.id, reply, files),
             onOpenBrowser: () => _openBrowserForTab(_browserTabs.length > 1 ? _browserTabs[1].id : 'user_default'),
@@ -1081,7 +1043,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             onOpen: () => _openTextAsDocument(openItem.modelDef.label, _conversationText(openItem), openItem.modelDef.label),
           );
 
-    // Collapsed: the consensus row pinned on top, then one row per model.
+    // Collapsed Ticker: Consensus row pinned at top, followed by active (lit) models at the top and inactive (dimmed) models below.
     final Widget rows = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1092,12 +1054,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             isGenerating: _isConsensusGenerating,
             onTap: () => setState(() => _activeDrawer = 'consensus'),
           ),
-          if (activePills.isNotEmpty) const SizedBox(height: 13),
+          if (activePills.isNotEmpty) const SizedBox(height: 8),
         ],
         if (activePills.isNotEmpty)
           Flexible(
             child: EdgeFade(
-              fadeHeight: 40,
+              fadeHeight: 14,
               focus: FadeFocus.top,
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -1105,21 +1067,19 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     for (int i = 0; i < activePills.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 13),
-                      // the summary and the conversation it opens are one piece, scrolled into view together
+                      if (i > 0) const SizedBox(height: 8),
                       Column(
                         key: activePills[i].modelDef.id == openId ? _openKey : null,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                      ModelPill(
-                        item: activePills[i],
-                        elevation: activePills.length <= 1 ? 1.0 : 1.0 - i / (activePills.length - 1),
-                        isExpanded: activePills[i].modelDef.id == openId,
-                        compact: openItem != null,
-                        onToggleExpand: () => _onTogglePill(activePills[i].modelDef.id),
-                      ),
-                      // The conversation opens in the detail view over the room; the ticker keeps its size and place
-                      // (Claude, 2026-10-23; it used to grow out of the summary).
+                          ModelPill(
+                            item: activePills[i],
+                            isActive: _isPillActive(activePills[i]),
+                            elevation: activePills.length <= 1 ? 1.0 : 1.0 - i / (activePills.length - 1),
+                            isExpanded: activePills[i].modelDef.id == openId,
+                            compact: openItem != null,
+                            onToggleExpand: () => _onTogglePill(activePills[i].modelDef.id),
+                          ),
                         ],
                       ),
                     ],
@@ -1144,14 +1104,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           Positioned.fill(
             child: ThemeLivingBackdrop(
               theme: _currentTheme,
-              // Asset-swap: live loop + cached ambient frame when Premium Market
               preferVideo: true,
-              // Locked: the source's near-black dim. Unlocked (or free): the wallpaper itself, full and lit (David, 21 Oct).
               builderAmbient: _activeDrawer == 'premium' && _locked(_currentTheme),
             ),
           ),
 
-          // Theme Gallery (69:1926): the room behind the picture uses pre-rendered cached blur (0 shader regeneration).
           if (_activeDrawer == 'themes')
             Positioned.fill(
               child: CachedThemeSurface(
@@ -1159,123 +1116,128 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 preset: ThemeBlurPreset.galleryRoom,
               ),
             ),
+
           // ================= PLANE 1: RESTING WORKSPACE =================
-          // Hidden during Premium Theme Market (Body) so ticker chrome doesn't bleed through
-          // The resting workspace stays where it is under any window: hidden and paused (no drawing, no animation), then
-          // shown again exactly as it was. It used to be taken off the screen, and everything typed in it went too.
-          // (Claude, 2026-10-23)
           Positioned.fill(
             bottom: 78,
             child: Builder(builder: (context) {
-              final resting = !_browserOpen && !(isMobile && _isMobileSideNavOpen) &&
-                  !const {'premium', 'themes', 'apps', 'settings', 'smartgen', 'market', 'files', 'consensus'}.contains(_activeDrawer);
+              final resting = !_browserOpen &&
+                  !(isMobile && _isMobileSideNavOpen) &&
+                  !const {
+                    'premium',
+                    'themes',
+                    'apps',
+                    'settings',
+                    'smartgen',
+                    'market',
+                    'files',
+                    'consensus',
+                    'upgrade',
+                    'documents',
+                  }.contains(_activeDrawer);
               return Visibility(
                 visible: resting,
                 maintainState: true,
                 child: TickerMode(
                   enabled: resting,
                   child: SafeArea(
-              bottom: false,
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                // On a phone the ticker and the composer stand beside the side navigation, never under it
-                // (Claude, 2026-10-23: the rail covered the ticker's lower left corner).
-                child: Padding(
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // ================= THE TICKER WINDOW =================
-                    // Rows are the collapsed state. An opened conversation is its own view:
-                    // beside the rows where there is room, in their place on a phone.
-                    Padding(
-                      // beside the side navigation on a phone, never under it
-                      padding: EdgeInsets.only(left: isMobile && !media && !sideBySide ? 76 : 0),
-                      child: Center(
-                      child: Container(
-                        constraints: BoxConstraints(
-                          maxWidth: sideBySide
-                              ? (isMobile ? screenW - 20 : (screenW - 220).clamp(480.0, 872.0))
-                              : isMobile
-                                  ? (media ? 360.0 : 300.0) // the pictures' toolbar fits whole (Claude, 2026-10-21)
-                                  : (media ? 780.0 : 480.0),
-                          // rows: never more than 40% of the screen; a conversation: "halfway up is sufficient"
-                          maxHeight: MediaQuery.of(context).size.height * (sideBySide || (media && _mediaExpanded) ? 0.50 : 0.40),
-                        ),
-                        height: sideBySide ? MediaQuery.of(context).size.height * 0.50 : null,
-                        margin: EdgeInsets.symmetric(horizontal: sideBySide ? 0 : (isMobile ? 12 : 24)),
-                        child: VGlass(
-                          radius: VRadius.card,
-                          material: VMaterial.resting,
-                          padding: const EdgeInsets.all(VSpace.xs),
-                          child: media
-                              ? GenerationsPane(
-                                  aspect: _aspect,
-                                  count: _count,
-                                  onAspect: (a) => setState(() => _aspect = a),
-                                  onCount: (n) => setState(() => _count = n),
-                                  expanded: _mediaExpanded,
-                                  onToggleExpanded: () => setState(() => _mediaExpanded = !_mediaExpanded),
-                                  onRemix: (ref) => _toImageChat(reference: ref),
-                                  refresh: _mediaRefresh,
-                                )
-                              : sideBySide
-                                  ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                                      SizedBox(width: isMobile ? 136 : 300, child: Align(alignment: Alignment.topCenter, child: rows)),
-                                      const SizedBox(width: VSpace.xs),
-                                      Expanded(
-                                        child: Container(
-                                          padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-                                          decoration: BoxDecoration(color: VColors.fillRow, borderRadius: BorderRadius.circular(VRadius.card - VSpace.xs)),
-                                          child: conversation,
-                                        ),
-                                      ),
-                                    ])
-                                  : rows,
+                    bottom: false,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.only(left: isMobile && !media && !sideBySide ? 76 : 0),
+                              child: Center(
+                                child: Container(
+                                  constraints: BoxConstraints(
+                                    maxWidth: sideBySide
+                                        ? (isMobile ? screenW - 20 : (screenW - 220).clamp(480.0, 872.0))
+                                        : isMobile
+                                            ? (media ? 360.0 : 300.0)
+                                            : (media ? 780.0 : 480.0),
+                                    // Sized to comfortably display Consensus + at least 3-4 2-line model responses at once
+                                    maxHeight: (MediaQuery.of(context).size.height *
+                                            (sideBySide || (media && _mediaExpanded) ? 0.54 : 0.46))
+                                        .clamp(310.0, 450.0),
+                                  ),
+                                  height: sideBySide ? MediaQuery.of(context).size.height * 0.52 : null,
+                                  margin: EdgeInsets.symmetric(horizontal: sideBySide ? 0 : (isMobile ? 12 : 24)),
+                                  child: VGlass(
+                                    radius: VRadius.card,
+                                    material: VMaterial.resting,
+                                    padding: const EdgeInsets.all(VSpace.xs),
+                                    child: media
+                                        ? GenerationsPane(
+                                            aspect: _aspect,
+                                            count: _count,
+                                            onAspect: (a) => setState(() => _aspect = a),
+                                            onCount: (n) => setState(() => _count = n),
+                                            expanded: _mediaExpanded,
+                                            onToggleExpanded: () => setState(() => _mediaExpanded = !_mediaExpanded),
+                                            onRemix: (ref) => _toImageChat(reference: ref),
+                                            refresh: _mediaRefresh,
+                                          )
+                                        : sideBySide
+                                            ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                                SizedBox(width: isMobile ? 136 : 300, child: Align(alignment: Alignment.topCenter, child: rows)),
+                                                const SizedBox(width: VSpace.xs),
+                                                Expanded(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+                                                    decoration: BoxDecoration(
+                                                      color: VColors.fillRow,
+                                                      borderRadius: BorderRadius.circular(VRadius.card - VSpace.xs),
+                                                    ),
+                                                    child: conversation,
+                                                  ),
+                                                ),
+                                              ])
+                                            : rows,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: EdgeInsets.only(left: isMobile && !media ? 76 : 0),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(maxWidth: isMobile ? 300.0 : 480.0),
+                                child: FloatingPrompt(
+                                  summoned: _isComposerSummoned,
+                                  busy: _busy,
+                                  mode: _mode,
+                                  incognito: _incognito,
+                                  onMode: (m) => setState(() => _mode = m),
+                                  onIncognito: (v) => setState(() => _incognito = v),
+                                  onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
+                                  voice: _voiceChat ? _voicePhase : null,
+                                  onVoiceChat: _setVoiceChat,
+                                  onMic: _onMic,
+                                  continuingTitle: (_tickerItems.isNotEmpty && _currentJobId != null) ? _currentPrompt : null,
+                                  onNewConversation: _newConversation,
+                                  onSummon: () => setState(() {
+                                    _closeAllPanes();
+                                    _isComposerSummoned = true;
+                                  }),
+                                  onTuck: () => setState(() => _isComposerSummoned = false),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    ),
-                    const SizedBox(height: 4),
-                    // The composer is its own element, never a row of the ticker. Tucked, it is an arrow.
-                    Padding(
-                      // in the ticker's column, beside the side navigation; it stays put when a conversation opens
-                      padding: EdgeInsets.only(left: isMobile && !media ? 76 : 0),
-                      child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: isMobile ? 300.0 : 480.0),
-                      child: FloatingPrompt(
-                        summoned: _isComposerSummoned,
-                        busy: _busy,
-                        mode: _mode,
-                        incognito: _incognito,
-                        onMode: (m) => setState(() => _mode = m),
-                        onIncognito: (v) => setState(() => _incognito = v),
-                        onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
-                        voice: _voiceChat ? _voicePhase : null,
-                        onVoiceChat: _setVoiceChat,
-                        onMic: _onMic,
-                        continuingTitle: (_tickerItems.isNotEmpty && _currentJobId != null) ? _currentPrompt : null,
-                        onNewConversation: _newConversation,
-                        onSummon: () => setState(() {
-                          _closeAllPanes();
-                          _isComposerSummoned = true;
-                        }),
-                        onTuck: () => setState(() => _isComposerSummoned = false),
-                      ),
-                    ),
-                    ),
-                  ],
-                ),
-                ),
-              ),
-            ),
+                  ),
                 ),
               );
             }),
           ),
 
           // ================= PLANE 2: APPS POPUP PANE =================
-          // Middle neutral area, no visible canvas, blurred background, clickaway + close icon
           if (_activeDrawer == 'apps')
             Positioned.fill(
               child: AppsPopupPane(
@@ -1293,7 +1255,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
 
           // ================= PLANE 3: LOCAL MODEL HISTORY PANE =================
-          // Centered popup pane, searches body & title, relative timestamps
           if (_localHistoryModel != null)
             Positioned.fill(
               child: LocalHistoryPane(
@@ -1305,8 +1266,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
 
           // ================= PLANE 4: MESSAGE ZOOM OVERLAY =================
-          // Dimmed/blurred backdrop, no visible window, faded edges, bottom actions
-          // An answer that drew on the web opens as a document with its sources (Claude, 2026-10-20).
           if (_zoomedMessage != null && _zoomedModelDef != null && _zoomedMessage!.sender == 'model' && _currentSources.isNotEmpty)
             Positioned.fill(
               child: ResearchDocument(
@@ -1344,7 +1303,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             Positioned(
               left: 0,
               right: 0,
-              top: 0, // the whole screen takes the pull up toward the live wallpapers
+              top: 0,
               bottom: 84,
               child: WindowlessThemeScroller(
                 currentTheme: _currentTheme,
@@ -1364,24 +1323,33 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           if (_activeDrawer == 'premium')
             Positioned.fill(
-              // Swipe down returns to the free Theme Gallery.
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onVerticalDragEnd: (d) {
-                  if ((d.primaryVelocity ?? 0) > 300) setState(() => _activeDrawer = 'themes');
+                  if ((d.primaryVelocity ?? 0) > 300) {
+                    setState(() {
+                      if (_locked(_currentTheme)) _currentTheme = _savedThemeBeforePreview;
+                      _activeDrawer = 'themes';
+                    });
+                  }
                 },
                 child: PremiumThemeMarketView(
-                currentTheme: _currentTheme,
-                onApplyTheme: (theme) => setState(() {
-                  _currentTheme = theme;
-                  _savedThemeBeforePreview = theme;
-                  _activeDrawer = null;
-                }),
-                onPreviewTheme: (theme) => setState(() {
-                  _currentTheme = theme;
-                }),
-                onClose: () => setState(() => _activeDrawer = null),
-              ),
+                  currentTheme: _currentTheme,
+                  onApplyTheme: (theme) => setState(() {
+                    _currentTheme = theme;
+                    _savedThemeBeforePreview = theme;
+                    _activeDrawer = null;
+                  }),
+                  onPreviewTheme: (theme) => setState(() {
+                    _currentTheme = theme;
+                  }),
+                  onClose: () => setState(() {
+                    if (_locked(_currentTheme)) {
+                      _currentTheme = _savedThemeBeforePreview;
+                    }
+                    _activeDrawer = null;
+                  }),
+                ),
               ),
             ),
 
@@ -1401,7 +1369,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
 
-          // Durable work surfaces sit over one shared scrim (kit overlay + cached blur).
           if (_activeDrawer == 'smartgen' || _activeDrawer == 'market' || _activeDrawer == 'files' || _activeDrawer == 'documents')
             const Positioned.fill(child: VScrim()),
 
@@ -1483,7 +1450,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
 
-          // The browser opens over the room; the room goes out of focus behind it via cached blur.
           if (_browserOpen)
             Positioned.fill(
               child: IgnorePointer(
@@ -1496,14 +1462,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           // ================= PLANE 3: CONTEXTUAL SIDE NAV =================
           if (isMobile) ...[
-            // Mobile backdrop when side nav is open
             if (_isMobileSideNavOpen && railVisible)
               Positioned.fill(
                 child: VScrim(soft: true, onTap: () => setState(() => _isMobileSideNavOpen = false)),
               ),
-
-            // REQ-21: the rail ornament is present on the resting canvas and every
-            // durable work surface; focused overlays own the stage while open.
             if (railVisible)
               Positioned(
                 left: 2,
@@ -1512,11 +1474,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
           ] else ...[
             if (railVisible)
-            Positioned(
-              left: 12,
-              bottom: 84,
-              child: _buildSideNav(isMobile: false),
-            ),
+              Positioned(
+                left: 12,
+                bottom: 84,
+                child: _buildSideNav(isMobile: false),
+              ),
           ],
 
           // ================= MUSIC WIDGET: draggable, stays where it is placed =================
@@ -1538,8 +1500,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             }),
 
           // ================= PLANE 4: PERMANENT BOTTOM DOCK =================
-          // Hidden during Premium Theme Market so transport stays in-frame (Figma Body)
-          if (_activeDrawer != 'premium')
           Positioned(
             left: 0,
             right: 0,
@@ -1564,10 +1524,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
           ),
-
         ],
       ),
     );
   }
 }
-

@@ -58,15 +58,38 @@ def setup(root, web, data, port, config):
         atexit.register(TUNNEL.stop)
 
 
+def _dedupe_theme_list(items):
+    """Ensures every theme has a distinct display name and replaces corrupted 062 Blue Cove.jpg poster."""
+    counts = {}
+    numerals = ("", " II", " III", " IV", " V")
+    out = []
+    for item in items or []:
+        t = dict(item)
+        base_name = re.sub(r"\s+(II|III|IV|V)$", "", (t.get("name") or "").strip())
+        idx = counts.get(base_name, 0)
+        counts[base_name] = idx + 1
+        suffix = numerals[idx] if idx < len(numerals) else f" {idx + 1}"
+        t["name"] = base_name + suffix
+        poster = t.get("poster") or ""
+        if "062%20Blue%20Cove.jpg" in poster or "062 Blue Cove.jpg" in poster:
+            t["poster"] = poster.replace("062%20Blue%20Cove.jpg", "063%20Blue%20Cove.jpg").replace("062 Blue Cove.jpg", "063 Blue Cove.jpg")
+        out.append(t)
+    return out
+
+
 def _init_caches():
     """Preload themes_cache.json, history.json (sanitizing any legacy reasoning leaks), and smartgen_cards.json into RAM."""
     global _history_mem, _smartgen_mem
     cache_path = os.path.join(DATA, "themes_cache.json")
     if os.path.isfile(cache_path):
         try:
+            raw_themes = json.load(open(cache_path, encoding="utf-8"))
+            deduped = _dedupe_theme_list(raw_themes)
             with _themes_lock:
-                _themes_cache["data"] = json.load(open(cache_path, encoding="utf-8"))
+                _themes_cache["data"] = deduped
                 _themes_cache["at"] = time.time()
+            if deduped != raw_themes:
+                json.dump(deduped, open(cache_path, "w", encoding="utf-8"), ensure_ascii=False)
         except Exception:
             pass
     threading.Thread(target=_refresh_themes_bg, daemon=True).start()
@@ -77,12 +100,23 @@ def _init_caches():
         raw_hist = []
     dirty = False
     for sess in raw_hist:
-        n = line_budget(sess.get("line_chars") or LINE_DEFAULT)
+        old_n = sess.get("line_chars") or 0
+        n = line_budget(max(old_n, LINE_DEFAULT))
+        if sess.get("line_chars") != n:
+            sess["line_chars"] = n
+            dirty = True
         prompt = sess.get("prompt") or ""
         cons = sess.get("consensus") or {}
-        cons_summary = (cons.get("summary") or "").strip()
+        cons_summary = sanitize_model_output((cons.get("summary") or "").strip())
+        if cons_summary != (cons.get("summary") or "").strip():
+            cons["summary"] = plain(cons_summary)
+            dirty = True
         res = sess.get("results") or {}
+        done_count = 0
         for mid, r in res.items():
+            if r.get("status") == "done" and r.get("error"):
+                r.pop("error", None)
+                dirty = True
             txt = r.get("text") or ""
             cleaned = sanitize_model_output(txt)
             if txt and not cleaned and cons_summary:
@@ -90,20 +124,36 @@ def _init_caches():
             if cleaned != txt:
                 r["text"] = cleaned
                 r["essence"] = self_essence_fallback(cleaned) if cleaned else ""
-                r["line"] = fit_words(r["essence"], n) if r["essence"] else ""
+                r["line"] = fit_words(r["essence"] or cleaned, n) if (r["essence"] or cleaned) else ""
                 r.pop("error", None)
-                if r.get("messages") and len(r["messages"]) >= 2:
-                    r["messages"][-1]["content"] = cleaned
                 dirty = True
-            if r.get("line") and ("thinking process" in r["line"].lower() or len(r["line"]) > n):
-                r["line"] = fit_words(r.get("essence") or r.get("text") or cons_summary, n)
-                dirty = True
+            if r.get("messages"):
+                for m_entry in r["messages"]:
+                    if m_entry.get("role") == "assistant":
+                        mc = sanitize_model_output(m_entry.get("content") or "")
+                        if mc and mc != m_entry.get("content"):
+                            m_entry["content"] = mc
+                            dirty = True
+            cur_line = r.get("line") or ""
+            source_for_line = r.get("essence") or r.get("text") or cons_summary
+            if source_for_line and (
+                "thinking process" in cur_line.lower()
+                or "line 1:" in cur_line.lower()
+                or len(cur_line) > n
+                or (len(cur_line) <= 38 and len(source_for_line) > len(cur_line) + 6)
+            ):
+                new_line = fit_words(source_for_line, n)
+                if new_line and new_line != cur_line:
+                    r["line"] = new_line
+                    dirty = True
             if not r.get("messages") and r.get("status") == "done" and r.get("text"):
                 r["messages"] = [
                     {"role": "user", "content": prompt},
                     {"role": "assistant", "content": r["text"]},
                 ]
                 dirty = True
+            if r.get("status") == "done" and r.get("text"):
+                done_count += 1
         if cons.get("essences"):
             for mid, e in list(cons["essences"].items()):
                 ce = sanitize_model_output(e)
@@ -111,6 +161,25 @@ def _init_caches():
                     ce = cons_summary or ce
                 if ce != e:
                     cons["essences"][mid] = plain(ce)
+                    dirty = True
+                if mid in res and cons["essences"].get(mid):
+                    re_line = fit_words(cons["essences"][mid], n)
+                    if re_line and len(res[mid].get("line") or "") <= 38 and len(re_line) > len(res[mid].get("line") or ""):
+                        res[mid]["line"] = re_line
+                        dirty = True
+        if cons_summary:
+            new_cons_line = fit_words(cons_summary, n)
+            if new_cons_line and new_cons_line != cons.get("line"):
+                cons["line"] = new_cons_line
+                dirty = True
+        if cons.get("score") and "/" in str(cons.get("score")) and done_count > 0:
+            parts = str(cons["score"]).split("/", 1)
+            if parts[0].strip().isdigit() and parts[1].strip().isdigit():
+                num, den = int(parts[0].strip()), int(parts[1].strip())
+                if den < done_count:
+                    groups = cons.get("groups") or []
+                    win_len = max((len(g) for g in groups), default=num)
+                    cons["score"] = f"{max(num, win_len)}/{done_count}"
                     dirty = True
         if cons.get("dissent"):
             new_dissent = [
@@ -134,19 +203,44 @@ def _init_caches():
         _smartgen_mem = json.load(open(SMARTGEN_FILE, encoding="utf-8")) if os.path.isfile(SMARTGEN_FILE) else []
     except Exception:
         _smartgen_mem = []
-    if not _smartgen_mem and _history_mem:
-        for sess in reversed(_history_mem[:TUNING["smartgen_backfill"]]):
-            _extract_smartgen_card(sess, save=False)
-        _save_smartgen()
-    elif _smartgen_mem:
-        buckets = ("High", "Medium", "Low")
+
+    def _is_trivial_prompt(p_str):
+        pl = (p_str or "").strip().lower().rstrip("?.!")
+        return pl in ("who are you", "what is 2+2", "what is 2 + 2", "hi", "hello", "test")
+
+    if _smartgen_mem:
+        cleaned_sg = []
         sg_dirty = False
+        sess_by_id = {s.get("id"): s for s in (_history_mem or []) if s.get("id")}
+        buckets = ("High", "Medium", "Low")
         for idx, c in enumerate(_smartgen_mem):
-            if not c.get("list"):
-                c["list"] = buckets[idx % len(buckets)]
+            if _is_trivial_prompt(c.get("prompt")) or (c.get("title") or "").strip().lower() in ("four", "i am glm by z.ai"):
                 sg_dirty = True
+                continue
+            if not c.get("list"):
+                c["list"] = buckets[len(cleaned_sg) % len(buckets)]
+                sg_dirty = True
+            sid = c.get("session_id")
+            linked = sess_by_id.get(sid)
+            if linked:
+                cons = linked.get("consensus") or {}
+                better_title = fit_words(cons.get("summary") or linked.get("prompt") or c.get("title") or "Synthesis", TUNING["smartgen_title_chars"])
+                if better_title and len(c.get("title") or "") <= 34 and len(better_title) > len(c.get("title") or ""):
+                    c["title"] = better_title
+                    sg_dirty = True
+                if cons.get("score") and c.get("score") != cons.get("score"):
+                    c["score"] = cons["score"]
+                    sg_dirty = True
+            cleaned_sg.append(c)
+        _smartgen_mem = cleaned_sg
         if sg_dirty:
             _save_smartgen()
+
+    if not _smartgen_mem and _history_mem:
+        for sess in reversed(_history_mem[:TUNING["smartgen_backfill"]]):
+            if not _is_trivial_prompt(sess.get("prompt")):
+                _extract_smartgen_card(sess, save=False)
+        _save_smartgen()
 
 
 def rows(name=None, search=None):
@@ -265,7 +359,7 @@ def uses(row):
     parts = [f"{len(ms)} models' answers (/api/ask) and replies (/api/reply)"]
     agent = next((m for m in ROSTER if m["id"] == CONSENSUS_AGENT), None)
     if agent and agent.get("via", "").lower() == name.lower():
-        parts.append("the consensus and one-line summaries (/api/lines)")
+        parts.append("the consensus and two-line summaries (/api/lines)")
     return "; ".join(parts) + ": " + ", ".join(ms)
 
 DEPTH = {
@@ -291,7 +385,7 @@ PLAN_PROMPT = ("Split the question into {k} web searches that together cover wha
 _LEAK_RE = re.compile(
     r"(?im)^(let'?s\s+count\s+characters|wait,\s+the\s+prompt|begin\s+your\s+reply\s+with\s+one\s+line|"
     r"character\s+count\s*:|let'?s\s+check\s+length|drafting\s+the\s+one-liner|the\s+user\s+wants\s+one\s+line|"
-    r"here'?s\s+a\s+thinking\s+process).*$"
+    r"here'?s\s+a\s+thinking\s+process|line\s+1\s*:\s*max|then\s+an\s+empty\s+line|then\s+the\s+full\s+answer).*$"
 )
 
 
@@ -300,14 +394,25 @@ def sanitize_model_output(text):
     if not text:
         return ""
     s = re.sub(r"<think>.*?</think>", "", str(text), flags=re.S).strip()
-    if "Let me draft:" in s:
-        s = s.split("Let me draft:", 1)[1].strip()
+    if "<think>" in s:
+        s = s.split("<think>", 1)[0].strip()
+    for marker in ("Then the full answer:\n", "Then the full answer:", "Let me draft:", "Let's just write:"):
+        if marker in s:
+            s = s.rsplit(marker, 1)[-1].strip()
     paras = [p.strip() for p in re.split(r"\n\s*\n", s) if p.strip()]
     clean_paras = []
     for p in paras:
         low = p.lower()
         if any(k in low for k in (
             "begin your reply with one line",
+            "line 1: max",
+            "then an empty line",
+            "then the full answer",
+            "let's check the character count",
+            "let's make a short line 1",
+            "1,2,3,4,5",
+            "prompt asks:",
+            "constraints:",
             "let's count",
             "count characters",
             "count: ",
@@ -319,7 +424,7 @@ def sanitize_model_output(text):
             "we need to produce answer",
             "we need first line",
             "so first line max",
-            "need <=37",
+            "need <=",
             "too long.",
             "the user is asking",
             "let me think about",
@@ -328,13 +433,10 @@ def sanitize_model_output(text):
             "that's a good structure.",
             "that's pretty good. should i use",
             "here's a thinking process",
-            "(25 chars)",
-            "(26 chars)",
-            "(27 chars)",
-            "(28 chars)",
-            "(29 chars)",
-            "(30 chars)",
+            "chars)",
+            "characters)",
             "full stop at the end",
+            "no period at the end",
         )):
             continue
         clean_paras.append(p)
@@ -474,7 +576,7 @@ def draft_clean(s):
 
 
 def draft_split(s, n):
-    """Text drafted so far -> (its one line once that line is complete, the answer drafted so far)."""
+    """Text drafted so far -> (its summary line once complete, the answer drafted so far)."""
     s = draft_clean(s)
     if "\n" in s:
         first, rest = s.split("\n", 1)
@@ -553,7 +655,7 @@ On a tie you may choose, and state the logical basis in one line as tie_basis.
 7. Separately, count the logical chains in each RAW response (not the essence): every explicit connective
    (because, so, therefore, thus, hence, as a result) and every instance of implied logic (a definition used to support
    a claim, a clarification that adds meaning, a preemptive challenge to a presumption).
-8. For each response also write its line: the complete answer in at most {n} characters, spaces included.
+8. For each response also write its line: the complete 1-to-2 line summary in at most {n} characters, spaces included.
    The conclusion itself, stated outright in plain words. Never a teaser, never "it depends", never cut off.
    No full stop at the end. Responses in the same group share the same line, word for word.
    Different groups get different lines that show how they differ.
@@ -599,8 +701,10 @@ def run_consensus(prompt, answers, n=None):
             groups = [[tags[t] for t in g if t in tags] for g in out.get("groups") or []]
             chains = {tags[t]: int(n) for t, n in (out.get("chains") or {}).items() if t in tags and str(n).isdigit()}
             lines = {tags[t]: e for t, e in (out.get("lines") or {}).items() if t in tags}
+            win_size = max((len(g) for g in groups), default=1)
+            score_str = f"{win_size}/{len(ids)}"
             return {"status": "done", "agent": agent, "need": out.get("need", ""), "essences": ess, "chains": chains, "lines": lines,
-                    "groups": groups, "summary": out.get("summary", ""), "score": out.get("score", ""),
+                    "groups": groups, "summary": out.get("summary", ""), "score": score_str,
                     "dissent": out.get("dissent") or [], "tie_basis": out.get("tie_basis", "")}
         except Exception as e:
             print("consensus agent failed", agent, e)
@@ -628,15 +732,12 @@ def self_essence(model, prompt, answer):
         return self_essence_fallback(answer)
 
 
-# ---------------- One line ----------------
-# Every ticker row and the consensus preview shows ONE line: the complete answer, never cut, fitting its box.
-# The app measures its box and sends the length. The consensus agent writes the line for every row (primary);
-# each model also writes its own at the top of its answer (backup, shown while the agent is still working).
-# The length is checked here: a line that is over is never shown.
-LINE_DEFAULT = 28
-LINE_RULE = ("Begin your reply with one line of at most {n} characters, spaces included, that is the complete answer itself: "
-             "the conclusion, stated outright in plain words, with no full stop. Then an empty line. Then the full answer.")
-LINES_PROMPT = """For each response below, write its line: the complete answer to the question in at most {n} characters, spaces included.
+# ---------------- Two-line Summary ----------------
+# Every ticker row and the consensus preview shows up to TWO lines (~115 chars): the complete answer, never cut, fitting its box.
+LINE_DEFAULT = 115
+LINE_RULE = ("Begin your reply with one concise summary sentence of at most {n} characters, spaces included, that states the "
+             "complete conclusion outright in plain words, with no full stop. Then an empty line. Then the full answer.")
+LINES_PROMPT = """For each response below, write its summary line: the complete answer to the question in at most {n} characters, spaces included.
 The conclusion itself, stated outright in plain words. Never a teaser, never "it depends", never cut off.
 No full stop at the end. Responses listed together under Groups agree: they share one line, word for word.
 Responses in different groups disagree: their lines must show how they differ.
@@ -656,19 +757,19 @@ def clean_line(t):
 
 
 def fit_words(t, n):
-    """Clause-aware one-line fitter: prefers complete clauses before punctuation, then whole words without dangling prepositions."""
+    """Clause-aware summary fitter: prefers complete clauses before punctuation, then whole words without dangling prepositions."""
     t = clean_line(t)
     if len(t) <= n:
         return t
     window = t[:n + 1]
-    for sep in ("; ", " — ", " – ", ": ", ", "):
+    for sep in (". ", "; ", " — ", " – ", ": ", ", "):
         idx = window.rfind(sep)
-        if idx >= max(10, n // 2):
+        if idx >= max(18, n // 2):
             window = window[:idx]
             break
     else:
         window = window[:window.rfind(" ")] if " " in window else t[:n]
-    cut = window.strip()
+    cut = window.strip().rstrip(".")
     while True:
         new = re.sub(
             r"(?i)[\s,;:(\-\u2013\u2014]+$|\s+(and|or|but|the|a|an|to|of|for|with|in|on|at|by|from|as|into|than|"
@@ -683,7 +784,7 @@ def fit_words(t, n):
 
 
 def split_line(text, n):
-    """A model's reply -> (its own line, the full answer). The line is taken only when it fits."""
+    """A model's reply -> (its own summary line, the full answer). The line is taken only when it fits."""
     cleaned = sanitize_model_output(text)
     rows = str(cleaned or "").strip().split("\n")
     first = clean_line(rows[0])
@@ -764,6 +865,9 @@ def _extract_smartgen_card(job, save=True):
     global _smartgen_mem
     if _smartgen_mem is None:
         _smartgen_mem = []
+    prompt_text = (job.get("prompt") or "").strip()
+    if prompt_text.lower().rstrip("?.!") in ("who are you", "what is 2+2", "what is 2 + 2", "hi", "hello", "test"):
+        return
     cons = job.get("consensus") or {}
     results = job.get("results") or {}
     summary = (cons.get("summary") or "").strip()
@@ -774,8 +878,9 @@ def _extract_smartgen_card(job, save=True):
                 break
     if not summary:
         return
-    title = (cons.get("line") or "").strip() or fit_words(job.get("prompt") or "Synthesis", TUNING["smartgen_title_chars"])
-    score = cons.get("score") or f"{len([r for r in results.values() if r.get('status') == 'done'])}/{len(results)}"
+    title = fit_words(cons.get("summary") or cons.get("line") or prompt_text or "Synthesis", TUNING["smartgen_title_chars"])
+    done_cnt = len([r for r in results.values() if r.get("status") == "done" and r.get("text")])
+    score = cons.get("score") or f"{done_cnt}/{max(done_cnt, len(results))}"
     dissent = cons.get("dissent") or []
     body_lines = [summary]
     if dissent:
@@ -787,7 +892,7 @@ def _extract_smartgen_card(job, save=True):
         "session_id": job["id"],
         "list": list_name,
         "title": title,
-        "prompt": job.get("prompt") or "",
+        "prompt": prompt_text,
         "content": "\n\n".join(body_lines),
         "score": score,
         "mode": job.get("mode") or "chat",
@@ -818,7 +923,7 @@ def save_session(job):
 
 
 def ensure_lines(body):
-    """Fills in the one-line form where a session has none, or has one made for a wider box. Answers stay as they are."""
+    """Fills in the summary line form where a session has none, or has one made for a different box. Answers stay as they are."""
     n, sid = line_budget(body.get("line")), body.get("id")
     job = JOBS.get(sid)
     sess = job or next((x for x in load_history() if x.get("id") == sid), None)
@@ -882,6 +987,7 @@ def run_job(job, prior_threads=None):
                 messages=updated_thread,
                 ms=int((time.time() - t0) * 1000),
             )
+            job["results"][mid].pop("error", None)
         except Exception as e:
             fallback_thread = _sanitize_messages(history_msgs + [{"role": "user", "content": prompt}])
             job["results"][mid].update(
@@ -1038,6 +1144,7 @@ def reply(body, on_draft=None):
         res_entry["line"] = line
         res_entry["essence"] = self_essence_fallback(text) or line
         res_entry["messages"] = updated_thread
+        res_entry.pop("error", None)
         JOBS[target_sess["id"]] = target_sess
         if target_sess.get("save", True) and not target_sess.get("incognito", False):
             save_session(target_sess)
@@ -1105,6 +1212,7 @@ def _refresh_themes_bg():
             "productId": "collider.theme." + num,
             "tracks": [{"title": s[1], "url": s[2]} for s in picks],
         })
+    out = _dedupe_theme_list(out)
     with _themes_lock:
         _themes_cache.update(at=time.time(), data=out)
     try:
@@ -1139,7 +1247,7 @@ def _themes():
     cache = os.path.join(DATA, "themes_cache.json")
     if os.path.isfile(cache):
         try:
-            data = json.load(open(cache, encoding="utf-8"))
+            data = _dedupe_theme_list(json.load(open(cache, encoding="utf-8")))
             with _themes_lock:
                 _themes_cache.update(at=time.time(), data=data)
             threading.Thread(target=_refresh_themes_bg, daemon=True).start()
@@ -1163,7 +1271,7 @@ TUNING = {
     "thinking_tokens": 4000,
     "temperature": 0.4, "answer_timeout": 150, "retries": 2, "retry_wait": 1.5, "reply_tokens": 1400,
     "agent_answer_chars": 2200, "agent_tokens": 2500, "agent_backup_tokens": 9000, "agent_timeout": 110,
-    "lines_tokens": 900, "lines_backup_tokens": 6000, "lines_timeout": 90, "line_min": 18, "line_max": 72,
+    "lines_tokens": 900, "lines_backup_tokens": 6000, "lines_timeout": 90, "line_min": 60, "line_max": 140,
     "essence_answer_chars": 3500, "essence_tokens": 200, "essence_timeout": 60,
     "plan_tokens": 400, "plan_backup_tokens": 3000, "plan_timeout": 60, "search_timeout": 40,
     "browser_search_depth": "basic", "browser_search_results": 10, "browser_search_timeout": 30,
@@ -1171,7 +1279,7 @@ TUNING = {
     # read by code another session added in the old folder at 08:53 on 2026-10-20 without listing them here;
     # these are the values that code had before it was moved into the configuration
     "smartgen_backfill": 12, "search_fanout_min": 3, "search_fanout_factor": 2, "error_chars": 80,
-    "draft_extra_chars": 8, "essence_short_line": 45, "essence_fallback_chars": 240, "smartgen_title_chars": 32,
+    "draft_extra_chars": 8, "essence_short_line": 45, "essence_fallback_chars": 240, "smartgen_title_chars": 64,
     "report_words": 8,
 }
 SETTINGS = ("consensus_agent", "agent_chain", "agent_prompt", "lines_prompt", "essence_prompt", "plan_prompt", "models",
@@ -1216,6 +1324,9 @@ def apply_settings(cfg):
         if k not in cfg:
             cfg[k] = v
             missing = True
+    if int(cfg.get("line_length") or 0) < 60:
+        cfg["line_length"] = 115
+        missing = True
     CONSENSUS_AGENT = str(cfg["consensus_agent"]).strip()
     AGENT_CHAIN = [m for m in dict.fromkeys([CONSENSUS_AGENT] + [str(x).strip() for x in cfg["agent_chain"]]) if m]
     ROSTER[:] = [dict(m) for m in cfg["models"] if m.get("id")]
@@ -1238,6 +1349,13 @@ def apply_settings(cfg):
         m.setdefault("temperature", "")
     missing = missing or any(k not in cfg["tuning"] for k in TUNING)
     TUNING = {**TUNING, **cfg["tuning"]}
+    if int(TUNING.get("line_max") or 0) < 115:
+        TUNING["line_min"] = 60
+        TUNING["line_max"] = 140
+        missing = True
+    if int(TUNING.get("smartgen_title_chars") or 0) < 48:
+        TUNING["smartgen_title_chars"] = 64
+        missing = True
     cfg["tuning"] = dict(TUNING)
     AGENT_PROMPT, LINES_PROMPT = str(cfg["agent_prompt"]), str(cfg["lines_prompt"])
     PACK_PRICE, TRACKS_PER_PACK = str(cfg["pack_price"]), int(cfg["tracks_per_pack"])

@@ -1,6 +1,4 @@
-// Smart Gen's cards, kept on this device. Made by Claude (2026-10-17); the idea of a small store that saves on every
-// change is Grok's (smartgen/kanban_store.dart), held here in the browser's storage through shared_preferences.
-// Nothing is made up: the board starts empty.
+// Smart Gen's cards, kept on this device and synced with Collider's consensus synthesis sessions.
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -10,22 +8,54 @@ import '../../core/api/collider_api.dart';
 class SgCard {
   final String id;
   String title;
+  String subtitle;
+  String score;
   bool done;
-  SgCard({required this.id, required this.title, this.done = false});
+  SgCard({
+    required this.id,
+    required this.title,
+    this.subtitle = '',
+    this.score = '',
+    this.done = false,
+  });
 
-  Map<String, dynamic> toJson() => {'id': id, 'title': title, if (done) 'done': true};
-  factory SgCard.fromJson(Map<String, dynamic> j) => SgCard(id: j['id'] as String, title: (j['title'] as String?) ?? '', done: j['done'] == true);
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        if (subtitle.isNotEmpty) 'subtitle': subtitle,
+        if (score.isNotEmpty) 'score': score,
+        if (done) 'done': true,
+      };
+  factory SgCard.fromJson(Map<String, dynamic> j) => SgCard(
+        id: j['id'] as String,
+        title: (j['title'] as String?) ?? '',
+        subtitle: (j['subtitle'] as String?) ?? '',
+        score: (j['score'] as String?) ?? '',
+        done: j['done'] == true,
+      );
 }
 
 class SmartGenStore extends ChangeNotifier {
   SmartGenStore._();
   static final SmartGenStore instance = SmartGenStore._();
 
-  static const _key = 'smartgen_board_v1';
-  static const _dismissedKey = 'smartgen_dismissed_v1';
+  static const _key = 'smartgen_board_v2';
+  static const _dismissedKey = 'smartgen_dismissed_v2';
   final Map<String, List<SgCard>> _lists = {};
   final Set<String> _dismissedIds = {};
   bool _loaded = false;
+
+  static bool _isTrivialCard(String title) {
+    final t = title.trim().toLowerCase();
+    return t.isEmpty ||
+        t == 'four' ||
+        t == '4' ||
+        t.startsWith('i am glm') ||
+        t.startsWith('nemotron 3 super by') ||
+        t.startsWith('i am nemotron') ||
+        t == 'who are you' ||
+        t == 'what is 2+2';
+  }
 
   List<SgCard> list(String name) => _lists.putIfAbsent(name, () => []);
 
@@ -41,7 +71,11 @@ class SmartGenStore extends ChangeNotifier {
       if (raw != null) {
         final j = jsonDecode(raw) as Map<String, dynamic>;
         for (final e in j.entries) {
-          _lists[e.key] = [for (final c in (e.value as List)) SgCard.fromJson((c as Map).cast<String, dynamic>())];
+          _lists[e.key] = [
+            for (final c in (e.value as List))
+              if (!_isTrivialCard('${(c as Map)['title'] ?? ''}'))
+                SgCard.fromJson(c.cast<String, dynamic>()),
+          ];
         }
       }
       final dis = prefs.getStringList(_dismissedKey);
@@ -72,9 +106,31 @@ class SmartGenStore extends ChangeNotifier {
         final id = '${item['id'] ?? ''}'.trim();
         final listName = '${item['list'] ?? 'Medium'}'.trim();
         final title = '${item['title'] ?? ''}'.trim();
-        if (id.isEmpty || title.isEmpty) continue;
-        if (existingIds.contains(id) || existingTitles.contains(title.toLowerCase())) continue;
-        list(listName).add(SgCard(id: id, title: title, done: item['done'] == true));
+        final content = '${item['content'] ?? ''}'.trim();
+        final score = '${item['score'] ?? ''}'.trim();
+        if (id.isEmpty || title.isEmpty || _isTrivialCard(title)) continue;
+        if (existingIds.contains(id)) {
+          // Update existing card if title was upgraded on server
+          for (final l in _lists.values) {
+            for (final c in l) {
+              if (c.id == id && (c.title != title || c.subtitle != content || c.score != score)) {
+                c.title = title;
+                c.subtitle = content;
+                c.score = score;
+                added = true;
+              }
+            }
+          }
+          continue;
+        }
+        if (existingTitles.contains(title.toLowerCase())) continue;
+        list(listName).add(SgCard(
+          id: id,
+          title: title,
+          subtitle: content,
+          score: score,
+          done: item['done'] == true,
+        ));
         existingIds.add(id);
         existingTitles.add(title.toLowerCase());
         added = true;
@@ -113,7 +169,6 @@ class SmartGenStore extends ChangeNotifier {
     _save();
   }
 
-  /// Moves [c] into [listName] at [index] (the end when null).
   void move(SgCard c, String listName, int? index) {
     String? from;
     int fromIndex = -1;
@@ -128,7 +183,7 @@ class SmartGenStore extends ChangeNotifier {
     }
     final to = list(listName);
     var at = index ?? to.length;
-    if (from == listName && fromIndex >= 0 && fromIndex < at) at -= 1; // the gap it left
+    if (from == listName && fromIndex >= 0 && fromIndex < at) at -= 1;
     to.insert(at.clamp(0, to.length), c);
     _save();
   }

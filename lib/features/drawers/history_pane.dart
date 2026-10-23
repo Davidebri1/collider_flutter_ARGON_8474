@@ -7,12 +7,7 @@ import '../../models/model_def.dart';
 import '../../models/ticker_item.dart';
 import 'history_drawer.dart' show VHistoryRowsGrouped;
 
-/// History. Made by Claude (2026-10-17) on David's word: "history is not a submenu. It's a pane. an overlay pane.
-/// and it will be a scrollable list of selections", with "a preview ... like Windows 11's preview pane".
-/// A pane over the room with the conversations listed; choosing one opens the preview beside the list (on a phone,
-/// in place of it, with the way back at the top). The preview shows the question, the consensus and every model's
-/// answer, takes a follow-up that every model in it answers right there, and carries Load Conversation, which opens
-/// the whole conversation in the app.
+/// History overlay pane with Windows 11-style side-by-side preview pane.
 class HistoryPane extends StatefulWidget {
   final List<ConversationHistorySession> sessions;
   final JobState? Function(String id) job;
@@ -62,7 +57,9 @@ class _HistoryPaneState extends State<HistoryPane> {
     final previewW = wide ? (size.width - 300 - 120).clamp(320.0, 460.0) : listW;
     final h = (size.height * (wide ? 0.66 : 0.62)).clamp(320.0, 720.0);
     final q = _q.toLowerCase();
-    final sessions = widget.sessions.where((s) => q.isEmpty || s.title.toLowerCase().contains(q) || s.summary.toLowerCase().contains(q)).toList();
+    final sessions = widget.sessions
+        .where((s) => q.isEmpty || s.title.toLowerCase().contains(q) || s.summary.toLowerCase().contains(q))
+        .toList();
     _syncPreviewParam(sessions);
     final open = _open;
 
@@ -124,7 +121,7 @@ class _HistoryPaneState extends State<HistoryPane> {
       pane = AnimatedSwitcher(
         duration: VMotion.base,
         child: open == null
-             ? KeyedSubtree(key: const ValueKey('list'), child: list)
+            ? KeyedSubtree(key: const ValueKey('list'), child: list)
             : SizedBox(
                 key: ValueKey(open.id),
                 width: listW,
@@ -159,7 +156,6 @@ class _HistoryPaneState extends State<HistoryPane> {
   }
 }
 
-/// The preview: the question, the consensus, each model's answer; a follow-up field; Load Conversation.
 class _Preview extends StatefulWidget {
   final ConversationHistorySession session;
   final JobState? job;
@@ -174,7 +170,7 @@ class _Preview extends StatefulWidget {
 
 class _Turn {
   final String question;
-  final Map<String, String?> answers = {}; // model id -> answer (null while it is being written)
+  final Map<String, String?> answers = {};
   _Turn(this.question);
 }
 
@@ -187,7 +183,6 @@ class _PreviewState extends State<_Preview> {
     super.dispose();
   }
 
-  /// Every model in the conversation answers the follow-up with the conversation so far, here in the preview.
   void _send() {
     final text = _ctrl.text.trim();
     final job = widget.job;
@@ -214,7 +209,6 @@ class _PreviewState extends State<_Preview> {
         ],
         {'role': 'user', 'content': text},
       ];
-      // Each answer drafts in place as the model writes it and persists to the session (Claude, 2026-10-19).
       ColliderApi.instance.replyStream(model: mid, messages: messages, mode: mode, jobId: job.id).listen((d) {
         if (mounted && d.text.isNotEmpty) setState(() => turn.answers[mid] = d.text);
         if (d.done) {
@@ -234,14 +228,20 @@ class _PreviewState extends State<_Preview> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Color.alphaBlend(c.withValues(alpha: 0.18), VColors.fillRow), Color.alphaBlend(c.withValues(alpha: 0.06), VColors.fillRow)]),
+        gradient: LinearGradient(colors: [
+          Color.alphaBlend(c.withValues(alpha: 0.18), VColors.fillRow),
+          Color.alphaBlend(c.withValues(alpha: 0.06), VColors.fillRow),
+        ]),
         borderRadius: BorderRadius.circular(VRadius.row),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(def?.label ?? mid, style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w500)),
         const SizedBox(height: 4),
         text == null
-            ? const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 1.5, color: VColors.textSecondary))
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: CupertinoActivityIndicator(radius: 7, color: VColors.textSecondary),
+              )
             : MdText(text, style: VType.callout(weight: FontWeight.w400).copyWith(fontSize: 11, height: 1.4)),
       ]),
     );
@@ -257,7 +257,6 @@ class _PreviewState extends State<_Preview> {
         ),
       );
 
-  /// Extracts any persisted follow-up turns beyond the initial question so the preview shows the full thread.
   List<_Turn> _persistedFollowUps(JobState? job) {
     if (job == null) return const [];
     final out = <_Turn>[];
@@ -291,7 +290,11 @@ class _PreviewState extends State<_Preview> {
         Padding(
           padding: const EdgeInsets.fromLTRB(VSpace.xs, VSpace.sm, VSpace.sm, VSpace.xs),
           child: Row(children: [
-            if (widget.onBack != null) ...[VCircleButton(icon: Icons.chevron_left_rounded, size: 30, onTap: widget.onBack), const SizedBox(width: 6)] else const SizedBox(width: 8),
+            if (widget.onBack != null) ...[
+              VCircleButton(icon: Icons.chevron_left_rounded, size: 30, onTap: widget.onBack),
+              const SizedBox(width: 6),
+            ] else
+              const SizedBox(width: 8),
             Expanded(child: Text(s.title, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.callout(weight: FontWeight.w600))),
             const SizedBox(width: 8),
             VPress(
@@ -313,7 +316,11 @@ class _PreviewState extends State<_Preview> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                  decoration: BoxDecoration(color: VColors.fillRow, borderRadius: BorderRadius.circular(VRadius.row), border: Border.all(color: VColors.borderLight, width: 0.5)),
+                  decoration: BoxDecoration(
+                    color: VColors.fillRow,
+                    borderRadius: BorderRadius.circular(VRadius.row),
+                    border: Border.all(color: VColors.borderLight, width: 0.5),
+                  ),
                   child: MdText(consensus, style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11, height: 1.4)),
                 ),
               if (job != null)
@@ -342,7 +349,7 @@ class _PreviewState extends State<_Preview> {
             child: VRecessed(
               radius: 17,
               padding: const EdgeInsets.fromLTRB(14, 0, 4, 0),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.5),

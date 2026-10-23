@@ -1,11 +1,4 @@
-// Collider composer. Made by Claude. Made minimal on 2026-10-04.
-// David's words: "Prompt bar should be slick and professional... the minimal features: attachments,
-// styles/adjusters (research, deep research, internet, etc.)... message area (with placeholder text:
-// 'Enter message'), send button", and from his reference map: "add the remaining options such as
-// internet/research/deep research, private mode, attachments".
-// So it is one bar: a plus, the message, send. The plus opens the options; nothing else is on show.
-// It is its own element under the ticker window, never a row of it. Tucked, it is an arrow above the dock
-// (David: "has an indicator acknowledging its tucked view. an arrow").
+// Collider composer.
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import '../../core/api/collider_api.dart';
@@ -14,7 +7,6 @@ import '../../core/vision/vision_kit.dart';
 import '../../core/voice/voice.dart';
 
 class FloatingPrompt extends StatefulWidget {
-  /// A file to add to the message being written (Claude, 2026-10-21): Discover's remix puts its picture here.
   static final ValueNotifier<String?> attach = ValueNotifier(null);
 
   final bool summoned;
@@ -29,7 +21,6 @@ class FloatingPrompt extends StatefulWidget {
   final String? continuingTitle;
   final VoidCallback? onNewConversation;
 
-  /// Voice chat (Claude, 2026-10-20): null when it is off, else 'listening', 'thinking', 'speaking' or '' (waiting).
   final String? voice;
   final ValueChanged<bool>? onVoiceChat;
   final VoidCallback? onMic;
@@ -57,7 +48,6 @@ class FloatingPrompt extends StatefulWidget {
 }
 
 class _FloatingPromptState extends State<FloatingPrompt> {
-  // the words and files being written live in Drafts, not in this box, so nothing that hides the box can lose them
   final TextEditingController _ctrl = Drafts.text('composer');
   final FocusNode _focus = FocusNode();
   final List<String> _files = Drafts.files('composer');
@@ -69,7 +59,6 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     FloatingPrompt.attach.addListener(_attached);
   }
 
-  /// A picture handed over (Discover's remix): it goes with the next message, as its reference.
   void _attached() {
     final f = FloatingPrompt.attach.value;
     if (f == null) return;
@@ -141,20 +130,19 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     );
   }
 
-  /// Tucked: an arrow above the dock says the composer is there. Tap it, or swipe up on the dock.
   Widget _tucked() {
     return VPress(
       key: const ValueKey('tucked'),
       onTap: widget.onSummon,
       tooltip: 'Compose',
-      child: SizedBox(
+      child: const SizedBox(
         width: 72,
         height: 22,
         child: Icon(
           Icons.keyboard_arrow_up_rounded,
           size: 22,
-          color: const Color(0xD9FFFFFF),
-          shadows: const [Shadow(color: Color(0x99000000), blurRadius: 8)],
+          color: Color(0xD9FFFFFF),
+          shadows: [Shadow(color: Color(0x99000000), blurRadius: 8)],
         ),
       ),
     );
@@ -162,7 +150,6 @@ class _FloatingPromptState extends State<FloatingPrompt> {
 
   Widget _open() {
     final cont = widget.continuingTitle?.trim() ?? '';
-    // What has been chosen stays in sight as a chip; tapping a chip takes it off again.
     final chosen = <Widget>[
       if (cont.isNotEmpty && widget.onNewConversation != null)
         VChip(
@@ -189,7 +176,7 @@ class _FloatingPromptState extends State<FloatingPrompt> {
       key: const ValueKey('open'),
       material: VMaterial.resting,
       radius: 26,
-      padding: const EdgeInsets.fromLTRB(VSpace.xs, 6, VSpace.xs, VSpace.xs),
+      padding: const EdgeInsets.fromLTRB(VSpace.xs, 4, VSpace.xs, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -215,9 +202,8 @@ class _FloatingPromptState extends State<FloatingPrompt> {
               child: Wrap(spacing: 6, runSpacing: 6, children: chosen),
             ),
           const SizedBox(height: 2),
-          // Capsule 1:240: leading circle, recessed input, trailing circle.
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               VCircleButton(
                 icon: _options ? Icons.close_rounded : Icons.add_rounded,
@@ -227,14 +213,12 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                 onTap: () => setState(() => _options = !_options),
               ),
               const SizedBox(width: 8),
-              // Measured against row 8 (1-240), Claude 2026-10-17: text 0.38 of the bar's height, the circle 0.76 of it,
-              // inset 4; placeholder regular weight.
               Expanded(
                 child: VRecessed(
                   radius: 17,
-                  padding: const EdgeInsets.fromLTRB(14, 0, 4, 0),
+                  padding: const EdgeInsets.fromLTRB(14, 0, 5, 0),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: Padding(
@@ -249,7 +233,8 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                             style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11, height: 17 / 13),
                             decoration: InputDecoration(
                               hintText: 'Enter message',
-                              hintStyle: VType.callout(color: const Color(0x99FFFFFF), weight: FontWeight.w400).copyWith(fontSize: 11, height: 17 / 13),
+                              hintStyle: VType.callout(color: const Color(0x99FFFFFF), weight: FontWeight.w400)
+                                  .copyWith(fontSize: 11, height: 17 / 13),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.zero,
@@ -260,9 +245,13 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                       ),
                       const SizedBox(width: 6),
                       Padding(
-                        padding: EdgeInsets.zero,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
                         child: widget.voice != null && widget.onMic != null
-                            ? _MicButton(phase: widget.voice!, busy: widget.busy, onTap: () => _ctrl.text.trim().isEmpty ? widget.onMic!() : _submit())
+                            ? _MicButton(
+                                phase: widget.voice!,
+                                busy: widget.busy,
+                                onTap: () => _ctrl.text.trim().isEmpty ? widget.onMic!() : _submit(),
+                              )
                             : _SendButton(busy: widget.busy, onTap: _submit),
                       ),
                     ],
@@ -276,7 +265,6 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     );
   }
 
-  /// Behind the plus: attachments, how deep the answer goes, private mode.
   Widget _optionRows() {
     final cont = widget.continuingTitle?.trim() ?? '';
     return Padding(
@@ -345,8 +333,6 @@ class _Option extends StatelessWidget {
   }
 }
 
-/// Voice chat's button in place of Send: red and swelling with the voice while listening, a spinner while the
-/// models answer, sound bars while the answer is read; a tap ends listening, or stops the reading, or listens.
 class _MicButton extends StatelessWidget {
   final String phase;
   final bool busy;
@@ -378,9 +364,12 @@ class _MicButton extends StatelessWidget {
               decoration: BoxDecoration(color: listening ? VHue.red : VColors.fillActive, shape: BoxShape.circle),
               child: Center(
                 child: busy || phase == 'thinking'
-                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Icon(phase == 'speaking' ? Icons.graphic_eq_rounded : Icons.mic_rounded, size: 15,
-                        color: phase == 'speaking' ? VHue.red : Colors.white),
+                    ? const CupertinoActivityIndicator(radius: 7, color: Colors.white)
+                    : Icon(
+                        phase == 'speaking' ? Icons.graphic_eq_rounded : Icons.mic_rounded,
+                        size: 15,
+                        color: phase == 'speaking' ? VHue.red : Colors.white,
+                      ),
               ),
             ),
           ]),
@@ -390,7 +379,6 @@ class _MicButton extends StatelessWidget {
   }
 }
 
-/// Send: clear shape, springs on press, turns into a spinner while models answer.
 class _SendButton extends StatefulWidget {
   final bool busy;
   final VoidCallback onTap;
@@ -411,27 +399,31 @@ class _SendButtonState extends State<_SendButton> {
         setState(() => _down = false);
         widget.onTap();
       },
-      // the circle is drawn at 26; the finger gets Apple's minimum 44 x 44 around it (Claude, 2026-10-20)
-      child: SizedBox(width: 44, height: 44, child: Center(child: AnimatedScale(
-        scale: _down ? 0.86 : 1.0,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOutBack,
-        child: AnimatedContainer(
-          duration: VMotion.base,
-          width: 26,
-          height: 26,
-          // trailing circle of the capsule: #FFFFFF 30%
-          decoration: const BoxDecoration(color: VColors.fillActive, shape: BoxShape.circle),
-          child: Center(
-            child: AnimatedSwitcher(
-              duration: VMotion.fast,
-              child: widget.busy
-                  ? const SizedBox(key: ValueKey('b'), width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.arrow_upward_rounded, key: ValueKey('s'), size: 15, color: Colors.white),
+      child: SizedBox(
+        width: 28,
+        height: 26,
+        child: Center(
+          child: AnimatedScale(
+            scale: _down ? 0.86 : 1.0,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOutBack,
+            child: AnimatedContainer(
+              duration: VMotion.base,
+              width: 26,
+              height: 26,
+              decoration: const BoxDecoration(color: VColors.fillActive, shape: BoxShape.circle),
+              child: Center(
+                child: AnimatedSwitcher(
+                  duration: VMotion.fast,
+                  child: widget.busy
+                      ? const CupertinoActivityIndicator(key: ValueKey('b'), radius: 7, color: Colors.white)
+                      : const Icon(Icons.arrow_upward_rounded, key: ValueKey('s'), size: 15, color: Colors.white),
+                ),
+              ),
             ),
           ),
         ),
-      ))),
+      ),
     );
   }
 }

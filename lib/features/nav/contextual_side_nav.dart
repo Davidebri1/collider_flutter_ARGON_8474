@@ -18,9 +18,7 @@ enum ActiveWorkSurface {
 
 enum SideNavTab { local, global }
 
-/// REQ-21 contextual panel beside the rail — the visionOS menu panel
-/// (visionOS Apps 97:34752 "Home / People / Environments"): a glass panel of
-/// icon-circle rows, selected row lit as a capsule; content follows the surface.
+/// Contextual glass panel beside the rail: History, Models selector (active lit at top, inactive dimmed below), etc.
 class ContextualSideNav extends StatefulWidget {
   final ActiveWorkSurface activeSurface;
 
@@ -113,14 +111,11 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
   final TextEditingController _chatSearchCtrl = Drafts.text('sidenav.search');
   String _chatQuery = '';
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
   List<ConversationHistorySession> _sessions() {
     final q = _chatQuery.toLowerCase().trim();
-    final source = _local ? (widget.localHistory[widget.expandedModelId] ?? const <ConversationHistorySession>[]) : widget.globalHistory;
+    final source = _local
+        ? (widget.localHistory[widget.expandedModelId] ?? const <ConversationHistorySession>[])
+        : widget.globalHistory;
     if (q.isEmpty) return source;
     return source
         .where((s) =>
@@ -130,7 +125,6 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
         .toList();
   }
 
-  /// Local is the open card's own history; there is no Local without an open card.
   bool get _local => widget.expandedModelId != null && _chatTab == SideNavTab.local;
 
   String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
@@ -139,10 +133,9 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 768;
-    final width = isMobile ? math.min(220.0, size.width - 104) : 260.0;
-    final maxHeight = math.min(440.0, size.height * 0.52);
+    final width = isMobile ? math.min(236.0, size.width - 96) : 276.0;
+    final maxHeight = math.min(460.0, size.height * 0.56);
 
-    // History is headed by its two tabs; every other pane by its name.
     final history = widget.activeSurface == ActiveWorkSurface.chat && widget.chatSection != 'models';
     final title = switch (widget.activeSurface) {
       ActiveWorkSurface.chat => history ? 'History' : 'Models',
@@ -153,11 +146,13 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
       ActiveWorkSurface.files => 'Files Library',
     };
 
-    // Only as large as what it holds: the chat lists shrink to their rows.
     final hug = widget.activeSurface == ActiveWorkSurface.chat;
     final body = AnimatedSwitcher(
       duration: VMotion.base,
-      child: KeyedSubtree(key: ValueKey('${widget.activeSurface}-${widget.chatSection}-$_local'), child: _content()),
+      child: KeyedSubtree(
+        key: ValueKey('${widget.activeSurface}-${widget.chatSection}-$_local'),
+        child: _content(),
+      ),
     );
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxHeight),
@@ -166,8 +161,8 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
         height: hug ? null : maxHeight,
         child: VGlass(
           material: VMaterial.elevated,
-          radius: 20,
-          padding: const EdgeInsets.fromLTRB(10, 8, 8, 10),
+          radius: 22,
+          padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
           child: Column(
             mainAxisSize: hug ? MainAxisSize.min : MainAxisSize.max,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -183,11 +178,11 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
                           : Text(title, maxLines: 1, style: VType.callout(weight: FontWeight.w600)),
                     ),
                     if (widget.onClose != null)
-                      VCircleButton(icon: Icons.close_rounded, size: 26, tooltip: 'Close', onTap: widget.onClose),
+                      VCircleButton(icon: CupertinoIcons.xmark, size: 26, tooltip: 'Close', onTap: widget.onClose),
                   ],
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               hug ? Flexible(child: body) : Expanded(child: body),
             ],
           ),
@@ -218,7 +213,13 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
               color: _chatTab == t ? const Color(0x29FFFFFF) : Colors.transparent,
               borderRadius: BorderRadius.circular(VRadius.full),
             ),
-            child: Text(label, style: VType.callout(weight: FontWeight.w600, color: _chatTab == t ? VColors.textPrimary : VColors.textSecondary)),
+            child: Text(
+              label,
+              style: VType.callout(
+                weight: FontWeight.w600,
+                color: _chatTab == t ? VColors.textPrimary : VColors.textSecondary,
+              ),
+            ),
           ),
         );
     return Row(mainAxisSize: MainAxisSize.min, children: [tab(SideNavTab.local, 'Local'), tab(SideNavTab.global, 'Global')]);
@@ -230,26 +231,42 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        VSearchField(controller: _chatSearchCtrl, hint: 'Search', height: 32, onChanged: (v) => setState(() => _chatQuery = v)),
-        const SizedBox(height: 4),
+        VSearchField(
+          controller: _chatSearchCtrl,
+          hint: 'Search conversations',
+          height: 32,
+          onChanged: (v) => setState(() => _chatQuery = v),
+        ),
+        const SizedBox(height: 6),
         Flexible(child: _history()),
       ],
     );
   }
 
-  /// The models that can answer, by name. A tick marks the ones a question goes to.
+  /// Models selector:
+  /// - Categories: General, Image, Video, Audio (Coding/Writing omitted per user directive).
+  /// - Active models are sorted to the top of the container and kept LIT; inactive models sit below and are DIMMED.
   Widget _models() {
     final cats = [
       for (final c in ModelCategory.values)
         if (ModelRoster.forCategory(c).isNotEmpty) c,
     ];
     final cat = cats.contains(widget.activeCategory) || cats.isEmpty ? widget.activeCategory : cats.first;
-    final models = ModelRoster.forCategory(cat);
+    final rawModels = ModelRoster.forCategory(cat);
+    final activeModels = [
+      for (final m in rawModels)
+        if (widget.selectedModelIds.contains(m.id)) m,
+    ];
+    final inactiveModels = [
+      for (final m in rawModels)
+        if (!widget.selectedModelIds.contains(m.id)) m,
+    ];
+    final orderedModels = [...activeModels, ...inactiveModels];
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // A category appears only when it has a model that works; one category needs no tabs.
         if (cats.length > 1) ...[
           GestureDetector(
             onHorizontalDragEnd: (d) {
@@ -269,49 +286,107 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
               },
             ),
           ),
-          const SizedBox(height: VSpace.xs),
+          const SizedBox(height: 8),
         ],
         Flexible(
           child: EdgeFade(
-            fadeHeight: 10,
-            child: ListView(
-              shrinkWrap: true,
-              physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.zero,
-              children: [
-                for (final m in models)
-                  VPress(
-                    onTap: () {
-                      widget.onPaneInteraction();
-                      widget.onToggleModel(m.id);
-                    },
-                    child: Container(
-                      color: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              m.label,
-                              maxLines: 1,
-                              softWrap: false,
-                              overflow: TextOverflow.fade,
-                              style: VType.callout(
-                                weight: FontWeight.w500,
-                                color: widget.selectedModelIds.contains(m.id) ? VColors.textPrimary : VColors.textSecondary,
+            fadeHeight: 12,
+            child: CupertinoScrollbar(
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.only(right: 4, bottom: 2),
+                itemCount: orderedModels.length,
+                separatorBuilder: (_, i) {
+                  if (activeModels.isNotEmpty && i == activeModels.length - 1 && inactiveModels.isNotEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Divider(height: 1, thickness: 0.6, color: Colors.white.withValues(alpha: 0.14)),
+                    );
+                  }
+                  return const SizedBox(height: 5);
+                },
+                itemBuilder: (_, i) {
+                  final m = orderedModels[i];
+                  final isSelected = widget.selectedModelIds.contains(m.id);
+                  final c = m.providerColor;
+                  return AnimatedOpacity(
+                    duration: VMotion.base,
+                    opacity: isSelected ? 1.0 : 0.42,
+                    child: VPress(
+                      onTap: () {
+                        widget.onPaneInteraction();
+                        widget.onToggleModel(m.id);
+                      },
+                      child: AnimatedContainer(
+                        duration: VMotion.base,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          gradient: isSelected
+                              ? LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    c.withValues(alpha: 0.28),
+                                    c.withValues(alpha: 0.12),
+                                  ],
+                                )
+                              : null,
+                          color: isSelected ? null : const Color(0x1F10121A),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected ? c.withValues(alpha: 0.55) : const Color(0x1AFFFFFF),
+                            width: isSelected ? 0.8 : 0.5,
+                          ),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: c.withValues(alpha: 0.16),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ]
+                              : const [],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isSelected ? c : c.withValues(alpha: 0.45),
+                                boxShadow: isSelected
+                                    ? [BoxShadow(color: c.withValues(alpha: 0.85), blurRadius: 6)]
+                                    : null,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 18,
-                            child: widget.selectedModelIds.contains(m.id) ? const Icon(Icons.check_rounded, size: 17, color: VColors.textPrimary) : null,
-                          ),
-                        ],
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Text(
+                                m.label,
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.fade,
+                                style: VType.callout(
+                                  weight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                  color: isSelected ? VColors.textPrimary : VColors.textSecondary,
+                                ).copyWith(fontSize: 13),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              isSelected ? CupertinoIcons.checkmark_alt_circle_fill : CupertinoIcons.circle,
+                              size: 17,
+                              color: isSelected ? c : VColors.textTertiary,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -322,10 +397,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
   Widget _history() {
     final sessions = _sessions();
     if (sessions.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: VSpace.sm),
-        child: Text('No saved conversations', textAlign: TextAlign.center, style: VType.footnote(color: VColors.textTertiary)),
-      );
+      return const SizedBox(height: 12);
     }
     return HistoryRows(sessions: sessions, onSelect: widget.onSelectSession);
   }
@@ -362,7 +434,10 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
               selected: widget.activeSmartGenView == v.$1,
               onTap: () => widget.onSelectSmartGenView?.call(v.$1),
             ),
-          const Padding(padding: EdgeInsets.symmetric(vertical: VSpace.xs), child: Divider(height: 0.5, color: VColors.borderLight)),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: VSpace.xs),
+            child: Divider(height: 0.5, color: VColors.borderLight),
+          ),
           for (final b in boards)
             VSidebarItem(
               icon: Icons.view_kanban_outlined,
@@ -377,7 +452,10 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
 
   // ---------------- Market ----------------
   Widget _market() {
-    const views = [('discover', 'Discover', Icons.explore_outlined), ('gallery', 'My Gallery', Icons.collections_outlined)];
+    const views = [
+      ('discover', 'Discover', Icons.explore_outlined),
+      ('gallery', 'My Gallery', Icons.collections_outlined),
+    ];
     return ListView(
       physics: const BouncingScrollPhysics(),
       children: [
@@ -420,7 +498,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
       children: [
         Expanded(
           child: tabs.isEmpty
-              ? Center(child: Text('No open tabs', style: VType.footnote(color: VColors.textTertiary)))
+              ? const SizedBox.shrink()
               : ListView(
                   physics: const BouncingScrollPhysics(),
                   children: [
@@ -432,7 +510,12 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
                         onTap: () => widget.onSelectBrowserTab?.call(t.id),
                         trailing: widget.onCloseBrowserTab == null
                             ? null
-                            : VCircleButton(icon: Icons.close_rounded, size: 24, tooltip: 'Close tab', onTap: () => widget.onCloseBrowserTab!(t.id)),
+                            : VCircleButton(
+                                icon: CupertinoIcons.xmark,
+                                size: 24,
+                                tooltip: 'Close tab',
+                                onTap: () => widget.onCloseBrowserTab!(t.id),
+                              ),
                       ),
                   ],
                 ),
