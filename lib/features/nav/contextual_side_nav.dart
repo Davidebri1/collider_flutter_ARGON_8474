@@ -1,3 +1,4 @@
+import '../../core/drafts.dart';
 import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import '../../core/vision/vision_kit.dart';
@@ -109,12 +110,11 @@ class ContextualSideNav extends StatefulWidget {
 
 class _ContextualSideNavState extends State<ContextualSideNav> {
   SideNavTab _chatTab = SideNavTab.global;
-  final TextEditingController _chatSearchCtrl = TextEditingController();
+  final TextEditingController _chatSearchCtrl = Drafts.text('sidenav.search');
   String _chatQuery = '';
 
   @override
   void dispose() {
-    _chatSearchCtrl.dispose();
     super.dispose();
   }
 

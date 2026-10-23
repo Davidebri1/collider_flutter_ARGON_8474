@@ -142,7 +142,7 @@ class Files:
     def print_pdf(self, name, html, replace="", model=""):
         """Writes a document as PDF with Microsoft Edge (part of Windows), which keeps the text real and sharp."""
         import shutil, subprocess, tempfile
-        edge = shutil.which("msedge") or next((p for p in (
+        edge = shutil.which("msedge") or shutil.which("chromium") or shutil.which("chromium-browser") or next((p for p in (
             os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
             os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
             os.path.expandvars(r"%LocalAppData%\Microsoft\Edge\Application\msedge.exe")) if os.path.isfile(p)), None)
@@ -152,7 +152,7 @@ class Files:
             src, out = os.path.join(tmp, "page.html"), os.path.join(tmp, "page.pdf")
             with open(src, "w", encoding="utf-8") as f:
                 f.write(html)
-            subprocess.run([edge, "--headless=new", "--disable-gpu", "--no-first-run", "--no-pdf-header-footer",
+            subprocess.run([edge, *_SANDBOX, "--headless=new", "--disable-gpu", "--no-first-run", "--no-pdf-header-footer",
                             "--user-data-dir=" + os.path.join(tmp, "profile"), "--print-to-pdf=" + out,
                             "file:///" + src.replace("\\", "/")],
                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -242,13 +242,15 @@ def needs_script(final_url, html):
 
 
 _render_gate = threading.Semaphore(2)
+# Chromium in a Linux container (Collider online) runs without its sandbox (Claude, 2026-10-23).
+_SANDBOX = [] if os.name == "nt" else ["--no-sandbox", "--disable-dev-shm-usage"]
 
 
 def render_page(url, mobile=False):
     """The page as a browser leaves it once its script has run, by Edge (part of Windows), script taken out.
     None when Edge is not there or gives nothing. (Claude, 2026-10-21)"""
     import shutil, subprocess, tempfile
-    edge = shutil.which("msedge") or next((p for p in (
+    edge = shutil.which("msedge") or shutil.which("chromium") or shutil.which("chromium-browser") or next((p for p in (
         os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
         os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
         os.path.expandvars(r"%LocalAppData%\Microsoft\Edge\Application\msedge.exe")) if os.path.isfile(p)), None)
@@ -256,7 +258,7 @@ def render_page(url, mobile=False):
         return None
     with _render_gate, tempfile.TemporaryDirectory() as tmp:
         try:
-            out = subprocess.run([edge, "--headless=new", "--disable-gpu", "--no-first-run", "--user-agent=" + (UA_MOBILE if mobile else UA),
+            out = subprocess.run([edge, *_SANDBOX, "--headless=new", "--disable-gpu", "--no-first-run", "--user-agent=" + (UA_MOBILE if mobile else UA),
                                   "--user-data-dir=" + os.path.join(tmp, "p"), "--virtual-time-budget=4000", "--dump-dom", url],
                                  stdin=subprocess.DEVNULL, capture_output=True, timeout=30).stdout.decode("utf-8", "ignore")
         except Exception:

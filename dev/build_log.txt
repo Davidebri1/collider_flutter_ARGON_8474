@@ -1,2 +1,2 @@
-Compiling lib\main.dart for the Web...                             54.2s
+Compiling lib\main.dart for the Web...                             49.9s
 √ Built build\web

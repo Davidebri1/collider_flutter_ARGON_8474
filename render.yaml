@@ -1,0 +1,12 @@
+# Made by Claude (2026-10-23). Collider online on Render's free plan: its server, built from dev/space/Dockerfile.
+# The app's web build and Collider's data come from private Hugging Face repositories at start (dev/space/start.py).
+services:
+  - type: web
+    name: collider
+    runtime: docker
+    plan: free
+    dockerfilePath: ./dev/space/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: HF_TOKEN
+        sync: false

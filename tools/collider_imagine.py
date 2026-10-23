@@ -47,7 +47,9 @@ LABELS = {
 }
 
 # Sizes per shape: Cloudflare's FLUX.2 takes any size to 1920; NVIDIA's FLUX.1 dev takes only these.
-CF_SIZE = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1440, 1440), "3:4": (1440, 1920), "4:3": (1920, 1440)}
+# Claude, 2026-10-23: the largest Cloudflare makes (2048 on a side; it refused 1440x2560 and 2160x3840 when tried). A
+# 1152x2048 picture costs the same units as the 1080x1920 one it replaces (both are 12 tiles of 512).
+CF_SIZE = {"9:16": (1152, 2048), "16:9": (2048, 1152), "1:1": (2048, 2048), "3:4": (1536, 2048), "4:3": (2048, 1536)}
 NV_SIZE = {"9:16": (768, 1344), "16:9": (1344, 768), "1:1": (1024, 1024), "3:4": (896, 1152), "4:3": (1152, 896)}
 
 _lock = threading.Lock()

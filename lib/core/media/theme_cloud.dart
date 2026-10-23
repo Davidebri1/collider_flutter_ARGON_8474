@@ -1,6 +1,7 @@
 // Live wallpapers from David's Cloudflare bucket. Made by Claude (2026-10-17).
 // The local server builds the list from the bucket (GET /api/themes, see tools/collider_server.py themes()).
 // The last list is kept on this device so the market opens at once; a fresh one replaces it when it arrives.
+import '../../core/api/collider_api.dart';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -45,7 +46,7 @@ class ThemeCloud extends ChangeNotifier {
 
   Future<void> _fetch() async {
     try {
-      final r = await Dio().get<String>('${Uri.base.origin}/api/themes', options: Options(responseType: ResponseType.plain));
+      final r = await Dio().get<String>('${ColliderApi.base}/api/themes', options: Options(responseType: ResponseType.plain));
       final body = r.data ?? '';
       final fresh = _parse(body);
       if (fresh.isNotEmpty) {

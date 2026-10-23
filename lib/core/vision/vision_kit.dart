@@ -23,8 +23,8 @@ extension VMaterialX on VMaterial {
         VMaterial.modal => VColors.glassModal,
         VMaterial.work => VColors.glassWork,
       };
-  // Background blur 100 in the nodes is a 50 px blur.
-  double get blur => 50;
+  // The room behind, blurred but still there (Claude, 2026-10-23; was 50, which left a flat grey).
+  double get blur => 28;
 
   /// Pane glass carries a top highlight; kit glass carries the kit hairline.
   bool get pane => this == VMaterial.prompt || this == VMaterial.resting;
@@ -36,6 +36,14 @@ extension VMaterialX on VMaterial {
       };
   List<BoxShadow> get shadow => pane ? VShadow.pane : VShadow.ornament;
 }
+
+/// Saturation 1.6 (Claude, 2026-10-23): the colour of what is behind the glass comes through it.
+const List<double> _vibrancy = <double>[
+  1.4724, -0.4288, -0.0436, 0, 0,
+  -0.1276, 1.1712, -0.0436, 0, 0,
+  -0.1276, -0.4288, 1.5564, 0, 0,
+  0, 0, 0, 1, 0,
+];
 
 /// One-pass glass surface: blur + material fill + hairline + specular rim.
 /// Never nest a VGlass inside another VGlass; use plain fills inside.
@@ -65,7 +73,8 @@ class VGlass extends StatelessWidget {
       child: ClipRRect(
         borderRadius: r,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur),
+          // vibrancy: the blurred room's own colours, lifted, as Apple's glass keeps them
+          filter: ImageFilter.compose(outer: const ColorFilter.matrix(_vibrancy), inner: ImageFilter.blur(sigmaX: material.blur, sigmaY: material.blur)),
           child: CustomPaint(
             foregroundPainter: VGlassStroke(radius: radius, pane: material.pane),
             child: Container(

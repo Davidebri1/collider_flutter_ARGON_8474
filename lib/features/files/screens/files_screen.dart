@@ -6,6 +6,7 @@
 // Purchased holds the songs that came with the live wallpapers that were bought; the wallpapers themselves
 // live in the app (David: "the live wallpapers are for in app use only ... here, you can put music").
 // A song plays in the music bar.
+import '../../../core/drafts.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -104,7 +105,7 @@ class FilesScreen extends StatefulWidget {
 
 class _FilesScreenState extends State<FilesScreen> {
   final _api = ColliderApi.instance;
-  final _search = TextEditingController();
+  final TextEditingController _search = Drafts.text('files.search');
   Map<String, List<ColliderFile>> _files = {for (final s in _sources) s.key: const []};
   late final List<_View> _history = [_View.start(widget.initialPlace)];
 
@@ -133,7 +134,6 @@ class _FilesScreenState extends State<FilesScreen> {
 
   @override
   void dispose() {
-    _search.dispose();
     super.dispose();
   }
 

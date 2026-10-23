@@ -1,0 +1,41 @@
+Running Gradle task 'assembleDebug'...                          
+The message received from the daemon indicates that the daemon has disappeared.
+Build request sent: Build{id=d6ae57e2-e7b4-443c-af6d-fb33cb7f636a, currentDir=C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\android}
+Attempting to read last messages from the daemon log...
+Daemon pid: 8644
+  log file: C:\Users\D\.gradle\daemon\9.3.1\daemon-8644.out.log
+----- Last 20 lines from daemon log file - daemon-8644.out.log -----
+2026-10-23T02:14:30.105-0400 [DEBUG] [org.gradle.launcher.daemon.server.SynchronizedDispatchConnection] thread 46: received class org.gradle.launcher.daemon.protocol.Build
+2026-10-23T02:14:30.105-0400 [DEBUG] [org.gradle.launcher.daemon.server.DefaultDaemonConnection] thread 46: Received non-IO message from client: Build{id=d6ae57e2-e7b4-443c-af6d-fb33cb7f636a, currentDir=C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\android}
+2026-10-23T02:14:30.106-0400 [INFO] [org.gradle.launcher.daemon.server.DefaultIncomingConnectionHandler] Received command: Build{id=d6ae57e2-e7b4-443c-af6d-fb33cb7f636a, currentDir=C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\android}.
+2026-10-23T02:14:30.106-0400 [DEBUG] [org.gradle.launcher.daemon.server.DefaultIncomingConnectionHandler] Starting executing command: Build{id=d6ae57e2-e7b4-443c-af6d-fb33cb7f636a, currentDir=C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\android} with connection: socket connection from /127.0.0.1:58366 to /127.0.0.1:58368.
+2026-10-23T02:14:30.108-0400 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] Command execution: started DaemonCommandExecution[command = Build{id=d6ae57e2-e7b4-443c-af6d-fb33cb7f636a, currentDir=C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\android}, connection = DefaultDaemonConnection: socket connection from /127.0.0.1:58366 to /127.0.0.1:58368] after 0.0017833333333333334 minutes of idle
+2026-10-23T02:14:30.108-0400 [INFO] [org.gradle.launcher.daemon.server.DaemonRegistryUpdater] Marking the daemon as busy, address: [ab628297-9d95-4718-b740-6c2bad12027b port:58366, addresses:[localhost/127.0.0.1]]
+2026-10-23T02:14:30.108-0400 [DEBUG] [org.gradle.launcher.daemon.registry.PersistentDaemonRegistry] Marking busy by address: [ab628297-9d95-4718-b740-6c2bad12027b port:58366, addresses:[localhost/127.0.0.1]]
+2026-10-23T02:14:30.109-0400 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Waiting to acquire exclusive lock on daemon addresses registry.
+2026-10-23T02:14:30.110-0400 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Lock acquired on daemon addresses registry.
+2026-10-23T02:14:30.111-0400 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Releasing lock on daemon addresses registry.
+2026-10-23T02:14:30.112-0400 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] resetting idle timer
+2026-10-23T02:14:30.112-0400 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] daemon is running. Sleeping until state changes.
+2026-10-23T02:14:30.112-0400 [INFO] [org.gradle.launcher.daemon.server.exec.StartBuildOrRespondWithBusy] Daemon is about to start building Build{id=d6ae57e2-e7b4-443c-af6d-fb33cb7f636a, currentDir=C:\Users\D\Documents\collider_flutter_CLAUDE_20261020\android}. Dispatching build started information...
+2026-10-23T02:14:30.113-0400 [DEBUG] [org.gradle.launcher.daemon.server.SynchronizedDispatchConnection] thread 48: dispatching org.gradle.launcher.daemon.protocol.BuildStarted@74164ee1
+2026-10-23T02:14:30.115-0400 [DEBUG] [org.gradle.launcher.daemon.server.exec.EstablishBuildEnvironment] Configuring env variables: [PATH, PROCESSOR_LEVEL, SYSTEMDRIVE, ALLUSERSPROFILE, PROCESSOR_ARCHITECTURE, PROGRAMFILES, PROGRAMDATA, DIRNAME, USERNAME, CMD_LINE_ARGS, APP_HOME, PATHEXT, DASH__TOOL, WINDIR, UV_THREADPOOL_SIZE, HOMEPATH, PROCESSOR_IDENTIFIER, PUBLIC, NODE_ENV, _SKIP, DASH__SUPPRESS_ANALYTICS, LOCALAPPDATA, COMMONPROGRAMFILES(X86), JAVA_HOME, PROMPT, PROGRAMFILES(X86), FLUTTER_ROOT, TERM, MCP_DXT, =C:, APPDATA, PROGRAMW6432, SYSTEMROOT, JAVA_EXE, OS, COMMONPROGRAMW6432, COMPUTERNAME, COMMONPROGRAMFILES, COMSPEC, NODE_USE_SYSTEM_CA, PROCESSOR_REVISION, CLASSPATH, APP_BASE_NAME, TEMP, FLUTTER_ALREADY_LOCKED, HOMEDRIVE, USERPROFILE, TMP, NUMBER_OF_PROCESSORS]
+2026-10-23T02:14:30.120-0400 [DEBUG] [org.gradle.launcher.daemon.server.exec.LogToClient] About to start relaying all logs to the client via the connection.
+2026-10-23T02:14:30.120-0400 [INFO] [org.gradle.launcher.daemon.server.exec.LogToClient] The client will now receive all logging from the daemon (pid: 8644). The daemon log file: C:\Users\D\.gradle\daemon\9.3.1\daemon-8644.out.log
+2026-10-23T02:14:30.122-0400 [INFO] [org.gradle.launcher.daemon.server.exec.LogAndCheckHealth] Starting build in new daemon [memory: 8 GiB]
+2026-10-23T02:14:30.127-0400 [DEBUG] [org.gradle.launcher.daemon.server.exec.ExecuteBuild] The daemon has started executing the build.
+2026-10-23T02:14:30.127-0400 [DEBUG] [org.gradle.launcher.daemon.server.exec.ExecuteBuild] Executing build with daemon context: DefaultDaemonContext[uid=5a4a7dcc-fee9-4d74-ae73-be67f3fe599e,javaHome=C:\Program Files\Android\Android Studio\jbr,javaVersion=21,javaVendor=JetBrains s.r.o.,daemonRegistryDir=C:\Users\D\.gradle\daemon,pid=8644,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-XX:MaxMetaspaceSize=4G,-XX:ReservedCodeCacheSize=512m,-XX:+HeapDumpOnOutOfMemoryError,-Xmx8G,-Dfile.encoding=UTF-8,-Duser.country=US,-Duser.language=en,-Duser.variant]----- End of the daemon log -----
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Gradle build daemon disappeared unexpectedly (it may have been killed or may have crashed)
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+Running Gradle task 'assembleDebug'...                           1550.6s
+Gradle task assembleDebug failed with exit code 1

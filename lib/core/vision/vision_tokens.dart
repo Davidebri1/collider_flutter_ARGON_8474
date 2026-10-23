@@ -39,9 +39,9 @@ class VColors {
   // See docs/VISIONOS_DESIGN_SYSTEM.md.
   static const Color glassPrompt = Color(0x1AFFFFFF); // pane: #FFFFFF 10%
   static const Color glassResting = Color(0x1AFFFFFF); // pane: #FFFFFF 10%
-  static const Color glassElevated = Color(0x4DF2F5F9); // bars and ornaments: a cool white 30%
-  static const Color glassModal = Color(0x4DF2F5F9); // alerts and menus: a cool white 30%
-  static const Color glassWork = Color(0x38F2F5F9); // windows: a cool white 22%, the content layer
+  static const Color glassElevated = Color(0x2EF2F5F9); // bars and ornaments: a cool white 18% (was 30%; Claude, 2026-10-23)
+  static const Color glassModal = Color(0x2EF2F5F9); // alerts and menus: a cool white 18% (was 30%; Claude, 2026-10-23)
+  static const Color glassWork = Color(0x24F2F5F9); // windows: a cool white 14%, the content layer (was 22%; Claude, 2026-10-23)
 
   // Apple's thickness scale, used for the job Apple gives each one.
   static const Color glassThin = Color(0x26FFFFFF); // thin: brings attention to a control or a selected item

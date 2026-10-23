@@ -1,3 +1,4 @@
+import '../../../core/drafts.dart';
 import 'package:material_ui/material_ui.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../smartgen_store.dart';
@@ -26,7 +27,7 @@ class SmartGenScreen extends StatefulWidget {
 }
 
 class _SmartGenScreenState extends State<SmartGenScreen> {
-  final TextEditingController _searchCtrl = TextEditingController();
+  final TextEditingController _searchCtrl = Drafts.text('smartgen.search');
   final SmartGenStore _store = SmartGenStore.instance;
   String _q = '';
   int _tab = 0;
@@ -74,7 +75,6 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   @override
   void dispose() {
     _store.removeListener(_changed);
-    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -318,13 +318,12 @@ class _BoardState extends State<_Board> {
   String? _adding; // the list whose "+ Add card" is open
   SgCard? _editing;
   DateTime _lastTurn = DateTime(0);
-  final _newCtrl = TextEditingController();
+  final TextEditingController _newCtrl = Drafts.text('smartgen.new');
   final _newFocus = FocusNode();
 
   @override
   void dispose() {
     _pages?.dispose();
-    _newCtrl.dispose();
     _newFocus.dispose();
     super.dispose();
   }
@@ -526,7 +525,7 @@ class _BoardState extends State<_Board> {
               cursorColor: _cardInk,
               style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 13.5, height: 18 / 13.5),
               decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 2)),
-              onChanged: (v) => c.title = v,
+              onChanged: (v) => widget.store.update(c, title: v), // kept as typed (Claude, 2026-10-23)
               onFieldSubmitted: (v) {
                 widget.store.update(c, title: v.trim().isEmpty ? c.title : v.trim());
                 setState(() => _editing = null);

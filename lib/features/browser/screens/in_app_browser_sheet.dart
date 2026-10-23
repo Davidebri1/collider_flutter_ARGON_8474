@@ -1,3 +1,4 @@
+import '../../../core/drafts.dart';
 import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -42,7 +43,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
 
   late String _activeTabId;
   bool _overview = false;
-  final TextEditingController _addr = TextEditingController();
+  final TextEditingController _addr = Drafts.text('browser.address');
   final Map<String, List<String>> _back = {};
   final Map<String, List<String>> _forward = {};
   int _reload = 0;
@@ -68,7 +69,6 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
 
   @override
   void dispose() {
-    _addr.dispose();
     super.dispose();
   }
 

@@ -1,3 +1,4 @@
+import '../../core/drafts.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/api/collider_api.dart';
@@ -33,14 +34,13 @@ class HistoryPane extends StatefulWidget {
 }
 
 class _HistoryPaneState extends State<HistoryPane> {
-  final _search = TextEditingController();
+  final TextEditingController _search = Drafts.text('history.pane.search');
   String _q = '';
   ConversationHistorySession? _open;
   bool _previewInitDone = false;
 
   @override
   void dispose() {
-    _search.dispose();
     super.dispose();
   }
 
@@ -179,12 +179,11 @@ class _Turn {
 }
 
 class _PreviewState extends State<_Preview> {
-  final _ctrl = TextEditingController();
+  final TextEditingController _ctrl = Drafts.text('history.pane.reply');
   final List<_Turn> _turns = [];
 
   @override
   void dispose() {
-    _ctrl.dispose();
     super.dispose();
   }
 

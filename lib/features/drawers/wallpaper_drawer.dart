@@ -1,3 +1,4 @@
+import '../../core/drafts.dart';
 import 'dart:ui';
 import 'package:material_ui/material_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -22,12 +23,11 @@ class WallpaperDrawer extends StatefulWidget {
 }
 
 class _WallpaperDrawerState extends State<WallpaperDrawer> {
-  final TextEditingController _searchCtrl = TextEditingController();
+  final TextEditingController _searchCtrl = Drafts.text('wallpaper.search');
   String _searchQuery = '';
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
     super.dispose();
   }
 

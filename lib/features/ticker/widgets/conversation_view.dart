@@ -40,7 +40,7 @@ class ConversationView extends StatefulWidget {
 class _ConversationViewState extends State<ConversationView> {
   // the reply being written is kept per model in Drafts: closing this view or opening another keeps it (Claude, 2026-10-21)
   late final TextEditingController _reply = Drafts.text('reply:${widget.item.modelDef.id}');
-  final TextEditingController _search = TextEditingController();
+  late final TextEditingController _search = Drafts.text('conversation.search:${widget.item.modelDef.id}');
   bool _searching = false;
   String _filter = '';
   late final List<String> _files = Drafts.files('reply:${widget.item.modelDef.id}');
@@ -58,7 +58,6 @@ class _ConversationViewState extends State<ConversationView> {
 
   @override
   void dispose() {
-    _search.dispose();
     _scroll.dispose();
     super.dispose();
   }

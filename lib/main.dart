@@ -1136,10 +1136,20 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
           // ================= PLANE 1: RESTING WORKSPACE =================
           // Hidden during Premium Theme Market (Body) so ticker chrome doesn't bleed through
-          if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'settings', 'smartgen', 'market', 'files', 'consensus'}.contains(_activeDrawer))
+          // The resting workspace stays where it is under any window: hidden and paused (no drawing, no animation), then
+          // shown again exactly as it was. It used to be taken off the screen, and everything typed in it went too.
+          // (Claude, 2026-10-23)
           Positioned.fill(
             bottom: 78,
-            child: SafeArea(
+            child: Builder(builder: (context) {
+              final resting = !_browserOpen && !(isMobile && _isMobileSideNavOpen) &&
+                  !const {'premium', 'themes', 'apps', 'settings', 'smartgen', 'market', 'files', 'consensus'}.contains(_activeDrawer);
+              return Visibility(
+                visible: resting,
+                maintainState: true,
+                child: TickerMode(
+                  enabled: resting,
+                  child: SafeArea(
               bottom: false,
               child: Align(
                 alignment: Alignment.bottomCenter,
@@ -1207,6 +1217,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 ),
               ),
             ),
+                ),
+              );
+            }),
           ),
 
           // ================= PLANE 2: APPS POPUP PANE =================

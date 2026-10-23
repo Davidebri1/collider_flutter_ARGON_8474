@@ -15,6 +15,7 @@
 !/analysis_options.yaml
 !/.metadata
 !/.gitignore
+!/render.yaml
 !/README_CLAUDE.md
 __pycache__/
 *.log
@@ -35,3 +36,5 @@ __pycache__/
 # Claude (2026-10-21): the exe's build scratch (PyInstaller work, dist, set-aside exes). Each build had been committed,
 # about 75 MB a time; the exe itself goes up as a release download instead.
 /dev/exe/
+/dev/space_stage/ 
+/dev/online_test/ 

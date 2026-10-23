@@ -1,3 +1,4 @@
+import '../../../core/drafts.dart';
 import 'package:material_ui/material_ui.dart';
 import '../../../models/ticker_item.dart';
 import '../../../models/model_def.dart';
@@ -25,12 +26,11 @@ class LocalHistoryPane extends StatefulWidget {
 }
 
 class _LocalHistoryPaneState extends State<LocalHistoryPane> {
-  final TextEditingController _searchCtrl = TextEditingController();
+  final TextEditingController _searchCtrl = Drafts.text('localhistory.search');
   String _query = '';
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
     super.dispose();
   }
 

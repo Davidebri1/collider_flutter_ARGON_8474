@@ -1,3 +1,4 @@
+import '../../core/drafts.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -673,7 +674,6 @@ class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderState
 
   @override
   void dispose() {
-    _c.dispose();
     super.dispose();
   }
 
@@ -819,11 +819,10 @@ class _SearchBar extends StatefulWidget {
 }
 
 class _SearchBarState extends State<_SearchBar> {
-  final _c = TextEditingController();
+  final TextEditingController _c = Drafts.text('premium.search');
 
   @override
   void dispose() {
-    _c.dispose();
     super.dispose();
   }
 

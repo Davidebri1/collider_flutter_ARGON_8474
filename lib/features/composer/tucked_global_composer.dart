@@ -1,3 +1,4 @@
+import '../../core/drafts.dart';
 import 'dart:ui';
 import 'package:material_ui/material_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,7 +27,7 @@ class TuckedGlobalComposer extends StatefulWidget {
 }
 
 class _TuckedGlobalComposerState extends State<TuckedGlobalComposer> {
-  final TextEditingController _promptCtrl = TextEditingController();
+  final TextEditingController _promptCtrl = Drafts.text('composer.tucked');
 
   void _submit() {
     final text = _promptCtrl.text.trim();

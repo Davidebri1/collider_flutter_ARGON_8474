@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:material_ui/material_ui.dart';
 import '../../models/model_def.dart';
 import 'sse.dart';
@@ -189,9 +190,19 @@ class ColliderFile {
 class ColliderApi {
   ColliderApi._();
   static final ColliderApi instance = ColliderApi._();
+
+  /// Where Collider's server is. On the web: the address the page came from. On a phone, tablet or desktop run from
+  /// Flutter's runner: --dart-define=COLLIDER_SERVER=<address>, else the server on this computer at host 47801
+  /// (seen as 10.0.2.2 from inside Android's emulator). (Claude, 2026-10-23)
+  static final String base = () {
+    const named = String.fromEnvironment('COLLIDER_SERVER');
+    if (named.isNotEmpty) return named;
+    if (kIsWeb) return Uri.base.origin;
+    return defaultTargetPlatform == TargetPlatform.android ? 'http://10.0.2.2:47801' : 'http://127.0.0.1:47801';
+  }();
   final Dio _dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 8), receiveTimeout: const Duration(seconds: 180)));
 
-  String get _base => Uri.base.origin;
+  String get _base => base;
   bool online = false;
   bool webSearch = false;
   int nvidiaKeys = 0;

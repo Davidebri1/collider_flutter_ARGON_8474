@@ -1,3 +1,4 @@
+import '../../core/drafts.dart';
 import 'package:material_ui/material_ui.dart';
 import '../../../models/ticker_item.dart';
 import '../../../core/vision/vision_kit.dart';
@@ -22,12 +23,11 @@ class HistoryDrawer extends StatefulWidget {
 }
 
 class _HistoryDrawerState extends State<HistoryDrawer> {
-  final TextEditingController _searchCtrl = TextEditingController();
+  final TextEditingController _searchCtrl = Drafts.text('history.search');
   String _query = '';
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
     super.dispose();
   }
 

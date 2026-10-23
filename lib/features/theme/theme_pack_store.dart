@@ -5,6 +5,7 @@
 //  - Bypass (the launch window's Purchases switch, saved in data\collider_config.json): a Buy completes at once,
 //    for development. The app then shows the confirmation the store would have shown.
 //  - The price on a pack is the store's own local price once the store has answered; until then the catalog's.
+import '../../core/api/collider_api.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -54,7 +55,7 @@ class ThemePackStore extends ChangeNotifier {
       ..addAll(prefs.getStringList(_prefsKey) ?? const <String>[]);
     if (kIsWeb) {
       try {
-        final r = await Dio().get<Map<String, dynamic>>('${Uri.base.origin}/api/store');
+        final r = await Dio().get<Map<String, dynamic>>('${ColliderApi.base}/api/store');
         _bypass = r.data?['bypass'] == true;
       } catch (_) {}
     }
