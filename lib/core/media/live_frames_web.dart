@@ -6,8 +6,6 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 
-import 'theme_blur_cache.dart';
-
 /// Pooled, reference-counted live video frame extractor and ambient-blur cache.
 /// Shares a single decoded <video> element and GPU texture between CoverFlow covers
 /// and the background wallpaper, keeping recent instances warm in an LRU pool
@@ -125,25 +123,9 @@ class LiveFrames {
     }
   }
 
-  Future<void> _updateAmbient(ui.Image src) async {
-    if (_ambientBusy || _v == null) return;
-    _ambientBusy = true;
-    try {
-      final blurred = await ThemeBlurCache.rasterizeFrameAmbient(src);
-      if (_v == null) {
-        blurred?.dispose();
-        return;
-      }
-      if (blurred != null) {
-        final oldAmb = ambientFrame.value;
-        ambientFrame.value = blurred;
-        oldAmb?.dispose();
-      }
-    } catch (_) {
-    } finally {
-      _ambientBusy = false;
-    }
-  }
+  // The ambient look is drawn live from [frame] (themeBlurLook); no second, blurred copy of each frame is made
+  // (Claude, 2026-10-23).
+  Future<void> _updateAmbient(ui.Image src) async {}
 
   void play() {
     _paused = false;

@@ -1,8 +1,10 @@
 // A picture opened large. Made by Claude (2026-10-21), on the layout of Grok Imagine's picture view (Mobbin, Grok iOS):
-// the picture at its own shape on near-black, rounded; a row of actions under it; a sideways swipe to the next.
+// the picture at its own shape, rounded; actions under it; a sideways swipe to the next.
 // David, 21 Oct: Discover "needs to extract the cinematic effect. Through dimming the background", and Remix hands the
 // picture to the media chat as its reference ("Grok merely transfers you to the chat window when you hit remix").
-// Actions: keep it (My Gallery), Files, share, remix. No words of Grok's.
+// Claude, 2026-10-23: the app's one detail view (DetailView): Remix, Keep and Save, then Send, Open and Close, each with
+// its name under it, no tray. Pinch or double-tap to look closer (Flutter's InteractiveViewer); a zoomed picture pans
+// instead of turning the page.
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -22,17 +24,17 @@ class PictureViewer extends StatefulWidget {
   final List<ViewedPicture> pictures;
   final int start;
   final Set<String> saved;
-  final ValueChanged<ViewedPicture> onSave;
-  final ValueChanged<ViewedPicture> onRemix;
+  final ValueChanged<ViewedPicture>? onSave;
+  final ValueChanged<ViewedPicture>? onRemix;
   final ValueChanged<ViewedPicture>? onFiles;
   final VoidCallback onClose;
   const PictureViewer({
     super.key,
     required this.pictures,
     required this.start,
-    required this.saved,
-    required this.onSave,
-    required this.onRemix,
+    this.saved = const {},
+    this.onSave,
+    this.onRemix,
     required this.onClose,
     this.onFiles,
   });
@@ -44,16 +46,40 @@ class PictureViewer extends StatefulWidget {
 class _PictureViewerState extends State<PictureViewer> {
   late final PageController _pages = PageController(initialPage: widget.start);
   late int _i = widget.start;
+  final TransformationController _zoom = TransformationController();
+  bool _zoomed = false;
+  TapDownDetails? _tap;
+
+  @override
+  void initState() {
+    super.initState();
+    _zoom.addListener(() {
+      final z = _zoom.value.getMaxScaleOnAxis() > 1.01;
+      if (z != _zoomed) setState(() => _zoomed = z);
+    });
+  }
 
   @override
   void dispose() {
     _pages.dispose();
+    _zoom.dispose();
     super.dispose();
   }
 
-  Future<void> _share(ViewedPicture p) async {
+  Future<void> _send(ViewedPicture p) async {
     if (canShareText && await shareText(p.url)) return;
     await Clipboard.setData(ClipboardData(text: p.url));
+  }
+
+  void _toggleZoom() {
+    if (_zoomed) {
+      _zoom.value = Matrix4.identity();
+      return;
+    }
+    final at = _tap?.localPosition ?? Offset.zero;
+    _zoom.value = Matrix4.identity()
+      ..translateByDouble(-at.dx * 1.5, -at.dy * 1.5, 0, 1)
+      ..scaleByDouble(2.5, 2.5, 1, 1);
   }
 
   Widget _picture(ViewedPicture p) {
@@ -62,65 +88,51 @@ class _PictureViewerState extends State<PictureViewer> {
         : Image.network(p.url, fit: BoxFit.contain, filterQuality: FilterQuality.high, gaplessPlayback: true,
             loadingBuilder: (_, child, progress) => progress == null ? child : const ColoredBox(color: Color(0xFF0B0B0D)),
             errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0B0B0D)));
-    return ClipRRect(borderRadius: BorderRadius.circular(16), child: AspectRatio(aspectRatio: p.aspect, child: img));
+    return DetailRaised(child: AspectRatio(aspectRatio: p.aspect, child: img));
   }
 
   @override
   Widget build(BuildContext context) {
     final p = widget.pictures[_i];
-    final saved = widget.saved.contains(p.id);
-    Widget act(IconData icon, VoidCallback onTap, {Color? color}) =>
-        VCircleButton(icon: icon, size: 44, selected: true, iconColor: color, onTap: onTap);
-    return Stack(children: [
-      // the room goes nearly black: the picture is all there is
-      Positioned.fill(
-        child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose, child: const ColoredBox(color: Color(0xF2000000))),
-      ),
-      SafeArea(
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: Row(children: [VCircleButton(icon: Icons.arrow_back_rounded, size: 44, selected: true, onTap: widget.onClose)]),
-          ),
-          Expanded(
-            child: PageView.builder(
-              controller: _pages,
-              itemCount: widget.pictures.length,
-              onPageChanged: (i) => setState(() => _i = i),
-              itemBuilder: (_, i) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Center(child: _picture(widget.pictures[i])),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 96),
-            // as Grok's picture view: remix on its own at the left; keep, Files and share together in one capsule at the right
-            child: Row(children: [
-              act(Icons.auto_fix_high_rounded, () => widget.onRemix(p)),
-              const Spacer(),
-              VGlass(
-                material: VMaterial.elevated,
-                radius: 26,
-                padding: const EdgeInsets.all(4),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  VCircleButton(
-                    icon: saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    size: 44,
-                    iconColor: saved ? const Color(0xFFE5484D) : null,
-                    onTap: () {
-                      widget.onSave(p);
-                      setState(() {});
-                    },
+    final kept = widget.saved.contains(p.id);
+    return DetailView(
+      onClose: widget.onClose,
+      onSend: () => _send(p),
+      onOpen: () => openUrl(p.url),
+      maxWidth: 900,
+      actions: [
+        if (widget.onRemix != null) DetailAction(Icons.auto_fix_high_rounded, 'Remix', () => widget.onRemix!(p)),
+        if (widget.onSave != null)
+          DetailAction(kept ? Icons.favorite_rounded : Icons.favorite_border_rounded, 'Keep', () {
+            widget.onSave!(p);
+            setState(() {});
+          }, tint: kept ? const Color(0xFFE5484D) : null),
+        if (widget.onFiles != null) DetailAction(Icons.download_rounded, 'Save', () => widget.onFiles!(p)),
+      ],
+      child: PageView.builder(
+        controller: _pages,
+        physics: _zoomed ? const NeverScrollableScrollPhysics() : const PageScrollPhysics(),
+        itemCount: widget.pictures.length,
+        onPageChanged: (i) => setState(() {
+          _i = i;
+          _zoom.value = Matrix4.identity();
+        }),
+        itemBuilder: (_, i) => Center(
+          child: i == _i
+              ? GestureDetector(
+                  onDoubleTapDown: (d) => _tap = d,
+                  onDoubleTap: _toggleZoom,
+                  child: InteractiveViewer(
+                    transformationController: _zoom,
+                    minScale: 1,
+                    maxScale: 5,
+                    clipBehavior: Clip.none,
+                    child: _picture(widget.pictures[i]),
                   ),
-                  if (widget.onFiles != null) VCircleButton(icon: Icons.download_rounded, size: 44, onTap: () => widget.onFiles!(p)),
-                  VCircleButton(icon: Icons.ios_share_rounded, size: 44, onTap: () => _share(p)),
-                ]),
-              ),
-            ]),
-          ),
-        ]),
+                )
+              : _picture(widget.pictures[i]),
+        ),
       ),
-    ]);
+    );
   }
 }

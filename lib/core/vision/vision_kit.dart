@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
-import '../media/theme_blur_cache.dart';
 import '../theme/edge_fade.dart';
 import 'vision_tokens.dart';
 import 'hues.dart';
@@ -11,6 +10,7 @@ export 'vision_tokens.dart';
 export 'hues.dart';
 export '../theme/edge_fade.dart';
 export 'md_text.dart';
+export 'detail_view.dart';
 
 /// Glass material levels, mapped to the Collider depth planes.
 enum VMaterial { prompt, resting, elevated, modal, work }
@@ -199,22 +199,17 @@ class VScrim extends StatelessWidget {
         child: dim,
       );
     }
-    final cachedBlur = ThemeBlurCache.instance.activeBlurred(ThemeBlurPreset.scrim);
+    // Flutter's own backdrop blur of whatever is behind (Claude, 2026-10-23: this showed a stored blurred copy of the
+    // wallpaper alone, so the windows behind vanished instead of going out of focus).
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: cachedBlur != null
-          ? RawImage(
-              image: cachedBlur,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              filterQuality: FilterQuality.high,
-            )
-          : BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: VBlur.medium, sigmaY: VBlur.medium),
-              child: dim,
-            ),
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: VBlur.medium, sigmaY: VBlur.medium),
+          child: dim,
+        ),
+      ),
     );
   }
 }
@@ -499,17 +494,22 @@ class VOrnamentRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return VGlass(
+    // visionOS tab bar: a capsule of glass floating off the window's edge, raised by its shadow; each place a lit
+    // capsule of its own when chosen, never under 44 points (Claude, 2026-10-23; was a 4-point rim, square-ish
+    // corners and 33-point rows).
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.full), boxShadow: VShadow.ornament),
+      child: VGlass(
       material: VMaterial.elevated,
-      radius: 18,
-      padding: const EdgeInsets.all(4),
+      radius: VRadius.full,
+      padding: const EdgeInsets.all(6),
       child: IntrinsicWidth(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (int i = 0; i < items.length; i++) ...[
-              if (i > 0) const SizedBox(height: 2),
+              if (i > 0) const SizedBox(height: 4),
               Semantics(
                 button: true,
                 label: items[i].label,
@@ -517,11 +517,12 @@ class VOrnamentRail extends StatelessWidget {
                   onTap: dim.contains(i) ? null : () => onSelect(i),
                   child: AnimatedContainer(
                     duration: VMotion.fast,
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+                    constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      color: i == active ? const Color(0x29FFFFFF) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(VRadius.full),
+                      color: i == active ? VColors.fillActive : Colors.transparent,
                     ),
                     child: Text(
                       items[i].label.replaceAll(' ', '\n'),
@@ -539,6 +540,7 @@ class VOrnamentRail extends StatelessWidget {
             ],
           ],
         ),
+      ),
       ),
     );
   }

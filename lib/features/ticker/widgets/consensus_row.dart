@@ -36,31 +36,35 @@ class ConsensusRow extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // The score leads the line it belongs to; it does not take a line of its own.
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(agree == null ? '\u2013/\u2013' : score,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: VType.caption(color: ink, weight: FontWeight.w700).copyWith(
-                      fontSize: 12,
-                      height: 17 / 12,
-                      shadows: agree == null
-                          ? null
-                          : [Shadow(color: ink.withValues(alpha: 0.9), blurRadius: 10), Shadow(color: ink.withValues(alpha: 0.5), blurRadius: 3)],
-                    )),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: VMotion.base,
-                    layoutBuilder: (cur, prev) => Stack(alignment: Alignment.centerLeft, children: [...prev, if (cur != null) cur]),
-                    child: summary.isEmpty
-                        ? const SizedBox(key: ValueKey('none'), height: 17, width: double.infinity)
-                        : VOneLine(key: ValueKey(summary), text: summary),
+            // The score leads the words it belongs to; it does not take a line of its own. Two lines are kept for them
+            // from the start and the summary shows whole (Claude, 2026-10-23; was one line, shrunk to fit).
+            SizedBox(
+              height: 34,
+              child: AnimatedSwitcher(
+                duration: VMotion.base,
+                layoutBuilder: (cur, prev) => Stack(alignment: Alignment.topLeft, children: [...prev, if (cur != null) cur]),
+                child: SizedBox(
+                  key: ValueKey('$score|$summary'),
+                  width: double.infinity,
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                        text: agree == null ? '\u2013/\u2013' : score,
+                        style: VType.caption(color: ink, weight: FontWeight.w700).copyWith(
+                          fontSize: 12,
+                          height: 17 / 12,
+                          shadows: agree == null
+                              ? null
+                              : [Shadow(color: ink.withValues(alpha: 0.9), blurRadius: 10), Shadow(color: ink.withValues(alpha: 0.5), blurRadius: 3)],
+                        ),
+                      ),
+                      if (summary.isNotEmpty) TextSpan(text: '   $summary', style: VOneLine.rowStyle),
+                    ]),
+                    maxLines: 2,
+                    overflow: TextOverflow.fade,
                   ),
                 ),
-              ],
+              ),
             ),
             if (isGenerating) ...[
               const SizedBox(height: 6),

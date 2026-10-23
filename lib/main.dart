@@ -42,6 +42,7 @@ import 'core/media/theme_cloud.dart';
 import 'features/drawers/history_pane.dart';
 import 'core/media/theme_media_bundle.dart';
 import 'core/drafts.dart';
+import 'core/platform/open_url.dart';
 import 'package:device_preview/device_preview.dart';
 
 Future<void> main() async {
@@ -418,7 +419,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   /// Characters one ticker row holds: the resting ticker is as wide as the dock, and the summary line
   /// has the row's full width inside the pane's and the row's padding.
-  int get _lineChars => VOneLine.charsFor((MediaQuery.of(context).size.width < 768 ? 260.0 : 480.0) - 42);
+  int get _lineChars => VOneLine.charsFor((MediaQuery.of(context).size.width < 768 ? 260.0 : 480.0) - 42) * 2;
 
   final Set<String> _lineAsked = {};
   final Set<String> _lineFailed = {};
@@ -603,6 +604,32 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   final GlobalKey _openKey = GlobalKey();
+
+  /// A conversation as text: who said each part, then what was said.
+  String _conversationText(TickerItem it) => [
+        for (final m in it.conversation) '${m.sender == 'user' ? 'You' : it.modelDef.label}:\n${m.text}',
+      ].join('\n\n');
+
+  /// The device's share sheet; where there is none, the text is copied.
+  Future<void> _sendText(String text) async {
+    if (!await shareText(text)) await Clipboard.setData(ClipboardData(text: text));
+  }
+
+  /// Opens text in Documents: it is kept in Files > Generated first, so the document is a file like any other
+  /// (Claude, 2026-10-23).
+  Future<void> _openTextAsDocument(String title, String text, String model) async {
+    final words = text.replaceAll(RegExp(r'[#*_`>\[\]\n]'), ' ').trim().split(RegExp(r'\s+')).take(6).join(' ');
+    final name = await ColliderApi.instance.saveGenerated('$title - $words.md', text, model: model);
+    if (name == null || !mounted) return;
+    final all = await ColliderApi.instance.files(forceRefresh: true);
+    final f = (all['generated'] ?? const <ColliderFile>[]).where((f) => f.name == name).firstOrNull;
+    if (f == null || !mounted) return;
+    setState(() {
+      _zoomedMessage = null;
+      _expandedModelIds.clear();
+    });
+    _openDocument(f.url, f.name);
+  }
 
   Future<void> _onSendInlineReply(String modelId, String text, [List<String> files = const []]) async {
     final idx = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
@@ -1029,11 +1056,9 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final openId = _expandedModelIds.isEmpty ? null : _expandedModelIds.first;
     final TickerItem? openItem = activePills.where((p) => p.modelDef.id == openId).firstOrNull;
     // On a phone the opened conversation is wide; the side navigation steps aside for it.
-    final railVisible = _railVisible;
+    final railVisible = _railVisible && openItem == null;
 
     // Expanded: that model's conversation, closeable, opened under its own summary (see the rows below).
-    // what is left of the window (half the screen) under the consensus row and the summary, so the entry box shows whole
-    final convHeight = (MediaQuery.sizeOf(context).height * 0.5 - 150).clamp(220.0, 420.0);
     final Widget conversation = openItem == null
         ? const SizedBox.shrink()
         : ConversationView(
@@ -1086,19 +1111,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         isExpanded: activePills[i].modelDef.id == openId,
                         onToggleExpand: () => _onTogglePill(activePills[i].modelDef.id),
                       ),
-                      // The opened conversation grows out of its own summary, the other summaries staying where they
-                      // are (Claude, 2026-10-21; David: the swap "to slightly larger ticker ... we lost the summaries").
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeOutCubic,
-                        alignment: Alignment.topCenter,
-                        child: activePills[i].modelDef.id == openId
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: SizedBox(height: convHeight, child: conversation),
-                              )
-                            : const SizedBox(width: double.infinity),
-                      ),
+                      // The conversation opens in the detail view over the room; the ticker keeps its size and place
+                      // (Claude, 2026-10-23; it used to grow out of the summary).
                         ],
                       ),
                     ],
@@ -1157,7 +1171,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               bottom: false,
               child: Align(
                 alignment: Alignment.bottomCenter,
-                child: Column(
+                // On a phone the ticker and the composer stand beside the side navigation, never under it
+                // (Claude, 2026-10-23: the rail covered the ticker's lower left corner).
+                child: Padding(
+                  padding: EdgeInsets.only(left: isMobile && !media ? 76 : 0),
+                  child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // ================= THE TICKER WINDOW =================
@@ -1170,7 +1188,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                               ? (media ? 360.0 : 300.0) // one width, opened or not; the pictures' toolbar fits whole (Claude, 2026-10-21)
                               : (media ? 780.0 : 480.0),
                           // rows: never more than 40% of the screen; a conversation: "halfway up is sufficient"
-                          maxHeight: MediaQuery.of(context).size.height * (openItem != null || (media && _mediaExpanded) ? 0.50 : 0.40),
+                          maxHeight: MediaQuery.of(context).size.height * (media && _mediaExpanded ? 0.50 : 0.40),
                         ),
                         margin: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24),
                         child: VGlass(
@@ -1219,6 +1237,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                     ),
                   ],
                 ),
+                ),
               ),
             ),
                 ),
@@ -1241,6 +1260,39 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 onOpenDocuments: () => _openDocument(),
                 onOpenMusicPlayer: _openMusic,
                 onOpenBrowser: () => _openBrowserForTab('user_default'),
+              ),
+            ),
+
+          // ================= AN OPENED CONVERSATION (Claude, 2026-10-23) =================
+          // The app's detail view: the model, its summary in full, the conversation and its entry box; Send, Open, Close.
+          if (openItem != null && _activeDrawer == null)
+            Positioned.fill(
+              child: DetailView(
+                onClose: () => setState(() => _expandedModelIds.clear()),
+                onSend: () => _sendText(_conversationText(openItem)),
+                onOpen: () => _openTextAsDocument(openItem.modelDef.label, _conversationText(openItem), openItem.modelDef.label),
+                maxWidth: 560,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.66),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(openItem.modelDef.label,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.fade,
+                          style: VType.headline().copyWith(fontSize: 15, height: 20 / 15, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 12)])),
+                      if (openItem.summary.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(openItem.summary,
+                            style: VType.callout(color: VColors.textSecondary).copyWith(height: 1.4, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 12)])),
+                      ],
+                      const SizedBox(height: 10),
+                      Flexible(child: conversation),
+                    ],
+                  ),
+                ),
               ),
             ),
 
@@ -1276,6 +1328,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 modelName: _zoomedModelDef!.label,
                 providerColor: _zoomedModelDef!.providerColor,
                 onClose: () => setState(() => _zoomedMessage = null),
+                onOpen: () => _openTextAsDocument(_zoomedModelDef!.label, _zoomedMessage!.text, _zoomedModelDef!.label),
               ),
             ),
 

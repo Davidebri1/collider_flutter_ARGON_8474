@@ -42,7 +42,8 @@ class _ModelPillState extends State<ModelPill> {
     final waiting = item.isStreaming;
 
     // The row exists for its summary line, so that line has the row's full width.
-    final meta = VType.caption(color: VColors.textSecondary, weight: FontWeight.w500).copyWith(fontSize: 10.5, height: 14 / 10.5);
+    // 11, Apple's smallest text size (Claude, 2026-10-23; was 10.5)
+    final meta = VType.caption(color: VColors.textSecondary, weight: FontWeight.w500).copyWith(fontSize: 11, height: 14 / 11);
     return VPress(
       onTap: widget.onToggleExpand,
       child: AnimatedContainer(
@@ -77,10 +78,22 @@ class _ModelPillState extends State<ModelPill> {
               ),
             ),
             const SizedBox(height: 3),
-            AnimatedSwitcher(
-              duration: VMotion.base,
-              layoutBuilder: (cur, prev) => Stack(alignment: Alignment.topLeft, children: [...prev, if (cur != null) cur]),
-              child: waiting && item.summary.isEmpty ? _SkeletonLines(key: const ValueKey('wait'), color: c) : VOneLine(key: ValueKey(item.summary), text: item.summary),
+            // Two lines, kept for the summary from the start, so the row never changes height as the answer comes in;
+            // the summary is written to fit them and shows whole (Claude, 2026-10-23; David: "it can be 2 lines. the
+            // important thing is that it shows in full").
+            SizedBox(
+              height: 34,
+              child: AnimatedSwitcher(
+                duration: VMotion.base,
+                layoutBuilder: (cur, prev) => Stack(alignment: Alignment.topLeft, children: [...prev, if (cur != null) cur]),
+                child: waiting && item.summary.isEmpty
+                    ? _SkeletonLines(key: const ValueKey('wait'), color: c)
+                    : SizedBox(
+                        key: ValueKey(item.summary),
+                        width: double.infinity,
+                        child: Text(item.summary, maxLines: 2, overflow: TextOverflow.fade, style: VOneLine.rowStyle),
+                      ),
+              ),
             ),
             if (item.mediaUrls != null && item.mediaUrls!.isNotEmpty) ...[
               const SizedBox(height: VSpace.xs),
@@ -155,7 +168,7 @@ class _SkeletonLinesState extends State<_SkeletonLines> with SingleTickerProvide
               alignment: Alignment.centerLeft,
               child: Container(
                 height: 9,
-                margin: const EdgeInsets.symmetric(vertical: 5),
+                margin: const EdgeInsets.symmetric(vertical: 4), // two of them fill the summary's two lines
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(5),
                   gradient: LinearGradient(
@@ -166,7 +179,7 @@ class _SkeletonLinesState extends State<_SkeletonLines> with SingleTickerProvide
                 ),
               ),
             );
-        return SizedBox(width: double.infinity, child: line(0.78));
+        return SizedBox(width: double.infinity, child: Column(mainAxisSize: MainAxisSize.min, children: [line(0.86), line(0.58)]));
       },
     );
   }

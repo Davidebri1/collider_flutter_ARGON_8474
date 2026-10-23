@@ -246,23 +246,22 @@ class _ThemeLivingBackdropState extends State<ThemeLivingBackdrop> {
   @override
   Widget build(BuildContext context) {
     if (widget.builderAmbient) {
-      // Pull pre-blurred ambient poster directly from ThemeBlurCache (0ms shader cost)
       final cachedAmbientPoster = CachedThemeSurface(
         assetPath: widget.theme.assetPath,
         preset: ThemeBlurPreset.ambient,
       );
       final f = _frames;
       if (f == null) return cachedAmbientPoster;
+      // The live video frame through the same live look (Claude, 2026-10-23: each frame was copied and blurred again).
       return ValueListenableBuilder<ui.Image?>(
-        valueListenable: f.ambientFrame,
-        builder: (_, ambImg, __) {
-          if (ambImg != null) {
-            return RawImage(
-              image: ambImg,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              filterQuality: FilterQuality.high,
+        valueListenable: f.frame,
+        builder: (_, img, __) {
+          if (img != null) {
+            return ClipRect(
+              child: themeBlurLook(
+                ThemeBlurPreset.ambient,
+                RawImage(image: img, fit: BoxFit.cover, width: double.infinity, height: double.infinity, filterQuality: FilterQuality.medium),
+              ),
             );
           }
           return cachedAmbientPoster;

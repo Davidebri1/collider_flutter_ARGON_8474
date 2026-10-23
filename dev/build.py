@@ -9,7 +9,8 @@ tool = [dart, "--packages=" + os.path.join(FLUTTER, "packages", "flutter_tools",
 env = {**os.environ, "FLUTTER_ROOT": FLUTTER}
 log = os.path.join(W, "dev", "build_log.txt")
 with open(log, "w", encoding="utf-8") as f:
-    code = subprocess.run(tool + ["build", "web", "--release", "--no-tree-shake-icons", "--no-wasm-dry-run"],
+    # --wasm: browsers that run WebAssembly get the Wasm build, the rest get JavaScript (Claude, 2026-10-23)
+    code = subprocess.run(tool + ["build", "web", "--release", "--no-tree-shake-icons", "--wasm"],
                           cwd=W, env=env, stdout=f, stderr=f, stdin=subprocess.DEVNULL).returncode
 print("BUILD_EXIT", code, "log:", log)
 sys.exit(code)
