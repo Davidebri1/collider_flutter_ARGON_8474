@@ -42,8 +42,12 @@ import 'core/media/theme_cloud.dart';
 import 'features/drawers/history_pane.dart';
 import 'core/media/theme_media_bundle.dart';
 import 'core/drafts.dart';
+import 'package:device_preview/device_preview.dart';
 
 Future<void> main() async {
+  // Device Preview 3.0: devices, sizes, orientation and screenshots from the device_preview tab in DevTools,
+  // debug and profile runs only (Claude, 2026-10-23).
+  DevicePreview.enable();
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
