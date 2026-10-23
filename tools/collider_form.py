@@ -62,7 +62,7 @@ input.f::placeholder,textarea.f::placeholder{color:var(--sub)}
 const C=INITIAL;let rows=C.providers.map(r=>Object.assign({name:'',endpoint:'',key:'',models:''},r));
 const R=document.getElementById('rows'),H=document.getElementById('host');
 const S=JSON.parse(JSON.stringify(C.settings));
-const N={consensus_agent:'Consensus agent',agent_chain:'Agent chain',agent_prompt:'Consensus agent instruction',lines_prompt:'One-line agent instruction',smartgen_prompt:'Smart Gen agent instruction',essence_prompt:'Essence instruction',plan_prompt:'Search planning instruction',models:'Models',depth:'Answer instruction by mode',line_rule:'One-line rule',line_length:'Line length',search:'Search',plan_queries:'Planned searches',source_chars:'Source length',max_tokens:'Max tokens',deadline:'Deadline',silence:'Silence',tuning:'Tuning',pack_price:'Pack price',tracks_per_pack:'Tracks per pack',imagine:'Discover Market'};
+const N={consensus_agent:'Consensus agent model',agent_chain:'Consensus agent backups',agent_prompt:'Consensus agent instruction',smartgen_prompt:'Smart Gen agent instruction',plan_prompt:'Search planning instruction',models:'Models',depth:'Response instruction by mode',line_length:'Summary length (characters)',search:'Web search by mode',plan_queries:'Planned searches by mode',source_chars:'Source length by mode (characters)',max_tokens:'Response length by mode (tokens)',deadline:'Response wait by mode (seconds)',silence:'Longest silence while streaming (seconds)',tuning:'Tuning',pack_price:'Pack price',tracks_per_pack:'Tracks per pack',imagine:'Discover Market'};
 function inp(v,set){const long=typeof v==='string'&&(v.length>70||v.includes('\n'));const e=document.createElement(long?'textarea':'input');e.className='f';e.value=Array.isArray(v)?v.join(', '):v;if(long)e.rows=Math.min(14,v.split('\n').length+1);e.addEventListener('input',()=>set(e.value));return e;}
 function typed(old,s){if(typeof old==='number'){const n=Number(s);return isNaN(n)?old:n;}if(Array.isArray(old))return s.split(',').map(x=>x.trim()).filter(Boolean).map((x,i)=>typeof old[i]==='number'?Number(x):x);return s;}
 const MF=['id','label','short','provider','via','color','temperature'];
@@ -75,8 +75,8 @@ if(k==='models')drawModels(box);
 else if(v&&typeof v==='object'&&!Array.isArray(v))Object.keys(v).forEach(sk=>{const r=document.createElement('div');r.className='kv';const l=document.createElement('span');l.textContent=sk;r.appendChild(l);r.appendChild(inp(v[sk],s=>{v[sk]=typed(C.settings[k][sk],s);}));box.appendChild(r);});
 else box.appendChild(inp(v,s=>{S[k]=typed(C.settings[k],s);}));
 host.appendChild(box);}
-['consensus_agent','agent_chain','agent_prompt','lines_prompt','essence_prompt','plan_prompt','smartgen_prompt','models'].forEach(k=>section(k,document.getElementById('agents')));
-['depth','line_rule','line_length','search','plan_queries','source_chars','max_tokens','deadline','silence','tuning'].forEach(k=>section(k,document.getElementById('answers')));
+['consensus_agent','agent_chain','agent_prompt','smartgen_prompt','plan_prompt','models'].forEach(k=>section(k,document.getElementById('agents')));
+['depth','line_length','search','plan_queries','source_chars','max_tokens','deadline','silence','tuning'].forEach(k=>section(k,document.getElementById('answers')));
 ['pack_price','tracks_per_pack'].forEach(k=>section(k,document.getElementById('buy')));
 ['imagine'].forEach(k=>section(k,document.getElementById('answers')));
 function draw(){R.innerHTML='';rows.forEach((r,i)=>{const d=document.createElement('div');d.className='row';

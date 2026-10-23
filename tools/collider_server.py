@@ -204,10 +204,6 @@ def _init_caches():
     except Exception:
         _smartgen_mem = []
 
-    if not _smartgen_mem and _history_mem:
-        for sess in reversed(_history_mem[:TUNING["smartgen_backfill"]]):
-            _extract_smartgen_card(sess, save=False)
-        _save_smartgen()
 
 
 def rows(name=None, search=None):
@@ -609,25 +605,8 @@ def sources_block(sources):
 # ---------------- Consensus agent (Consensus Map v3: a headcount of essences) ----------------
 # Primary agent answers in plain JSON; the reasoning models are backups with room to think.
 AGENT_CHAIN = [CONSENSUS_AGENT, "nvidia/nemotron-3-super-120b-a12b", "z-ai/glm-5.3"]
-AGENT_PROMPT = """You are the Collider consensus agent. Consensus is a headcount: how many responses say essentially the same thing.
-Steps:
-1. Read the question and derive the need behind it.
-2. Reduce each response to its essence: what it says, as one standalone sentence (occasionally two) in service of that need.
-   Not a description of the response. Never mention which model produced it.
-3. Group responses whose essences say the same thing. The largest group is the consensus.
-4. The summary IS the winning group's essence, copied verbatim. Do not rewrite or blend.
-5. Every other group's essence is a dissenting view, verbatim.
-6. score = size of the largest group / number of responses.
-On a tie you may choose, and state the logical basis in one line as tie_basis.
-7. Separately, count the logical chains in each RAW response (not the essence): every explicit connective
-   (because, so, therefore, thus, hence, as a result) and every instance of implied logic (a definition used to support
-   a claim, a clarification that adds meaning, a preemptive challenge to a presumption).
-8. For each response also write its line: the complete 1-to-2 line summary in at most {n} characters, spaces included.
-   The conclusion itself, stated outright in plain words. Never a teaser, never "it depends", never cut off.
-   No full stop at the end. Responses in the same group share the same line, word for word.
-   Different groups get different lines that show how they differ.
-Return ONLY JSON:
-{"need": "...", "essences": {"R1": "...", "R2": "..."}, "lines": {"R1": "...", "R2": "..."}, "chains": {"R1": 4, "R2": 2}, "groups": [["R1","R3"],["R2"]], "summary": "...", "score": "2/3", "dissent": ["..."], "tie_basis": ""}"""
+AGENT_PROMPT = 'Inputs:\n-User\'s prompt\n-response messages\n\nFrom this\nFill the following fields:\nConsensus Ratio: number of responses with the same sentiment / number of total responses\nConsensus Summary: For each response message, use the prompt message to derive need and message intent. This will simplify each message to its base minimal distinction/sentiment; this is the actionable portion of the message. Resolve democratically by counting the number of duplicates of each unique sentiment. The sentiment with the biggest count is the consensus summary verbatim.\n\nFor each response:\nCalculate, from the full response text and its service to the observed need, the depth (aka length) of the logical chain in the message. This count should include explicit and implicit logical chains. Explicit logical chains are all sequential clarifications/simplifications. They extend logic, not activity. And they serve the purpose by providing capability and independence to the prompter. Accuracy (not precision) never becomes a factor, as logic is independent of facts. In fact, logic forms facts. It can never be wrong or even evaluated on such a basis. Only facts can, trivia.\n\n1. Logical chain: If you fall, THEN it\'s not your fault\n2. Not a logical chain: If you fall, THEN you can file a claim\n\n1 is a clarification of meaning and drives understanding and decision-making. 2 is giving instruction, which provides only procedure, not logic. No decision-making or simplification is offered.\n\nImplicit logical chains count as well. These are definitions, statements, stories, or any narrative element that directly support a logical conclusion. They can be evidentiary after the fact. Or preemptive, before the fact. The point will either immediately precede or supersede them. If not, the chain is broken, or adlibbing has delayed the expression of the point. It becomes obvious either way.\n\nYou can also count logical chains by simply reading until the next clause/sentence is not logically dependent on the previous. This extends beyond formatting so paragraphs and structure are irrelevant. An entire paragraph can be considered one logical chain if it is one narrative in service of one larger point: evidentiary, or it can be multiple logical chains if the depth of understanding is further developed within the paragraph. "Because," "Why," "Therefore," "Meaning," "Thus," and "therefore" are all contextual indicators but cannot be counted in a vacuum. This is why you derive intent first, based on the prompt message and its need, and you frame each response message in its purpose to serve that need. From there, you can resolve all logical clarifications because they appear as explanations and they provide rationale.\n\nYou will find that the count is not important. Only your definition and your ability to identify them are important. So whatever definition you create for a logical chain will hold up consistently, so long as it is legitimate in its observation of logic. Semantically counting words is not a legitimate observation of logic, by definition. Regex counts trivia. Logical chains count meaning.\n\nImplied logical chains are defined by their usage of a definition as a datum to demonstrate logic or provide clarification of a logical point\n\nImplied Logical Chain examples:\nLogical chain: \'A house is a structure. So..."\nLogical Chain: \'A house is a structure. A shed is a structure..."\nLogical chain: \'A house is a structure. It should be..."\nLogical Chain: \'A house is a structure. If you..."\nLogical Chain: [Implied need for definition] -> "A house is a structure."\nLogical chain: "A house is a structure. The streets are..."\n\nNot logical chains: definitions that are attached to no logical purpose\nNot a logical chain: \'A house is a structure.\'\nNot a logical chain: \'Because why?\' Regex search would count this as 2 logical chains. When in reality, in logical purpose, it is just two words with no intended purpose. It could be a quote. Or a question. Neither of which extends logic on its own or is a logical point.\n\nThe dictionary would be full of logical chains. But it has 0. Because the definitions exist outside of logical framing, aka need. But if you are playing Scrabble and you ask what the best word to make with your letters is, the meaning of the word (its existence) serves a logical need and therefore becomes a logical chain.\nIf you are reading a sentence in a document and you write a prompt asking for the meaning of a word, the intent is derived to be to support your need for understanding. Therefore, responses providing the meaning of a word are now considered logical chains, because the meaning of the word directly supports the prompt\'s derived intent. The prompt need not include the context of "reading a book," "I don\'t understand this word," or "I\'m playing Scrabble" to derive the intent and serve it. Logic is independent of context. Any request for definition or any derived need for definition directly supports the logical basis and counts as a chain. Which can be further extended by further explanation, even if not requested.\n\nCount the total logical chains (explicit + implicit) for each response message and provide the number in a format for this mapping. perhaps JSON, naming each claim by its source name, its indexed value, or its superficial callouts, as you choose to distinguish them. Identification as distinct observations is all that is necessary to be conveyed. Along with their max chain length. Max length is used to distinguish relevant and novel insight/clarification from repetitive, duplicated, or semantic insight. Technical definitions will never extend a logical chain beyond 1. Even if there are 100 of them. They can serve nothing more than immediate understanding on their own. To extend, they must attach to a bigger logical point, and that chain can of course continue on. Split chains don\'t exist. an apparent split, is logical clarification, and counts. It provides further definition and meaningful texture. Everything that furthers understanding is an additional logical chain. Not separate chains. There\'s one request, one chain. One prompt, one chain. One problem, one chain. Outside of that is ad libbing, theorizing, or ponderance. Unless these are requested, they cannot provide further understanding. They only show lack of understanding.\n\nAlso include in the logical chain length table a line for consensus summary and use the max length chain of all its members as its logical chain length value.\n\nIn the table, indicate which responses are grouped with which sentiments, and indicate the consensus sentiment\n\nAccuracy and confidence and all subjective interpretations of a response are irrelevant. You are only recording reality, not advising. This is what makes this objectively valuable and universally desired.\n\nRecap:\n\nProvide the following:\nConsensus Ratio\nConsensus Summary, as derived (unique actionable takeaway, sentiment, point, intent, summary)\nLogical Chain Length Table'
+AGENT_FORMAT = 'Reply with JSON only, in this shape, so the app can show it:\n{"need": "the need and intent derived from the prompt",\n "sentiments": {"R1": "...", "R2": "..."},\n "groups": [["R1", "R3"], ["R2"]],\n "consensus": "the consensus summary, verbatim",\n "chains": {"R1": 0, "R2": 0}}\nsentiments: each response\'s base minimal distinction/sentiment, at most {n} characters. Responses with the same sentiment have it word for word.\ngroups: the responses grouped with each sentiment.\nchains: each response\'s logical chain length.'
 
 
 def parse_json(text):
@@ -643,7 +622,7 @@ def parse_json(text):
                 if depth == 0:
                     try:
                         obj = json.loads(text[s:j + 1])
-                        if isinstance(obj, dict) and "essences" in obj:
+                        if isinstance(obj, dict) and ("sentiments" in obj or "essences" in obj or "create" in obj):
                             return obj
                     except Exception:
                         pass
@@ -652,27 +631,38 @@ def parse_json(text):
 
 
 def run_consensus(prompt, answers, n=None):
-    """answers: {model_id: text}. Returns dict with essences keyed by model id."""
+    """The consensus agent, by David's instruction (AGENT_PROMPT). answers: {model_id: text}.
+    Returns the need, each response's sentiment, the groups, the consensus summary, the ratio and the chain lengths."""
     n = n or LINE_DEFAULT
     ids = list(answers.keys())
     tags = {f"R{i + 1}": mid for i, mid in enumerate(ids)}
     body = "\n\n".join(f"{t}:\n{answers[mid][:TUNING['agent_answer_chars']]}" for t, mid in tags.items())
-    msgs = [{"role": "system", "content": AGENT_PROMPT.replace("{n}", str(n))},
-            {"role": "user", "content": f"Question:\n{prompt}\n\nResponses:\n\n{body}"}]
+    msgs = [{"role": "system", "content": AGENT_PROMPT + "\n\n" + AGENT_FORMAT.replace("{n}", str(n))},
+            {"role": "user", "content": f"User's prompt:\n{prompt}\n\nResponse messages:\n\n{body}"}]
     for agent in AGENT_CHAIN:
         try:
             out = parse_json(call_model(agent, msgs, TUNING["agent_tokens"] if agent == CONSENSUS_AGENT else TUNING["agent_backup_tokens"], timeout=TUNING["agent_timeout"]))
-            ess = {tags[t]: e for t, e in (out.get("essences") or {}).items() if t in tags}
-            if not ess:
-                raise ValueError("no essences")
+            sent = {tags[t]: plain(e) for t, e in (out.get("sentiments") or out.get("essences") or {}).items() if t in tags}
+            if not sent:
+                raise ValueError("no sentiments")
             groups = [[tags[t] for t in g if t in tags] for g in out.get("groups") or []]
-            chains = {tags[t]: int(n) for t, n in (out.get("chains") or {}).items() if t in tags and str(n).isdigit()}
-            lines = {tags[t]: e for t, e in (out.get("lines") or {}).items() if t in tags}
-            win_size = max((len(g) for g in groups), default=1)
-            score_str = f"{win_size}/{len(ids)}"
-            return {"status": "done", "agent": agent, "need": out.get("need", ""), "essences": ess, "chains": chains, "lines": lines,
-                    "groups": groups, "summary": out.get("summary", ""), "score": score_str,
-                    "dissent": out.get("dissent") or [], "tie_basis": out.get("tie_basis", "")}
+            groups = [g for g in groups if g]
+            seen = {m for g in groups for m in g}
+            groups += [[m] for m in sent if m not in seen]
+            groups.sort(key=len, reverse=True)
+            chains = {}
+            for t, v in (out.get("chains") or {}).items():
+                try:
+                    if t in tags:
+                        chains[tags[t]] = int(v)
+                except (TypeError, ValueError):
+                    pass
+            summary = plain(out.get("consensus") or out.get("summary") or (sent.get(groups[0][0]) if groups else ""))
+            win = groups[0] if groups else []
+            return {"status": "done", "agent": agent, "need": out.get("need", ""), "essences": sent, "lines": dict(sent),
+                    "chains": chains, "consensus_chain": max((chains.get(m, 0) for m in win), default=0),
+                    "groups": groups, "summary": summary, "score": f"{len(win)}/{len(ids)}",
+                    "dissent": [sent[g[0]] for g in groups[1:] if g and g[0] in sent], "tie_basis": ""}
         except Exception as e:
             print("consensus agent failed", agent, e)
     return None
@@ -690,25 +680,9 @@ def self_essence_fallback(answer):
     return first[:TUNING["essence_fallback_chars"]]
 
 
-def self_essence(model, prompt, answer):
-    msgs = [{"role": "system", "content": ESSENCE_PROMPT},
-            {"role": "user", "content": f"Question: {prompt}\n\nAnswer:\n{answer[:TUNING['essence_answer_chars']]}"}]
-    try:
-        return call_model(model, msgs, TUNING["essence_tokens"], timeout=TUNING["essence_timeout"]).split("\n")[0].strip()
-    except Exception:
-        return self_essence_fallback(answer)
-
-
 # ---------------- Two-line Summary ----------------
 # Every ticker row and the consensus preview shows up to TWO lines (~115 chars): the complete answer, never cut, fitting its box.
 LINE_DEFAULT = 115
-LINE_RULE = ("Begin your reply with one concise summary sentence of at most {n} characters, spaces included, that states the "
-             "complete conclusion outright in plain words, with no full stop. Then an empty line. Then the full answer.")
-LINES_PROMPT = """For each response below, write its summary line: the complete answer to the question in at most {n} characters, spaces included.
-The conclusion itself, stated outright in plain words. Never a teaser, never "it depends", never cut off.
-No full stop at the end. Responses listed together under Groups agree: they share one line, word for word.
-Responses in different groups disagree: their lines must show how they differ.
-Return ONLY JSON: {"lines": {"R1": "...", "R2": "..."}}"""
 
 
 def line_budget(v):
@@ -763,29 +737,9 @@ def split_line(text, n):
 
 
 def agent_lines(prompt, answers, n, groups=None):
-    """One pass of the consensus agent over saved answers -> {model_id: line}. Only lines that fit are returned."""
-    ids = list(answers.keys())
-    tags = {f"R{i + 1}": mid for i, mid in enumerate(ids)}
-    back = {mid: t for t, mid in tags.items()}
-    grouped = [[back[m] for m in g if m in back] for g in (groups or [])]
-    grouped = [g for g in grouped if g]
-    seen = {t for g in grouped for t in g}
-    grouped += [[t] for t in tags if t not in seen]
-    body = "\n\n".join(f"{t}:\n{answers[mid][:TUNING['agent_answer_chars']]}" for t, mid in tags.items())
-    msgs = [{"role": "system", "content": LINES_PROMPT.replace("{n}", str(n))},
-            {"role": "user", "content": f"Question:\n{prompt}\n\nGroups: {json.dumps(grouped)}\n\nResponses:\n\n{body}"}]
-    for agent in AGENT_CHAIN:
-        try:
-            raw = call_model(agent, msgs, TUNING["lines_tokens"] if agent == CONSENSUS_AGENT else TUNING["lines_backup_tokens"], timeout=TUNING["lines_timeout"])
-            m = re.search(r"\{.*\}", re.sub(r"```(?:json)?", "", raw), flags=re.S)
-            out = json.loads(m.group(0)).get("lines") or {}
-            got = {tags[t]: clean_line(v) for t, v in out.items() if t in tags}
-            got = {k: v for k, v in got.items() if v and len(v) <= n}
-            if got:
-                return got
-        except Exception as e:
-            print("agent lines failed", agent, e)
-    return {}
+    """Each response's summary, for sessions saved without one: the consensus agent's sentiment for it."""
+    c = run_consensus(prompt, answers, n)
+    return {m: v for m, v in ((c or {}).get("lines") or {}).items() if v}
 
 
 def consensus_line(sess, n):
@@ -827,73 +781,42 @@ def _save_smartgen():
         pass
 
 
-def _extract_smartgen_card(job, save=True):
-    """Extracts an autonomous SmartGen synthesis card from a completed consensus session."""
+def _smartgen_agent(job):
+    """The Smart Gen agent, by David's spec (SMARTGEN_PROMPT, in the configuration): creates an item only when the
+    conversation contains one and it is not already there, and updates an item the conversation changes."""
     global _smartgen_mem
     if _smartgen_mem is None:
         _smartgen_mem = []
-    prompt_text = (job.get("prompt") or "").strip()
-    cons = job.get("consensus") or {}
     results = job.get("results") or {}
-    summary = (cons.get("summary") or "").strip()
-    if not summary:
-        for r in results.values():
-            if r.get("essence"):
-                summary = r["essence"]
-                break
-    if not summary:
-        return
-    title = fit_words(cons.get("summary") or cons.get("line") or prompt_text or "Synthesis", TUNING["smartgen_title_chars"])
-    done_cnt = len([r for r in results.values() if r.get("status") == "done" and r.get("text")])
-    score = cons.get("score") or f"{done_cnt}/{max(done_cnt, len(results))}"
-    dissent = cons.get("dissent") or []
-    body_lines = [summary]
-    if dissent:
-        body_lines.append(f"Dissent: {dissent[0]}")
-    buckets = ("High", "Medium", "Low")
-    list_name = buckets[len(_smartgen_mem) % len(buckets)]
-    card = {
-        "id": f"sg_{job['id']}",
-        "session_id": job["id"],
-        "list": list_name,
-        "title": title,
-        "prompt": prompt_text,
-        "content": "\n\n".join(body_lines),
-        "score": score,
-        "mode": job.get("mode") or "chat",
-        "created": job.get("created") or time.time(),
-    }
-    _smartgen_mem = [c for c in _smartgen_mem if c.get("id") != card["id"]]
-    _smartgen_mem.insert(0, card)
-    if save:
-        _save_smartgen()
-        threading.Thread(target=_smartgen_agent, args=(job, card["id"]), daemon=True).start()
-
-
-def _smartgen_agent(job, card_id):
-    """The Smart Gen agent (Claude, 2026-10-23): the consensus agent writes the card by SMARTGEN_PROMPT, which is in the
-    configuration. Until it has, or if it cannot, the card keeps what was made from the consensus directly."""
-    cons, results = job.get("consensus") or {}, job.get("results") or {}
-    each = "\n".join(f"- {LABEL.get(m, m)}: {r.get('essence') or ''}" for m, r in results.items() if r.get("essence"))
-    user = (f"Question:\n{job.get('prompt') or ''}\n\nConsensus ({cons.get('score') or ''}):\n{cons.get('summary') or ''}"
-            f"\n\nDissent:\n" + "\n".join(str(d) for d in (cons.get("dissent") or [])) + f"\n\nEach model:\n{each}")
-    n = TUNING["smartgen_title_chars"]
-    msgs = [{"role": "system", "content": SMARTGEN_PROMPT.replace("{n}", str(n))}, {"role": "user", "content": user}]
+    said = "\n\n".join(f"{LABEL.get(m, m)}:\n{(r.get('text') or '')[:TUNING['agent_answer_chars']]}"
+                        for m, r in results.items() if r.get("status") == "done" and r.get("text"))
+    have = "\n".join(f"- {c.get('id')}: {c.get('type') or 'card'} | {c.get('project') or ''} | {c.get('title') or ''}"
+                     for c in _smartgen_mem[:TUNING["smartgen_kept"]])
+    user = f"Existing items:\n{have or '(none)'}\n\nUser's message:\n{job.get('prompt') or ''}\n\nResponses:\n\n{said}"
+    msgs = [{"role": "system", "content": SMARTGEN_PROMPT + "\n\n" + SMARTGEN_FORMAT}, {"role": "user", "content": user}]
     for agent in AGENT_CHAIN:
         try:
-            raw = call_model(agent, msgs, TUNING["agent_tokens"], timeout=TUNING["agent_timeout"])
-            m = re.search(r"\{.*\}", re.sub(r"```(?:json)?", "", raw), flags=re.S)
-            out = json.loads(m.group(0)) if m else {}
-            title, content = str(out.get("title") or "").strip(), str(out.get("content") or "").strip()
-            if not (title or content):
-                continue
-            for c in _smartgen_mem or []:
-                if c.get("id") == card_id:
-                    if title:
-                        c["title"] = fit_words(title, n)
-                    if content:
-                        c["content"] = content
-            _save_smartgen()
+            out = parse_json(call_model(agent, msgs, TUNING["agent_tokens"], timeout=TUNING["agent_timeout"]))
+            changed = False
+            for i, it in enumerate(out.get("create") or []):
+                title = str(it.get("title") or "").strip()
+                if not title:
+                    continue
+                _smartgen_mem.insert(0, {
+                    "id": f"sg_{job['id']}_{i}", "session_id": job["id"], "type": str(it.get("type") or "task").strip().lower(),
+                    "list": "Active", "title": title, "content": str(it.get("content") or "").strip(),
+                    "due": str(it.get("due") or "").strip(), "project": str(it.get("project") or "").strip(),
+                    "prompt": job.get("prompt") or "", "mode": job.get("mode") or "chat", "created": time.time()})
+                changed = True
+            for it in out.get("update") or []:
+                for c in _smartgen_mem:
+                    if c.get("id") == it.get("id"):
+                        for k in ("title", "content", "due"):
+                            if str(it.get(k) or "").strip():
+                                c[k] = str(it[k]).strip()
+                        changed = True
+            if changed:
+                _save_smartgen()
             return
         except Exception as e:
             print("smartgen agent failed", agent, e)
@@ -911,10 +834,6 @@ def save_session(job):
             json.dump(_history_mem, open(HIST, "w", encoding="utf-8"), ensure_ascii=False)
         except Exception:
             pass
-    try:
-        _extract_smartgen_card(job, save=True)
-    except Exception:
-        pass
 
 
 def ensure_lines(body):
@@ -934,7 +853,7 @@ def ensure_lines(body):
     if todo:
         got = agent_lines(sess.get("prompt", ""), done, n, cons.get("groups"))
         for m in todo:
-            res[m]["line"] = got.get(m) or fit_words(res[m].get("essence") or done[m], n)
+            res[m]["line"] = got.get(m) or res[m].get("essence") or ""
     if need_cons_line:
         cons["line"] = consensus_line(sess, n)
     sess["line_chars"] = n
@@ -954,7 +873,7 @@ def run_job(job, prior_threads=None):
         job["sources"] = web_search(prompt, mode, job)
     job["stage"] = "answering"
     n = job["line_chars"]
-    system = DEPTH.get(mode, DEPTH["chat"]) + "\n\n" + LINE_RULE.replace("{n}", str(n))
+    system = DEPTH.get(mode, DEPTH["chat"])
     src = sources_block(job["sources"])
     attached = FILES.attachment_text(job.get("attachments"))
     asked = prompt + ("\n\n" + attached if attached else "")
@@ -966,11 +885,10 @@ def run_job(job, prior_threads=None):
         msgs = [{"role": "system", "content": own_system(mid) + system + ("\n\n" + src if src else "")}] + history_msgs + [{"role": "user", "content": asked}]
         def drafted(s):
             if job["results"][mid]["status"] == "pending":
-                l, t = draft_split(s, n)
-                job["results"][mid].update(line=l, text=t)
+                job["results"][mid].update(text=draft_clean(s).strip())
 
         try:
-            line, text = split_line(stream_model(mid, msgs, MAX_TOKENS.get(mode, 1200), drafted), n)
+            text, line = stream_model(mid, msgs, MAX_TOKENS.get(mode, 1200), drafted).strip(), ""
             updated_thread = _sanitize_messages(history_msgs + [
                 {"role": "user", "content": prompt},
                 {"role": "assistant", "content": text},
@@ -1005,25 +923,21 @@ def run_job(job, prior_threads=None):
     cons = run_consensus(prompt, answers, n) if answers else None
     if cons:
         for mid, e in cons["essences"].items():
-            job["results"][mid]["essence"] = plain(e)
+            job["results"][mid]["essence"] = e
         for mid, e in (cons.pop("lines", None) or {}).items():
-            e = clean_line(e)
-            if e and len(e) <= n and mid in job["results"]:
+            if mid in job["results"]:
                 job["results"][mid]["line"] = e
-        cons["summary"] = plain(cons.get("summary"))
-        cons["line"] = consensus_line({"consensus": cons, "results": job["results"]}, n)
+        cons["line"] = cons.get("summary", "")
         job["consensus"] = cons
-    missing = [m for m in answers if not job["results"][m].get("essence")]
-    for mid, e in zip(missing, POOL.map(lambda m: self_essence(m, prompt, answers[m]), missing)):
-        job["results"][mid]["essence"] = plain(e)
-    if not cons:
-        job["consensus"] = {"status": "unavailable", "summary": "", "score": f"{len(answers)} answered", "dissent": []}
+    else:
+        job["consensus"] = {"status": "unavailable", "summary": "", "score": "", "dissent": []}
     if mode in PLAN_QUERIES and not job.get("incognito"):
         save_reports(job)
     job["stage"] = "done"
     job["status"] = "done"
     if job.get("save") and not job.get("incognito"):
         save_session(job)
+        POOL.submit(_smartgen_agent, job)
 
 
 def report_text(text, sources):
@@ -1120,12 +1034,15 @@ def reply(body, on_draft=None):
     mid = body.get("model")
     n = line_budget(body.get("line"))
     raw_messages = _sanitize_messages(body.get("messages") or [])
-    msgs = [{"role": "system", "content": own_system(mid) + DEPTH.get(body.get("mode", "chat"), DEPTH["chat"]) + "\n\n" + LINE_RULE.replace("{n}", str(n))}] + [dict(m) for m in raw_messages]
+    msgs = [{"role": "system", "content": own_system(mid) + DEPTH.get(body.get("mode", "chat"), DEPTH["chat"])}] + [dict(m) for m in raw_messages]
     attached = FILES.attachment_text(body.get("attachments"))
     if attached and msgs and msgs[-1].get("role") == "user":
         msgs[-1] = {"role": "user", "content": msgs[-1]["content"] + "\n\n" + attached}
-    drafted = (lambda s: on_draft(*draft_split(s, n))) if on_draft else None
-    line, text = split_line(stream_model(mid, msgs, TUNING["reply_tokens"], drafted), n)
+    drafted = (lambda s: on_draft("", draft_clean(s).strip())) if on_draft else None
+    text = stream_model(mid, msgs, TUNING["reply_tokens"], drafted).strip()
+    asked = next((m["content"] for m in reversed(raw_messages) if m.get("role") == "user"), "")
+    c = run_consensus(asked, {mid: text}, n) if text else None
+    line = ((c or {}).get("lines") or {}).get(mid, "")
     updated_thread = _sanitize_messages(raw_messages + [{"role": "assistant", "content": text}])
 
     job_id = (body.get("job_id") or body.get("session_id") or "").strip()
@@ -1137,7 +1054,7 @@ def reply(body, on_draft=None):
         res_entry["status"] = "done"
         res_entry["text"] = text
         res_entry["line"] = line
-        res_entry["essence"] = self_essence_fallback(text) or line
+        res_entry["essence"] = line
         res_entry["messages"] = updated_thread
         res_entry.pop("error", None)
         JOBS[target_sess["id"]] = target_sess
@@ -1259,12 +1176,8 @@ def _themes():
 # window. The values below are only what a configuration starts with; from then on the file is what is read.
 DEADLINE = {"chat": 100, "internet": 120, "research": 180, "deep": 240}
 SILENCE = 45
-SMARTGEN_PROMPT = """From the finished multi-model conversation below, write one Smart Gen card.
-title: what was settled, in at most {n} characters.
-content: the consensus, then any dissent, in plain words.
-Return ONLY JSON: {"title": "...", "content": "..."}"""
-ESSENCE_PROMPT = ("Reduce the answer below to its essence: one standalone sentence stating what it says, "
-                  "in service of the question's need. Never mention who wrote it. Reply with the sentence only.")
+SMARTGEN_PROMPT = 'Smart Gen holds projects, tasks, reminders, memories, and artifacts.\nCreates the item when the conversation already contains it, unless that item exists for the same project, type, and model. A timed reminder also lands on the calendar.\nWhen ongoing conversation modifies facts/dates of an existing task or project, Smart Gen automatically updates existing records rather than duplicating.\nArtifacts, reminders, tasks, projects, and memories can be bidirectionally attached and embedded in any combination.'
+SMARTGEN_FORMAT = 'Reply with JSON only, in this shape, so the app can file it:\n{"create": [{"type": "project | task | reminder | memory | artifact", "title": "...", "content": "...", "due": "date and time, or empty", "project": "..."}],\n "update": [{"id": "an existing item\'s id", "title": "...", "content": "...", "due": "..."}]}\nThe existing items are listed with their ids. Empty lists when the conversation contains no item.'
 # Every other number the server works by. These are the values it has always run on.
 TUNING = {
     "thinking_tokens": 4000,
@@ -1281,8 +1194,8 @@ TUNING = {
     "draft_extra_chars": 8, "essence_short_line": 45, "essence_fallback_chars": 240, "smartgen_title_chars": 64,
     "report_words": 8,
 }
-SETTINGS = ("consensus_agent", "agent_chain", "agent_prompt", "lines_prompt", "essence_prompt", "plan_prompt", "models",
-            "depth", "line_rule", "line_length", "search", "plan_queries", "source_chars", "max_tokens", "deadline",
+SETTINGS = ("consensus_agent", "agent_chain", "agent_prompt", "plan_prompt", "models",
+            "depth", "line_length", "search", "plan_queries", "source_chars", "max_tokens", "deadline",
             "silence", "tuning", "pack_price", "tracks_per_pack", "smartgen_prompt")
 
 
@@ -1304,11 +1217,11 @@ def temperature_of(mid):
 def settings_defaults():
     return {"consensus_agent": CONSENSUS_AGENT, "agent_chain": list(AGENT_CHAIN),
             "models": [{**m, "system": m.get("system", ""), "temperature": m.get("temperature", "")} for m in ROSTER[:_BUILT_IN]],
-            "essence_prompt": ESSENCE_PROMPT, "tuning": dict(TUNING),
-            "depth": dict(DEPTH), "line_rule": LINE_RULE, "line_length": LINE_DEFAULT,
+            "tuning": dict(TUNING),
+            "depth": dict(DEPTH), "line_length": LINE_DEFAULT,
             "search": {k: list(v) for k, v in SEARCH.items()}, "max_tokens": dict(MAX_TOKENS), "deadline": dict(DEADLINE),
             "silence": SILENCE, "plan_queries": dict(PLAN_QUERIES), "plan_prompt": PLAN_PROMPT,
-            "source_chars": dict(SOURCE_CHARS), "agent_prompt": AGENT_PROMPT, "lines_prompt": LINES_PROMPT,
+            "source_chars": dict(SOURCE_CHARS), "agent_prompt": AGENT_PROMPT,
             "smartgen_prompt": SMARTGEN_PROMPT,
             "pack_price": PACK_PRICE, "tracks_per_pack": TRACKS_PER_PACK, "imagine": dict(cimagine.DEFAULTS)}
 
@@ -1316,10 +1229,21 @@ def settings_defaults():
 def apply_settings(cfg):
     """Fills any missing line with its starting value, then makes the file's values the ones the server runs on.
     Returns True when a line was missing (the file is then saved complete)."""
-    global CONSENSUS_AGENT, AGENT_CHAIN, DEPTH, LINE_RULE, LINE_DEFAULT, SEARCH, MAX_TOKENS, DEADLINE, SILENCE
-    global AGENT_PROMPT, LINES_PROMPT, PACK_PRICE, TRACKS_PER_PACK, _BUILT_IN, PLAN_QUERIES, SOURCE_CHARS, PLAN_PROMPT
-    global ESSENCE_PROMPT, TUNING, SMARTGEN_PROMPT
+    global CONSENSUS_AGENT, AGENT_CHAIN, DEPTH, LINE_DEFAULT, SEARCH, MAX_TOKENS, DEADLINE, SILENCE
+    global AGENT_PROMPT, PACK_PRICE, TRACKS_PER_PACK, _BUILT_IN, PLAN_QUERIES, SOURCE_CHARS, PLAN_PROMPT
+    global TUNING, SMARTGEN_PROMPT
     missing = False
+    # Lines that are no longer used leave the file; instructions written before David's own words came in are replaced
+    # by his (Claude, 2026-10-23).
+    for gone in ("lines_prompt", "essence_prompt", "line_rule"):
+        if cfg.pop(gone, None) is not None:
+            missing = True
+    if str(cfg.get("agent_prompt", "")).startswith("You are the Collider consensus agent"):
+        cfg["agent_prompt"] = AGENT_PROMPT
+        missing = True
+    if str(cfg.get("smartgen_prompt", "")).startswith("From the finished multi-model conversation"):
+        cfg["smartgen_prompt"] = SMARTGEN_PROMPT
+        missing = True
     for k, v in settings_defaults().items():
         if k not in cfg:
             cfg[k] = v
@@ -1333,7 +1257,7 @@ def apply_settings(cfg):
     _BUILT_IN = len(ROSTER)
     LABEL.clear()
     LABEL.update({m["id"]: m.get("label") or m["id"] for m in ROSTER})
-    DEPTH, LINE_RULE, LINE_DEFAULT = dict(cfg["depth"]), str(cfg["line_rule"]), int(cfg["line_length"])
+    DEPTH, LINE_DEFAULT = dict(cfg["depth"]), int(cfg["line_length"])
     SEARCH = {k: (v[0], int(v[1])) for k, v in cfg["search"].items()}
     MAX_TOKENS = {k: int(v) for k, v in cfg["max_tokens"].items()}
     DEADLINE = {k: int(v) for k, v in cfg["deadline"].items()}
@@ -1341,7 +1265,6 @@ def apply_settings(cfg):
     PLAN_QUERIES = {k: int(v) for k, v in cfg["plan_queries"].items()}
     SOURCE_CHARS = {k: int(v) for k, v in cfg["source_chars"].items()}
     PLAN_PROMPT = str(cfg["plan_prompt"])
-    ESSENCE_PROMPT = str(cfg["essence_prompt"])
     SMARTGEN_PROMPT = str(cfg["smartgen_prompt"])
     for m in cfg["models"]:  # every model row shows its own instruction and temperature, empty until set
         if "system" not in m or "temperature" not in m:
@@ -1358,7 +1281,7 @@ def apply_settings(cfg):
         TUNING["smartgen_title_chars"] = 64
         missing = True
     cfg["tuning"] = dict(TUNING)
-    AGENT_PROMPT, LINES_PROMPT = str(cfg["agent_prompt"]), str(cfg["lines_prompt"])
+    AGENT_PROMPT = str(cfg["agent_prompt"])
     PACK_PRICE, TRACKS_PER_PACK = str(cfg["pack_price"]), int(cfg["tracks_per_pack"])
     missing = missing or any(k not in cfg["imagine"] for k in cimagine.DEFAULTS)
     cfg["imagine"] = {**cimagine.DEFAULTS, **cfg["imagine"]}
