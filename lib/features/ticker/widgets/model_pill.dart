@@ -16,12 +16,16 @@ class ModelPill extends StatefulWidget {
   /// 0 = resting (bottom of the stack) to 1 = highest row.
   final double elevation;
 
+  /// In the narrow left column beside an open conversation.
+  final bool compact;
+
   const ModelPill({
     super.key,
     required this.item,
     required this.isExpanded,
     required this.onToggleExpand,
     this.elevation = 0,
+    this.compact = false,
   });
 
   @override
@@ -73,7 +77,7 @@ class _ModelPillState extends State<ModelPill> {
               child: Row(
                 children: [
                   Expanded(child: Text(item.modelDef.label, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: meta)),
-                  if (waiting) _Pulse(color: c) else Text(item.relativeTime, style: meta),
+                  if (waiting) _Pulse(color: c) else if (!widget.compact) Text(item.relativeTime, style: meta),
                 ],
               ),
             ),
@@ -81,8 +85,13 @@ class _ModelPillState extends State<ModelPill> {
             // Two lines, kept for the summary from the start, so the row never changes height as the answer comes in;
             // the summary is written to fit them and shows whole (Claude, 2026-10-23; David: "it can be 2 lines. the
             // important thing is that it shows in full").
-            SizedBox(
-              height: 34,
+            // The open model's summary in full, the row growing in place like an accordion (David, 23 Oct).
+            AnimatedSize(
+              duration: VMotion.base,
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+              height: widget.isExpanded && item.summary.isNotEmpty ? null : 30,
               child: AnimatedSwitcher(
                 duration: VMotion.base,
                 layoutBuilder: (cur, prev) => Stack(alignment: Alignment.topLeft, children: [...prev, if (cur != null) cur]),
@@ -91,9 +100,11 @@ class _ModelPillState extends State<ModelPill> {
                     : SizedBox(
                         key: ValueKey(item.summary),
                         width: double.infinity,
-                        child: Text(item.summary, maxLines: 2, overflow: TextOverflow.fade, style: VOneLine.rowStyle),
+                        child: Text(item.summary,
+                            maxLines: widget.isExpanded ? null : 2, overflow: widget.isExpanded ? null : TextOverflow.fade, style: VOneLine.rowStyle),
                       ),
               ),
+            ),
             ),
             if (item.mediaUrls != null && item.mediaUrls!.isNotEmpty) ...[
               const SizedBox(height: VSpace.xs),
@@ -168,7 +179,7 @@ class _SkeletonLinesState extends State<_SkeletonLines> with SingleTickerProvide
               alignment: Alignment.centerLeft,
               child: Container(
                 height: 9,
-                margin: const EdgeInsets.symmetric(vertical: 4), // two of them fill the summary's two lines
+                margin: const EdgeInsets.symmetric(vertical: 3), // two of them fill the summary's two lines
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(5),
                   gradient: LinearGradient(

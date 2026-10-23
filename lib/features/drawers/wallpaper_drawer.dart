@@ -118,7 +118,7 @@ class _WallpaperDrawerState extends State<WallpaperDrawer> {
                         // Subtitle
                         Text(
                           "Select high-fidelity spatial living backgrounds for your cosmos.",
-                          style: SpatialTypography.caption(fontSize: 11.5, color: Colors.white60),
+                          style: SpatialTypography.caption(fontSize: 11, color: Colors.white60),
                         ),
                         const SizedBox(height: 10),
 
@@ -131,10 +131,10 @@ class _WallpaperDrawerState extends State<WallpaperDrawer> {
                           ),
                           child: TextField(
                             controller: _searchCtrl,
-                            style: GoogleFonts.instrumentSans(fontSize: 12.5, color: Colors.white),
+                            style: GoogleFonts.instrumentSans(fontSize: 11, color: Colors.white),
                             decoration: InputDecoration(
                               hintText: "Search themes by name or palette...",
-                              hintStyle: GoogleFonts.instrumentSans(fontSize: 12, color: Colors.white38),
+                              hintStyle: GoogleFonts.instrumentSans(fontSize: 11, color: Colors.white38),
                               prefixIcon: const Icon(Icons.search_rounded, size: 16, color: Colors.white54),
                               suffixIcon: _searchQuery.isNotEmpty
                                   ? IconButton(
@@ -166,7 +166,7 @@ class _WallpaperDrawerState extends State<WallpaperDrawer> {
                                     _searchQuery.isEmpty
                                         ? "No themes available"
                                         : "No matching themes found",
-                                    style: SpatialTypography.caption(fontSize: 12, color: Colors.white54),
+                                    style: SpatialTypography.caption(fontSize: 11, color: Colors.white54),
                                   ),
                                 )
                               : GridView.builder(
@@ -251,7 +251,7 @@ class _WallpaperDrawerState extends State<WallpaperDrawer> {
                               ),
                               child: Text(
                                 "Done",
-                                style: GoogleFonts.instrumentSans(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                                style: GoogleFonts.instrumentSans(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
                               ),
                             ),
                           ),

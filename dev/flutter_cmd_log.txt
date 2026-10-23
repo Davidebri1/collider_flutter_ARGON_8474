@@ -4,6 +4,7 @@ Analyzing lib...
    info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\core\media\theme_blur_cache.dart:40:80 - prefer_const_constructors
    info - The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart'. Try removing the import directive - lib\core\media\theme_media_bundle.dart:2:8 - unnecessary_import
    info - The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/services.dart'. Try removing the import directive - lib\core\media\theme_media_bundle.dart:3:8 - unnecessary_import
+   info - The imported package 'url_launcher' isn't a dependency of the importing package. Try adding a dependency for 'url_launcher' in the 'pubspec.yaml' file - lib\core\platform\open_url_stub.dart:4:8 - depend_on_referenced_packages
    info - The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart'. Try removing the import directive - lib\core\voice\voice_web.dart:7:8 - unnecessary_import
 warning - A value for optional parameter 'reply' isn't ever given. Try removing the unused parameter - lib\features\consensus\consensus_webview.dart:53:82 - unused_element_parameter
    info - Use 'const' with the constructor to improve performance. Try adding the 'const' keyword to the constructor invocation - lib\features\prompt\floating_prompt.dart:150:14 - prefer_const_constructors
@@ -15,4 +16,4 @@ warning - The value of the field '_promptTime' isn't used. Try removing the fiel
    info - Statements in an if should be enclosed in a block. Try wrapping the statement in a block - lib\main.dart:1008:31 - curly_braces_in_flow_control_structures
    info - Statements in an if should be enclosed in a block. Try wrapping the statement in a block - lib\main.dart:1009:36 - curly_braces_in_flow_control_structures
 
-14 issues found. (ran in 9.5s)
+15 issues found. (ran in 5.7s)

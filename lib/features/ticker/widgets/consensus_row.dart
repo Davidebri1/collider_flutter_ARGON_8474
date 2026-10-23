@@ -39,7 +39,7 @@ class ConsensusRow extends StatelessWidget {
             // The score leads the words it belongs to; it does not take a line of its own. Two lines are kept for them
             // from the start and the summary shows whole (Claude, 2026-10-23; was one line, shrunk to fit).
             SizedBox(
-              height: 34,
+              height: 30,
               child: AnimatedSwitcher(
                 duration: VMotion.base,
                 layoutBuilder: (cur, prev) => Stack(alignment: Alignment.topLeft, children: [...prev, if (cur != null) cur]),
@@ -51,8 +51,8 @@ class ConsensusRow extends StatelessWidget {
                       TextSpan(
                         text: agree == null ? '\u2013/\u2013' : score,
                         style: VType.caption(color: ink, weight: FontWeight.w700).copyWith(
-                          fontSize: 12,
-                          height: 17 / 12,
+                          fontSize: 11,
+                          height: 15 / 11,
                           shadows: agree == null
                               ? null
                               : [Shadow(color: ink.withValues(alpha: 0.9), blurRadius: 10), Shadow(color: ink.withValues(alpha: 0.5), blurRadius: 3)],

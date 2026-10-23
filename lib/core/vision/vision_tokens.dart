@@ -125,8 +125,8 @@ class VShadow {
 class VType {
   VType._();
   static const double xs = 11;
-  static const double sm = 13;
-  static const double md = 15;
+  static const double sm = 11; // 13 until 2026-10-23 (Claude): 11 is the size outside headers
+  static const double md = 11; // 15 until 2026-10-23 (Claude): 11 is the size outside headers
   static const double lg = 17;
   static const double xl = 20;
   static const double xxl = 24;

@@ -1056,7 +1056,11 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     final openId = _expandedModelIds.isEmpty ? null : _expandedModelIds.first;
     final TickerItem? openItem = activePills.where((p) => p.modelDef.id == openId).firstOrNull;
     // On a phone the opened conversation is wide; the side navigation steps aside for it.
-    final railVisible = _railVisible && openItem == null;
+    // side by side: the rows as the left column and the conversation as a closeable pane beside them
+    final sideBySide = openItem != null && !media;
+    // On a phone the window takes the side navigation's room while a conversation is open.
+    final railVisible = _railVisible && !(isMobile && sideBySide);
+    final screenW = MediaQuery.sizeOf(context).width;
 
     // Expanded: that model's conversation, closeable, opened under its own summary (see the rows below).
     final Widget conversation = openItem == null
@@ -1064,7 +1068,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         : ConversationView(
             key: ValueKey('conv-${openItem.modelDef.id}'),
             item: openItem,
-            attached: true,
+            fill: true, // the pane's full height, the entry box at its foot
             onClose: () => setState(() => _expandedModelIds.clear()),
             onSendReply: (reply, files) => _onSendInlineReply(openItem.modelDef.id, reply, files),
             onOpenBrowser: () => _openBrowserForTab(_browserTabs.length > 1 ? _browserTabs[1].id : 'user_default'),
@@ -1073,6 +1077,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               _zoomedModelDef = openItem.modelDef;
             }),
             onOpenLocalHistory: () => setState(() => _localHistoryModel = openItem.modelDef),
+            onSend: () => _sendText(_conversationText(openItem)),
+            onOpen: () => _openTextAsDocument(openItem.modelDef.label, _conversationText(openItem), openItem.modelDef.label),
           );
 
     // Collapsed: the consensus row pinned on top, then one row per model.
@@ -1109,6 +1115,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         item: activePills[i],
                         elevation: activePills.length <= 1 ? 1.0 : 1.0 - i / (activePills.length - 1),
                         isExpanded: activePills[i].modelDef.id == openId,
+                        compact: openItem != null,
                         onToggleExpand: () => _onTogglePill(activePills[i].modelDef.id),
                       ),
                       // The conversation opens in the detail view over the room; the ticker keeps its size and place
@@ -1174,23 +1181,29 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 // On a phone the ticker and the composer stand beside the side navigation, never under it
                 // (Claude, 2026-10-23: the rail covered the ticker's lower left corner).
                 child: Padding(
-                  padding: EdgeInsets.only(left: isMobile && !media ? 76 : 0),
+                  padding: EdgeInsets.zero,
                   child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // ================= THE TICKER WINDOW =================
                     // Rows are the collapsed state. An opened conversation is its own view:
                     // beside the rows where there is room, in their place on a phone.
-                    Center(
+                    Padding(
+                      // beside the side navigation on a phone, never under it
+                      padding: EdgeInsets.only(left: isMobile && !media && !sideBySide ? 76 : 0),
+                      child: Center(
                       child: Container(
                         constraints: BoxConstraints(
-                          maxWidth: isMobile
-                              ? (media ? 360.0 : 300.0) // one width, opened or not; the pictures' toolbar fits whole (Claude, 2026-10-21)
-                              : (media ? 780.0 : 480.0),
+                          maxWidth: sideBySide
+                              ? (isMobile ? screenW - 20 : (screenW - 220).clamp(480.0, 872.0))
+                              : isMobile
+                                  ? (media ? 360.0 : 300.0) // the pictures' toolbar fits whole (Claude, 2026-10-21)
+                                  : (media ? 780.0 : 480.0),
                           // rows: never more than 40% of the screen; a conversation: "halfway up is sufficient"
-                          maxHeight: MediaQuery.of(context).size.height * (media && _mediaExpanded ? 0.50 : 0.40),
+                          maxHeight: MediaQuery.of(context).size.height * (sideBySide || (media && _mediaExpanded) ? 0.50 : 0.40),
                         ),
-                        margin: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24),
+                        height: sideBySide ? MediaQuery.of(context).size.height * 0.50 : null,
+                        margin: EdgeInsets.symmetric(horizontal: sideBySide ? 0 : (isMobile ? 12 : 24)),
                         child: VGlass(
                           radius: VRadius.card,
                           material: VMaterial.resting,
@@ -1206,14 +1219,29 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                                   onRemix: (ref) => _toImageChat(reference: ref),
                                   refresh: _mediaRefresh,
                                 )
-                              : rows,
+                              : sideBySide
+                                  ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                      SizedBox(width: isMobile ? 136 : 300, child: Align(alignment: Alignment.topCenter, child: rows)),
+                                      const SizedBox(width: VSpace.xs),
+                                      Expanded(
+                                        child: Container(
+                                          padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+                                          decoration: BoxDecoration(color: VColors.fillRow, borderRadius: BorderRadius.circular(VRadius.card - VSpace.xs)),
+                                          child: conversation,
+                                        ),
+                                      ),
+                                    ])
+                                  : rows,
                         ),
                       ),
                     ),
+                    ),
                     const SizedBox(height: 4),
                     // The composer is its own element, never a row of the ticker. Tucked, it is an arrow.
-                    ConstrainedBox(
-                      // as wide as the ticker and the dock, so it stands beside the side navigation, not over it
+                    Padding(
+                      // in the ticker's column, beside the side navigation; it stays put when a conversation opens
+                      padding: EdgeInsets.only(left: isMobile && !media ? 76 : 0),
+                      child: ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: isMobile ? 300.0 : 480.0),
                       child: FloatingPrompt(
                         summoned: _isComposerSummoned,
@@ -1234,6 +1262,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         }),
                         onTuck: () => setState(() => _isComposerSummoned = false),
                       ),
+                    ),
                     ),
                   ],
                 ),
@@ -1260,39 +1289,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 onOpenDocuments: () => _openDocument(),
                 onOpenMusicPlayer: _openMusic,
                 onOpenBrowser: () => _openBrowserForTab('user_default'),
-              ),
-            ),
-
-          // ================= AN OPENED CONVERSATION (Claude, 2026-10-23) =================
-          // The app's detail view: the model, its summary in full, the conversation and its entry box; Send, Open, Close.
-          if (openItem != null && _activeDrawer == null)
-            Positioned.fill(
-              child: DetailView(
-                onClose: () => setState(() => _expandedModelIds.clear()),
-                onSend: () => _sendText(_conversationText(openItem)),
-                onOpen: () => _openTextAsDocument(openItem.modelDef.label, _conversationText(openItem), openItem.modelDef.label),
-                maxWidth: 560,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.66),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(openItem.modelDef.label,
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.fade,
-                          style: VType.headline().copyWith(fontSize: 15, height: 20 / 15, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 12)])),
-                      if (openItem.summary.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(openItem.summary,
-                            style: VType.callout(color: VColors.textSecondary).copyWith(height: 1.4, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 12)])),
-                      ],
-                      const SizedBox(height: 10),
-                      Flexible(child: conversation),
-                    ],
-                  ),
-                ),
               ),
             ),
 

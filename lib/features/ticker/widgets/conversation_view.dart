@@ -19,8 +19,13 @@ class ConversationView extends StatefulWidget {
   final VoidCallback? onOpenBrowser;
   final void Function(TickerMessage message)? onTapMessage;
   final VoidCallback? onOpenLocalHistory;
+  final VoidCallback? onSend; // the conversation through the share sheet
+  final VoidCallback? onOpen; // the conversation as a document
   /// Opened under its own summary, which already shows the model's name and closes it on a tap (Claude, 2026-10-21).
   final bool attached;
+
+  /// Fills the height it is given (the side-by-side pane): the messages take the room, the entry box sits at the foot.
+  final bool fill;
 
   const ConversationView({
     super.key,
@@ -30,7 +35,10 @@ class ConversationView extends StatefulWidget {
     this.onOpenBrowser,
     this.onTapMessage,
     this.onOpenLocalHistory,
+    this.onSend,
+    this.onOpen,
     this.attached = false,
+    this.fill = false,
   });
 
   @override
@@ -140,6 +148,8 @@ class _ConversationViewState extends State<ConversationView> {
       VMenuItem(Icons.attach_file_rounded, 'Attach', _attach),
       if (widget.onOpenLocalHistory != null) VMenuItem(Icons.history_rounded, 'History', widget.onOpenLocalHistory!),
       if (widget.onOpenBrowser != null) VMenuItem(Icons.language_rounded, 'Browser', widget.onOpenBrowser!),
+      if (widget.onSend != null) VMenuItem(Icons.ios_share_rounded, 'Send', widget.onSend!, apart: true),
+      if (widget.onOpen != null) VMenuItem(Icons.open_in_new_rounded, 'Open', widget.onOpen!),
     ]);
   }
 
@@ -153,7 +163,7 @@ class _ConversationViewState extends State<ConversationView> {
     // The model is writing and nothing of its answer has arrived yet: its bubble shows that it is drafting.
     final drafting = item.isStreaming && (item.conversation.isEmpty || item.conversation.last.sender == 'user');
     return Column(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: widget.fill ? MainAxisSize.max : MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // 0:639 header: the name, and a round button at the right. Attached under its summary, there is none.
@@ -180,6 +190,7 @@ class _ConversationViewState extends State<ConversationView> {
           const SizedBox(height: VSpace.xs),
         ],
         Flexible(
+          fit: widget.fill ? FlexFit.tight : FlexFit.loose,
           child: EdgeFade(
             fadeHeight: 16,
             focus: FadeFocus.bottom, // the newest message is at the bottom; older ones recede upwards
@@ -213,7 +224,7 @@ class _ConversationViewState extends State<ConversationView> {
                                 ? Text(m.text, style: VType.callout(weight: FontWeight.w400).copyWith(height: 1.4))
                                 : MdText(m.text),
                             const SizedBox(height: 3),
-                            Text(time, style: VType.caption(color: VColors.textTertiary).copyWith(fontSize: 10, height: 12 / 10)),
+                            Text(time, style: VType.caption(color: VColors.textTertiary).copyWith(fontSize: 11, height: 12 / 10)),
                           ],
                         ),
                       ),

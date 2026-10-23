@@ -170,10 +170,10 @@ class _TuckedGlobalComposerState extends State<TuckedGlobalComposer> {
                               autofocus: true,
                               maxLines: null,
                               keyboardType: TextInputType.multiline,
-                              style: GoogleFonts.instrumentSans(fontSize: 13, color: Colors.white),
+                              style: GoogleFonts.instrumentSans(fontSize: 11, color: Colors.white),
                               decoration: InputDecoration(
                                 hintText: "Send prompt to active models...",
-                                hintStyle: GoogleFonts.instrumentSans(fontSize: 12, color: Colors.white38),
+                                hintStyle: GoogleFonts.instrumentSans(fontSize: 11, color: Colors.white38),
                                 border: InputBorder.none,
                                 isDense: true,
                                 contentPadding: const EdgeInsets.symmetric(vertical: 4),

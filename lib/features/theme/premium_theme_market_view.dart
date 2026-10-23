@@ -847,10 +847,10 @@ class _SearchBarState extends State<_SearchBar> {
               child: TextField(
                 controller: _c,
                 cursorColor: Colors.white70,
-                style: VType.callout(color: Colors.white, weight: FontWeight.w300).copyWith(fontSize: 15),
+                style: VType.callout(color: Colors.white, weight: FontWeight.w300).copyWith(fontSize: 11),
                 decoration: InputDecoration(
                   hintText: 'Search...',
-                  hintStyle: VType.callout(color: const Color(0xFF6B7280), weight: FontWeight.w300).copyWith(fontSize: 15),
+                  hintStyle: VType.callout(color: const Color(0xFF6B7280), weight: FontWeight.w300).copyWith(fontSize: 11),
                   border: InputBorder.none,
                   isDense: true,
                   contentPadding: EdgeInsets.zero,

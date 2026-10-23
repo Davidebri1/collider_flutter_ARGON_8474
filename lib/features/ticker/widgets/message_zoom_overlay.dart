@@ -59,24 +59,22 @@ class MessageZoomOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
     return DetailView(
       onClose: onClose,
       onSend: () => _send(context),
       onOpen: onOpen,
-      maxWidth: 520,
       actions: [
         DetailAction(Icons.copy_rounded, 'Copy', () => _copy(context)),
         DetailAction(Icons.bookmark_border_rounded, 'Save', () => _save(context)),
       ],
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: size.height * 0.62),
+        constraints: BoxConstraints(maxHeight: DetailView.zoneHeight(context)),
         child: VFadeScroll(
           fade: 30,
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 26),
           child: MdText(
             message.text,
-            style: VType.body().copyWith(fontSize: 15, height: 1.5, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 14)]),
+            style: VType.body().copyWith(fontSize: 11, height: 1.5, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 14)]),
           ),
         ),
       ),

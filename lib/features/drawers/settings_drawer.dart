@@ -86,7 +86,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
         height: 36,
         child: Row(
           children: [
-            Text(label, maxLines: 1, style: VType.callout(color: const Color(0xF5FFFFFF), weight: FontWeight.w500).copyWith(fontSize: 13)),
+            Text(label, maxLines: 1, style: VType.callout(color: const Color(0xF5FFFFFF), weight: FontWeight.w500).copyWith(fontSize: 11)),
             const SizedBox(width: 16),
             const Spacer(),
             trailing,
@@ -102,7 +102,7 @@ class _SettingsDrawerState extends State<SettingsDrawer> {
             VPress(
               onTap: () => setState(() => _tab = i),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(t, style: VType.caption(color: i == _tab ? VColors.textPrimary : VColors.textSecondary, weight: i == _tab ? FontWeight.w600 : FontWeight.w500).copyWith(fontSize: 12)),
+                Text(t, style: VType.caption(color: i == _tab ? VColors.textPrimary : VColors.textSecondary, weight: i == _tab ? FontWeight.w600 : FontWeight.w500).copyWith(fontSize: 11)),
                 const SizedBox(height: 3),
                 AnimatedContainer(
                   duration: VMotion.fast,

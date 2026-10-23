@@ -5,6 +5,8 @@
 // Claude, 2026-10-23: the app's one detail view (DetailView): Remix, Keep and Save, then Send, Open and Close, each with
 // its name under it, no tray. Pinch or double-tap to look closer (Flutter's InteractiveViewer); a zoomed picture pans
 // instead of turning the page.
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -99,7 +101,7 @@ class _PictureViewerState extends State<PictureViewer> {
       onClose: widget.onClose,
       onSend: () => _send(p),
       onOpen: () => openUrl(p.url),
-      maxWidth: 900,
+      media: true,
       actions: [
         if (widget.onRemix != null) DetailAction(Icons.auto_fix_high_rounded, 'Remix', () => widget.onRemix!(p)),
         if (widget.onSave != null)
@@ -109,7 +111,9 @@ class _PictureViewerState extends State<PictureViewer> {
           }, tint: kept ? const Color(0xFFE5484D) : null),
         if (widget.onFiles != null) DetailAction(Icons.download_rounded, 'Save', () => widget.onFiles!(p)),
       ],
-      child: PageView.builder(
+      child: SizedBox(
+        height: math.min(DetailView.zoneWidth(context, media: true) / p.aspect, DetailView.zoneHeight(context)),
+        child: PageView.builder(
         controller: _pages,
         physics: _zoomed ? const NeverScrollableScrollPhysics() : const PageScrollPhysics(),
         itemCount: widget.pictures.length,
@@ -132,6 +136,7 @@ class _PictureViewerState extends State<PictureViewer> {
                 )
               : _picture(widget.pictures[i]),
         ),
+      ),
       ),
     );
   }

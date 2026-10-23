@@ -385,10 +385,10 @@ class _FilesScreenState extends State<FilesScreen> {
             controller: _search,
             onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
             cursorColor: _N.title,
-            style: _N.text(13, FontWeight.w400, _N.title),
+            style: _N.text(11, FontWeight.w400, _N.title),
             decoration: InputDecoration(
               hintText: 'Search',
-              hintStyle: _N.text(13, FontWeight.w400, VColors.textTertiary),
+              hintStyle: _N.text(11, FontWeight.w400, VColors.textTertiary),
               border: InputBorder.none,
               isDense: true,
               contentPadding: EdgeInsets.zero,
@@ -503,14 +503,14 @@ class _FilesScreenState extends State<FilesScreen> {
               child: DetailRaised(child: Image.network(_api.fileUrl(f), fit: BoxFit.contain, filterQuality: FilterQuality.high)),
             ),
           'text' => ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: size.height * 0.6),
+              constraints: BoxConstraints(maxHeight: DetailView.zoneHeight(ctx)),
               child: FutureBuilder<String>(
                 future: _api.fileText(f),
                 builder: (_, snap) => VFadeScroll(
                   fade: 30,
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 26),
                   child: SelectableText(snap.data ?? '',
-                      style: VType.body().copyWith(fontSize: 14, height: 1.5, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 14)])),
+                      style: VType.body().copyWith(fontSize: 11, height: 1.5, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 14)])),
                 ),
               ),
             ),
@@ -565,7 +565,7 @@ class _FilesScreenState extends State<FilesScreen> {
         builder: (_, snap) => SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           physics: const BouncingScrollPhysics(),
-          child: SelectableText(snap.data ?? '', style: _N.text(13, FontWeight.w400, _N.label, height: 1.5)),
+          child: SelectableText(snap.data ?? '', style: _N.text(11, FontWeight.w400, _N.label, height: 1.5)),
         ),
       );
     }
@@ -582,7 +582,7 @@ class _FilesScreenState extends State<FilesScreen> {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.open_in_new_rounded, size: 16, color: Colors.white),
               const SizedBox(width: 8),
-              Text('Open', style: _N.text(13, FontWeight.w600, Colors.white)),
+              Text('Open', style: _N.text(11, FontWeight.w600, Colors.white)),
             ]),
           ),
         ),
@@ -700,7 +700,7 @@ class _SourceCard extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _GradientIcon(source.icon, source.colors, 38 * u),
             const Spacer(),
-            Text(source.label, maxLines: 1, softWrap: false, overflow: TextOverflow.visible, style: _N.text(9.5, FontWeight.w600, _N.label)),
+            Text(source.label, maxLines: 1, softWrap: false, overflow: TextOverflow.visible, style: _N.text(11, FontWeight.w600, _N.label)),
           ]),
         ),
       );
@@ -853,9 +853,9 @@ class _SongRow extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(12, FontWeight.w600, on ? const Color(0xFFD65983) : _N.label)),
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(11, FontWeight.w600, on ? const Color(0xFFD65983) : _N.label)),
                   const SizedBox(height: 2),
-                  Text(theme.name.replaceAll(RegExp(r'\s*4K$'), '').trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(10, FontWeight.w500, _N.hint)),
+                  Text(theme.name.replaceAll(RegExp(r'\s*4K$'), '').trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(11, FontWeight.w500, _N.hint)),
                 ]),
               ),
             ]),
@@ -897,10 +897,10 @@ class _FileRow extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(12, FontWeight.w600, _N.label)),
+              Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _N.text(11, FontWeight.w600, _N.label)),
               if (meta.isNotEmpty) ...[
                 const SizedBox(height: 2),
-                Text(meta, style: _N.text(10, FontWeight.w500, _N.hint)),
+                Text(meta, style: _N.text(11, FontWeight.w500, _N.hint)),
               ],
             ]),
           ),

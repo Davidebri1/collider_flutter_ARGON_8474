@@ -82,11 +82,11 @@ class MusicBar extends StatelessWidget {
                             maxLines: 1,
                             softWrap: false,
                             overflow: TextOverflow.fade,
-                            style: VType.caption(color: Colors.white, weight: FontWeight.w500).copyWith(fontSize: 12, height: 14 / 12)),
+                            style: VType.caption(color: Colors.white, weight: FontWeight.w500).copyWith(fontSize: 11, height: 14 / 12)),
                         if (time != null)
                           Text(time!,
                               maxLines: 1,
-                              style: VType.caption(color: const Color(0xFFC9C9C9), weight: FontWeight.w500).copyWith(fontSize: 10, height: 12 / 10)),
+                              style: VType.caption(color: const Color(0xFFC9C9C9), weight: FontWeight.w500).copyWith(fontSize: 11, height: 12 / 10)),
                       ],
                     ),
                   ),

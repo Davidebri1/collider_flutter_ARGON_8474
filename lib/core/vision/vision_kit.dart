@@ -532,7 +532,7 @@ class VOrnamentRail extends StatelessWidget {
                       style: VType.caption(
                         color: dim.contains(i) ? const Color(0x59FFFFFF) : (i == active ? const Color(0xF5FFFFFF) : const Color(0xD9FFFFFF)),
                         weight: FontWeight.w600,
-                      ).copyWith(fontSize: 12, height: 15 / 12),
+                      ).copyWith(fontSize: 11, height: 15 / 12),
                     ),
                   ),
                 ),
@@ -1141,7 +1141,7 @@ class VOneLine extends StatelessWidget {
   final TextStyle? style;
   const VOneLine({super.key, required this.text, this.style});
 
-  static TextStyle get rowStyle => VType.callout(weight: FontWeight.w500).copyWith(fontSize: 12, height: 17 / 12);
+  static TextStyle get rowStyle => VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11, height: 15 / 11);
 
   /// How many characters one line of [width] holds in the row style.
   static int charsFor(double width) {

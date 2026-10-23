@@ -246,10 +246,10 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                             maxLines: 5,
                             cursorColor: VColors.textPrimary,
                             textInputAction: TextInputAction.send,
-                            style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 13, height: 17 / 13),
+                            style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11, height: 17 / 13),
                             decoration: InputDecoration(
                               hintText: 'Enter message',
-                              hintStyle: VType.callout(color: const Color(0x99FFFFFF), weight: FontWeight.w400).copyWith(fontSize: 13, height: 17 / 13),
+                              hintStyle: VType.callout(color: const Color(0x99FFFFFF), weight: FontWeight.w400).copyWith(fontSize: 11, height: 17 / 13),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.zero,

@@ -50,7 +50,7 @@ class ResearchDocument extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
     // A reading window: most of a phone, about 60% of a wider screen, never wider than a comfortable line of text.
     final width = (size.width < 600 ? size.width - 32 : (size.width * 0.6).clamp(0.0, 720.0)).toDouble();
-    final body = VType.body().copyWith(fontSize: 14, height: 1.55);
+    final body = VType.body().copyWith(fontSize: 11, height: 1.55);
     final meta = VType.caption(color: VColors.textSecondary);
     void cite(int n) {
       if (n >= 1 && n <= sources.length) onOpenSource(n - 1);
@@ -110,7 +110,7 @@ class ResearchDocument extends StatelessWidget {
                                                 SizedBox(width: 26, child: Text('${i + 1}', style: meta)),
                                                 Expanded(
                                                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                                    Text('${sources[i]['title'] ?? ''}', style: body.copyWith(fontSize: 13, height: 1.35)),
+                                                    Text('${sources[i]['title'] ?? ''}', style: body.copyWith(fontSize: 11, height: 1.35)),
                                                     Text(_host('${sources[i]['url'] ?? ''}'), style: meta),
                                                   ]),
                                                 ),

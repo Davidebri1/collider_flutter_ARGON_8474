@@ -27,8 +27,20 @@ class DetailView extends StatefulWidget {
   final VoidCallback? onOpen;
   final VoidCallback onClose;
 
-  /// How wide the content may be.
-  final double maxWidth;
+  /// Pictures: the media column, as wide as the pictures' ticker.
+  final bool media;
+
+  /// The work column: as wide as the ticker window it opens from (phone 300, wider screens 480; pictures 360 and 780).
+  static double zoneWidth(BuildContext context, {bool media = false}) {
+    final phone = MediaQuery.sizeOf(context).width < 768;
+    return phone ? (media ? 360 : 300) : (media ? 780 : 480);
+  }
+
+  /// The tallest the content may be: the work column above the dock, less the actions under it.
+  static double zoneHeight(BuildContext context) {
+    final m = MediaQuery.of(context);
+    return m.size.height - m.padding.top - m.padding.bottom - 16 - 92 - 74;
+  }
 
   const DetailView({
     super.key,
@@ -37,7 +49,7 @@ class DetailView extends StatefulWidget {
     this.actions = const [],
     this.onSend,
     this.onOpen,
-    this.maxWidth = 560,
+    this.media = false,
   });
 
   @override
@@ -94,36 +106,32 @@ class _DetailViewState extends State<DetailView> with SingleTickerProviderStateM
               ),
             ),
           ),
+          // The content and its actions are one group in the work column, standing where the ticker and the composer
+          // stand: the actions right under what they act on (Claude, 2026-10-23; they were pinned to the screen's foot,
+          // far from short content, and the content took the screen's width).
           SafeArea(
             child: Padding(
-              // the actions end just above the dock, within the thumb's reach
-              padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, 92),
-              child: Column(children: [
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: widget.maxWidth),
-                      child: Opacity(
-                        opacity: v,
-                        child: Transform.translate(
-                          offset: Offset(0, 14 * (1 - v)),
-                          child: Transform.scale(scale: 0.94 + 0.06 * v, child: widget.child),
+              padding: const EdgeInsets.fromLTRB(0, VSpace.md, 0, 92),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: SizedBox(
+                  width: DetailView.zoneWidth(context, media: widget.media),
+                  child: Opacity(
+                    opacity: v,
+                    child: Transform.translate(
+                      offset: Offset(0, 14 * (1 - v)),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Flexible(child: Transform.scale(scale: 0.94 + 0.06 * v, child: widget.child)),
+                        const SizedBox(height: VSpace.sm),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [for (final a in all) _ActionButton(a)],
                         ),
-                      ),
+                      ]),
                     ),
                   ),
                 ),
-                const SizedBox(height: VSpace.sm),
-                Opacity(
-                  opacity: v,
-                  child: Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [for (final a in all) _ActionButton(a)],
-                  ),
-                ),
-              ]),
+              ),
             ),
           ),
         ]);
@@ -145,7 +153,7 @@ class _ActionButton extends StatelessWidget {
       child: VPress(
         onTap: a.onTap,
         child: SizedBox(
-          width: 60,
+          width: 50, // six fit the phone's column
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             ClipOval(
               child: BackdropFilter(

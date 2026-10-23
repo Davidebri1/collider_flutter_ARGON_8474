@@ -503,7 +503,7 @@ class _BoardState extends State<_Board> {
               child: Text(
                 c.title,
                 style: VType.callout(color: c.done ? _faint : _cardInk, weight: FontWeight.w400)
-                    .copyWith(fontSize: 13.5, height: 18 / 13.5, decoration: c.done ? TextDecoration.lineThrough : null, decorationColor: _faint),
+                    .copyWith(fontSize: 11, height: 18 / 13.5, decoration: c.done ? TextDecoration.lineThrough : null, decorationColor: _faint),
               ),
             ),
           ],
@@ -523,7 +523,7 @@ class _BoardState extends State<_Board> {
               maxLines: null,
               textInputAction: TextInputAction.done,
               cursorColor: _cardInk,
-              style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 13.5, height: 18 / 13.5),
+              style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 11, height: 18 / 13.5),
               decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 2)),
               onChanged: (v) => widget.store.update(c, title: v), // kept as typed (Claude, 2026-10-23)
               onFieldSubmitted: (v) {
@@ -572,7 +572,7 @@ class _BoardState extends State<_Board> {
                 focusNode: _newFocus,
                 autofocus: true,
                 cursorColor: _cardInk,
-                style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 13.5),
+                style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 11),
                 decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 4)),
                 onSubmitted: (_) => add(),
               ),
@@ -712,7 +712,7 @@ class _CardsView extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(color: VColors.fillActive, borderRadius: BorderRadius.circular(VRadius.full)),
-                              child: Text(listName, style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600).copyWith(fontSize: 10)),
+                              child: Text(listName, style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600).copyWith(fontSize: 11)),
                             ),
                             const Spacer(),
                             VPress(
@@ -734,7 +734,7 @@ class _CardsView extends StatelessWidget {
                         Text(
                           card.title,
                           style: VType.callout(color: card.done ? _faint : _cardInk, weight: FontWeight.w400).copyWith(
-                            fontSize: 13.5,
+                            fontSize: 11,
                             height: 1.35,
                             decoration: card.done ? TextDecoration.lineThrough : null,
                           ),
@@ -801,7 +801,7 @@ class _CanvasView extends StatelessWidget {
                             children: [
                               Row(
                                 children: [
-                                  Text(listName.toUpperCase(), style: VType.caption(color: VColors.textTertiary, weight: FontWeight.w600).copyWith(fontSize: 10)),
+                                  Text(listName.toUpperCase(), style: VType.caption(color: VColors.textTertiary, weight: FontWeight.w600).copyWith(fontSize: 11)),
                                   const Spacer(),
                                   if (lists.length > 1)
                                     VPress(
@@ -815,7 +815,7 @@ class _CanvasView extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 6),
-                              Text(card.title, style: VType.callout(color: _cardInk, weight: FontWeight.w500).copyWith(fontSize: 13, height: 1.38)),
+                              Text(card.title, style: VType.callout(color: _cardInk, weight: FontWeight.w500).copyWith(fontSize: 11, height: 1.38)),
                             ],
                           ),
                         ),
@@ -884,7 +884,7 @@ class _GenieView extends StatelessWidget {
                     maxLines: 1,
                     softWrap: false,
                     overflow: TextOverflow.fade,
-                    style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 13),
+                    style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -912,7 +912,7 @@ class _GenieView extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(color: VColors.fillRow, borderRadius: BorderRadius.circular(VRadius.full)),
-                    child: Text(listName, style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600).copyWith(fontSize: 10)),
+                    child: Text(listName, style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600).copyWith(fontSize: 11)),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -921,7 +921,7 @@ class _GenieView extends StatelessWidget {
                       maxLines: 2,
                       softWrap: true,
                       overflow: TextOverflow.fade,
-                      style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 13),
+                      style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 11),
                     ),
                   ),
                   if (listName != 'High')
