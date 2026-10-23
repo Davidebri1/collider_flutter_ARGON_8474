@@ -341,7 +341,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       items.add(TickerItem(
         modelDef: def,
         relativeTime: restored ? _ago(j.created) : 'just now',
-        summary: r.status == 'error' ? 'No answer' : (r.line.isNotEmpty ? r.line : _plain(r.essence)),
+        summary: r.status == 'error' ? '' : (r.line.isNotEmpty ? r.line : _plain(r.essence)),
         isStreaming: waiting,
         isIsolated: prev.isNotEmpty && prev.first.isIsolated && !restored,
         conversation: conv,
@@ -495,7 +495,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (!mounted || !_voiceChat) return;
     final j = _currentJobId == null ? null : _jobsById[_currentJobId];
     final answer = (j?.consensus.summary.isNotEmpty ?? false) ? j!.consensus.summary : _consensusSummary;
-    if (answer.isNotEmpty && answer != 'No answer') {
+    if (answer.isNotEmpty) {
       setState(() => _voicePhase = 'speaking');
       await Voice.instance.speak(answer);
     }
@@ -686,7 +686,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       if (!mounted) return;
       setState(() {
         final i = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
-        if (i != -1) _tickerItems[i] = _tickerItems[i].copyWith(isStreaming: false, summary: 'No answer from this model.');
+        if (i != -1) _tickerItems[i] = _tickerItems[i].copyWith(isStreaming: false, summary: '');
       });
     }
   }
@@ -770,8 +770,8 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       if (!mounted) return;
       setState(() {
         _isConsensusGenerating = false;
-        _consensusSummary = 'No answer';
-        _tickerItems = [for (final t in _tickerItems) t.copyWith(isStreaming: false, summary: 'No answer')];
+        _consensusSummary = '';
+        _tickerItems = [for (final t in _tickerItems) t.copyWith(isStreaming: false, summary: '')];
       });
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -1001,20 +1001,34 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     );
   }
 
-  bool _isPillActive(TickerItem it) =>
-      _selectedModelIds.contains(it.modelDef.id) && it.summary != 'No answer';
+  bool _isPillActive(TickerItem it) => _selectedModelIds.contains(it.modelDef.id);
+
+  /// The arrow under the model rows is open: the models not selected show, and a tap selects or removes a model.
+  bool _choosing = false;
+
+  /// Selects a model, or removes it (one stays selected; nine at most).
+  void _toggleModel(String id) => setState(() {
+        if (_selectedModelIds.contains(id)) {
+          if (_selectedModelIds.length > 1) _selectedModelIds.remove(id);
+          _expandedModelIds.remove(id);
+        } else if (_selectedModelIds.length < 9) {
+          _selectedModelIds.add(id);
+        }
+      });
 
   @override
   Widget build(BuildContext context) {
     // Include all models in the current category that have a response or are selected,
     // sorted with ACTIVE models at the top (lit) and INACTIVE models below (dimmed).
-    final categoryItems = _tickerItems
-        .where((it) => it.modelDef.categories.contains(_activeCategory))
-        .toList();
-
-    final litItems = categoryItems.where(_isPillActive).toList();
-    final dimItems = categoryItems.where((it) => !_isPillActive(it)).toList();
-    final activePills = [...litItems, ...dimItems].take(9).toList();
+    // (1) every selected model has a row, whether or not it has spoken yet; (3) the others wait under the arrow.
+    TickerItem rowFor(ModelDef d) =>
+        _tickerItems.where((t) => t.modelDef.id == d.id).firstOrNull ?? TickerItem(modelDef: d, relativeTime: '', summary: '', conversation: const []);
+    final roster = ModelRoster.forCategory(_activeCategory);
+    final activePills = [
+      for (final id in _selectedModelIds)
+        if (roster.where((m) => m.id == id).firstOrNull case final d?) rowFor(d),
+    ];
+    final idlePills = [for (final m in roster) if (!_selectedModelIds.contains(m.id)) rowFor(m)];
 
     final media = _activeCategory == ModelCategory.image;
     final isMobile = MediaQuery.of(context).size.width < 768;
@@ -1043,9 +1057,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             onOpen: () => _openTextAsDocument(openItem.modelDef.label, _conversationText(openItem), openItem.modelDef.label),
           );
 
-    // Collapsed Ticker: Consensus row pinned at top, followed by active (lit) models at the top and inactive (dimmed) models below.
+    // The ticker's column: the consensus, a hairline, the selected models; under the arrow, the rest (David's diagram).
     final Widget rows = Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_tickerItems.isNotEmpty) ...[
           ConsensusRow(
@@ -1054,36 +1069,53 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             isGenerating: _isConsensusGenerating,
             onTap: () => setState(() => _activeDrawer = 'consensus'),
           ),
-          if (activePills.isNotEmpty) const SizedBox(height: 8),
+          const TickerDivider(),
         ],
-        if (activePills.isNotEmpty)
-          Flexible(
-            child: EdgeFade(
-              fadeHeight: 14,
-              focus: FadeFocus.top,
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (int i = 0; i < activePills.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 8),
-                      Column(
-                        key: activePills[i].modelDef.id == openId ? _openKey : null,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ModelPill(
-                            item: activePills[i],
-                            isActive: _isPillActive(activePills[i]),
-                            elevation: activePills.length <= 1 ? 1.0 : 1.0 - i / (activePills.length - 1),
-                            isExpanded: activePills[i].modelDef.id == openId,
-                            compact: openItem != null,
-                            onToggleExpand: () => _onTogglePill(activePills[i].modelDef.id),
-                          ),
-                        ],
+        Flexible(
+          child: EdgeFade(
+            fadeHeight: 14,
+            focus: FadeFocus.top,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final p in activePills)
+                    ModelPill(
+                      key: p.modelDef.id == openId ? _openKey : ValueKey('on-${p.modelDef.id}'),
+                      item: p,
+                      isActive: true,
+                      isExpanded: !_choosing && p.modelDef.id == openId,
+                      compact: openItem != null,
+                      onToggleExpand: () => _choosing ? _toggleModel(p.modelDef.id) : _onTogglePill(p.modelDef.id),
+                    ),
+                  if (_choosing)
+                    for (final p in idlePills)
+                      ModelPill(
+                        key: ValueKey('off-${p.modelDef.id}'),
+                        item: p,
+                        isActive: false,
+                        isExpanded: false,
+                        compact: openItem != null,
+                        onToggleExpand: () => _toggleModel(p.modelDef.id),
                       ),
-                    ],
-                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (idlePills.isNotEmpty || _choosing)
+          VPress(
+            onTap: () => setState(() => _choosing = !_choosing),
+            child: SizedBox(
+              height: 28,
+              child: Center(
+                child: AnimatedRotation(
+                  turns: _choosing ? 0.5 : 0,
+                  duration: VMotion.base,
+                  curve: Curves.easeOutCubic,
+                  child: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: VColors.textSecondary),
                 ),
               ),
             ),
@@ -1184,17 +1216,19 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                                         : sideBySide
                                             ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                                                 SizedBox(width: isMobile ? 136 : 300, child: Align(alignment: Alignment.topCenter, child: rows)),
-                                                const SizedBox(width: VSpace.xs),
-                                                Expanded(
-                                                  child: Container(
-                                                    padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-                                                    decoration: BoxDecoration(
-                                                      color: VColors.fillRow,
-                                                      borderRadius: BorderRadius.circular(VRadius.card - VSpace.xs),
+                                                Container(
+                                                  width: 1,
+                                                  margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 18),
+                                                  decoration: const BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      begin: Alignment.topCenter,
+                                                      end: Alignment.bottomCenter,
+                                                      colors: [Color(0x00FFFFFF), Color(0x24FFFFFF), Color(0x24FFFFFF), Color(0x00FFFFFF)],
+                                                      stops: [0, 0.15, 0.85, 1],
                                                     ),
-                                                    child: conversation,
                                                   ),
                                                 ),
+                                                Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(4, 4, 4, 2), child: conversation)),
                                               ])
                                             : rows,
                                   ),

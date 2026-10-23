@@ -525,47 +525,52 @@ class VOrnamentRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // visionOS tab bar (Claude, 2026-10-23): a glass capsule beside the window; each place its glyph on a disc, its name
+    // under it, the chosen one lit. 11 points, one word to a line.
     return DecoratedBox(
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.full), boxShadow: VShadow.ornament),
       child: VGlass(
         material: VMaterial.elevated,
         radius: VRadius.full,
-        padding: const EdgeInsets.all(6),
-        child: IntrinsicWidth(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (int i = 0; i < items.length; i++) ...[
-                if (i > 0) const SizedBox(height: 4),
-                VPress(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < items.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              Semantics(
+                button: true,
+                label: items[i].label,
+                child: VPress(
                   onTap: dim.contains(i) ? null : () => onSelect(i),
-                  child: AnimatedContainer(
-                    duration: VMotion.fast,
-                    constraints: const BoxConstraints(minHeight: 42, minWidth: 46),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(VRadius.full),
-                      color: i == active ? VColors.fillActive : Colors.transparent,
-                    ),
-                    child: Text(
-                      items[i].label.replaceAll(' ', '\n'),
-                      textAlign: TextAlign.center,
-                      softWrap: false,
-                      overflow: TextOverflow.visible,
-                      style: VType.caption(
-                        color: dim.contains(i)
-                            ? const Color(0x59FFFFFF)
-                            : (i == active ? const Color(0xF5FFFFFF) : const Color(0xD9FFFFFF)),
-                        weight: FontWeight.w600,
-                      ).copyWith(fontSize: 11, height: 15 / 12),
-                    ),
+                  child: SizedBox(
+                    width: 56,
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      AnimatedContainer(
+                        duration: VMotion.fast,
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: i == active ? VColors.fillActive : VColors.fillCell),
+                        child: Icon(items[i].icon, size: 20, color: dim.contains(i) ? const Color(0x59FFFFFF) : VColors.textPrimary),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        items[i].label.replaceAll(' ', '\n'),
+                        textAlign: TextAlign.center,
+                        softWrap: false,
+                        overflow: TextOverflow.visible,
+                        style: VType.caption(
+                          color: dim.contains(i) ? const Color(0x59FFFFFF) : (i == active ? VColors.textPrimary : VColors.textSecondary),
+                          weight: FontWeight.w500,
+                        ).copyWith(fontSize: 11, height: 13 / 11),
+                      ),
+                    ]),
                   ),
                 ),
-              ],
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -1208,15 +1213,15 @@ class VOneLine extends StatelessWidget {
   final TextStyle? style;
   const VOneLine({super.key, required this.text, this.style});
 
-  static TextStyle get rowStyle => VType.callout(weight: FontWeight.w500).copyWith(fontSize: 12, height: 16 / 12);
+  static TextStyle get rowStyle => VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11, height: 15 / 11);
 
-  /// How many characters two lines of [width] hold in the row style.
-  static int charsFor(double width) {
+  /// How many characters [maxLines] of [width] hold in the row style.
+  static int charsFor(double width, {int maxLines = 2}) {
     const sample = 'Seal leaks and lower the thermostat. Water boils at 100 C at sea level. Yes, with a cold-climate model.';
     final p = TextPainter(text: TextSpan(text: sample, style: rowStyle), maxLines: 1, textDirection: TextDirection.ltr)..layout();
     final per = p.width / sample.length;
     p.dispose();
-    return ((width / per) * 1.85).floor().clamp(90, 135);
+    return ((width / per) * (maxLines * 0.925)).floor().clamp(90, 135);
   }
 
   @override

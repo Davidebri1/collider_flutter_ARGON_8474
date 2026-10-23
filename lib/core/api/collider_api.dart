@@ -40,12 +40,6 @@ extension AskModeX on AskMode {
         AskMode.research => 'Research',
         AskMode.deep => 'Deep Research',
       };
-  String get outcome => switch (this) {
-        AskMode.chat => 'A direct answer',
-        AskMode.internet => 'An answer from live web sources',
-        AskMode.research => 'A research report with sources',
-        AskMode.deep => 'An annotated research paper',
-      };
   IconData get icon => switch (this) {
         AskMode.chat => Icons.chat_bubble_outline_rounded,
         AskMode.internet => Icons.public_rounded,

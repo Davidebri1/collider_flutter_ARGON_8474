@@ -104,7 +104,7 @@ class _MarketScreenState extends State<MarketScreen> {
             if (m['kind'] != 'video')
               _Item(
                 id: 'c:${m['name']}',
-                title: c.prompt.isNotEmpty ? c.prompt : '${m['name']}',
+                title: c.text.isNotEmpty ? c.text : '${m['name']}',
                 url: api.fileUrl(ColliderFile('${m['name']}', 'generated', 0, DateTime.now(), 'image', '${m['url']}')),
                 aspect: (m['width'] is num && m['height'] is num && (m['height'] as num) > 0)
                     ? (m['width'] as num) / (m['height'] as num)

@@ -16,7 +16,6 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
       ActiveWorkSurface.chat => const [
           SideRailEntry('new', Icons.add_rounded, 'New Chat'),
           SideRailEntry('history', Icons.history_rounded, 'History'),
-          SideRailEntry('models', Icons.hub_outlined, 'Models'),
         ],
       ActiveWorkSurface.smartgen => const [
           SideRailEntry('cards', Icons.style_rounded, 'Cards'),

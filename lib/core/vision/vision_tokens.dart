@@ -17,6 +17,7 @@ class VColors {
   static const Color textTertiary = Color(0x73FFFFFF); // rgba(255,255,255,0.45)
 
   // Borders (kit dark theme)
+  static const Color borderSubtle = Color(0x18FFFFFF); // 0.09
   static const Color borderLight = Color(0x1FFFFFFF); // 0.12
   static const Color borderHeavy = Color(0x3DFFFFFF); // 0.24
 
