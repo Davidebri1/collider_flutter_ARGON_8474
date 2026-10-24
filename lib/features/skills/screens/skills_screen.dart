@@ -28,26 +28,22 @@ class _SkillsScreenState extends State<SkillsScreen> {
       children: [
         VScrim(onTap: widget.onClose),
         SafeArea(
-          child: Align(
-            alignment: Alignment.topCenter,
+          child: Center(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(VSpace.md, 40, VSpace.md, 0),
+              padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, 76),
               child: VWindow(
                 title: 'Agent Capabilities & Skills',
                 centerTitle: true,
-                maxWidth: VOverlay.menuWidth(context),
-                maxHeight: VOverlay.menuMaxHeight(context),
+                maxWidth: VOverlay.menuWidth(context) + 36,
                 leading: VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose),
-                child: VFadeScroll(
-                  child: VListGroup(children: [
-                    for (final k in _skills.keys)
-                      VListRow(
-                        title: k,
-                        titleLines: 2,
-                        trailing: VToggle(value: _skills[k]!, onChanged: (v) => setState(() => _skills[k] = v)),
-                      ),
-                  ]),
-                ),
+                child: VListGroup(children: [
+                  for (final k in _skills.keys)
+                    VListRow(
+                      title: k,
+                      titleLines: 2,
+                      trailing: VToggle(value: _skills[k]!, onChanged: (v) => setState(() => _skills[k] = v)),
+                    ),
+                ]),
               ),
             ),
           ),

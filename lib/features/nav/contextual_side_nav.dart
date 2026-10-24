@@ -178,7 +178,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
                           : Text(title, maxLines: 1, style: VType.callout(weight: FontWeight.w600)),
                     ),
                     if (widget.onClose != null)
-                      VCircleButton(icon: CupertinoIcons.xmark, size: 26, tooltip: 'Close', onTap: widget.onClose),
+                      VCircleButton(icon: Icons.close_rounded, size: 26, tooltip: 'Close', onTap: widget.onClose),
                   ],
                 ),
               ),
@@ -291,102 +291,100 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
         Flexible(
           child: EdgeFade(
             fadeHeight: 12,
-            child: CupertinoScrollbar(
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.only(right: 4, bottom: 2),
-                itemCount: orderedModels.length,
-                separatorBuilder: (_, i) {
-                  if (activeModels.isNotEmpty && i == activeModels.length - 1 && inactiveModels.isNotEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Divider(height: 1, thickness: 0.6, color: Colors.white.withValues(alpha: 0.14)),
-                    );
-                  }
-                  return const SizedBox(height: 5);
-                },
-                itemBuilder: (_, i) {
-                  final m = orderedModels[i];
-                  final isSelected = widget.selectedModelIds.contains(m.id);
-                  final c = m.providerColor;
-                  return AnimatedOpacity(
-                    duration: VMotion.base,
-                    opacity: isSelected ? 1.0 : 0.42,
-                    child: VPress(
-                      onTap: () {
-                        widget.onPaneInteraction();
-                        widget.onToggleModel(m.id);
-                      },
-                      child: AnimatedContainer(
-                        duration: VMotion.base,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        decoration: BoxDecoration(
-                          gradient: isSelected
-                              ? LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    c.withValues(alpha: 0.28),
-                                    c.withValues(alpha: 0.12),
-                                  ],
-                                )
-                              : null,
-                          color: isSelected ? null : const Color(0x1F10121A),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? c.withValues(alpha: 0.55) : const Color(0x1AFFFFFF),
-                            width: isSelected ? 0.8 : 0.5,
+            child: ListView.separated(
+              shrinkWrap: true,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 2),
+              itemCount: orderedModels.length,
+              separatorBuilder: (_, i) {
+                if (activeModels.isNotEmpty && i == activeModels.length - 1 && inactiveModels.isNotEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Divider(height: 1, thickness: 0.6, color: Colors.white.withValues(alpha: 0.14)),
+                  );
+                }
+                return const SizedBox(height: 5);
+              },
+              itemBuilder: (_, i) {
+                final m = orderedModels[i];
+                final isSelected = widget.selectedModelIds.contains(m.id);
+                final c = m.providerColor;
+                return AnimatedOpacity(
+                  duration: VMotion.base,
+                  opacity: isSelected ? 1.0 : 0.42,
+                  child: VPress(
+                    onTap: () {
+                      widget.onPaneInteraction();
+                      widget.onToggleModel(m.id);
+                    },
+                    child: AnimatedContainer(
+                      duration: VMotion.base,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: isSelected
+                            ? LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  c.withValues(alpha: 0.28),
+                                  c.withValues(alpha: 0.12),
+                                ],
+                              )
+                            : null,
+                        color: isSelected ? null : const Color(0x1F10121A),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? c.withValues(alpha: 0.55) : const Color(0x1AFFFFFF),
+                          width: isSelected ? 0.8 : 0.5,
+                        ),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: c.withValues(alpha: 0.16),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : const [],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected ? c : c.withValues(alpha: 0.45),
+                              boxShadow: isSelected
+                                  ? [BoxShadow(color: c.withValues(alpha: 0.85), blurRadius: 6)]
+                                  : null,
+                            ),
                           ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: c.withValues(alpha: 0.16),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ]
-                              : const [],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isSelected ? c : c.withValues(alpha: 0.45),
-                                boxShadow: isSelected
-                                    ? [BoxShadow(color: c.withValues(alpha: 0.85), blurRadius: 6)]
-                                    : null,
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              m.label,
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.fade,
+                              style: VType.body(
+                                weight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                color: isSelected ? VColors.textPrimary : VColors.textSecondary,
                               ),
                             ),
-                            const SizedBox(width: 9),
-                            Expanded(
-                              child: Text(
-                                m.label,
-                                maxLines: 1,
-                                softWrap: false,
-                                overflow: TextOverflow.fade,
-                                style: VType.callout(
-                                  weight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                  color: isSelected ? VColors.textPrimary : VColors.textSecondary,
-                                ).copyWith(fontSize: 13),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              isSelected ? CupertinoIcons.checkmark_alt_circle_fill : CupertinoIcons.circle,
-                              size: 17,
-                              color: isSelected ? c : VColors.textTertiary,
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                            size: 17,
+                            color: isSelected ? c : VColors.textTertiary,
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -511,7 +509,7 @@ class _ContextualSideNavState extends State<ContextualSideNav> {
                         trailing: widget.onCloseBrowserTab == null
                             ? null
                             : VCircleButton(
-                                icon: CupertinoIcons.xmark,
+                                icon: Icons.close_rounded,
                                 size: 24,
                                 tooltip: 'Close tab',
                                 onTap: () => widget.onCloseBrowserTab!(t.id),

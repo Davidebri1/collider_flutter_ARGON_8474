@@ -42,21 +42,22 @@ class _HistoryDrawerState extends State<HistoryDrawer> {
       fit: StackFit.expand,
       children: [
         VScrim(onTap: widget.onClose),
-        Align(
-          alignment: Alignment.topCenter,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(VSpace.md, 56, VSpace.md, 0),
-            child: VWindow(
-              title: 'History',
-              maxWidth: VOverlay.menuWidth(context),
-              maxHeight: VOverlay.menuMaxHeight(context),
-              actions: [VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose)],
-              child: HistorySessionList(
-                sessions: sessions,
-                searchController: _searchCtrl,
-                onQuery: (v) => setState(() => _query = v.trim()),
-                onSelect: widget.onSelectSession,
-                emptyText: _query.isEmpty ? 'No conversations yet' : 'No matching conversations',
+        SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, 76),
+              child: VWindow(
+                title: 'History',
+                maxWidth: VOverlay.menuWidth(context),
+                maxHeight: VOverlay.menuMaxHeight(context),
+                actions: [VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose)],
+                child: HistorySessionList(
+                  sessions: sessions,
+                  searchController: _searchCtrl,
+                  onQuery: (v) => setState(() => _query = v.trim()),
+                  onSelect: widget.onSelectSession,
+                  emptyText: _query.isEmpty ? 'No conversations yet' : 'No matching conversations',
+                ),
               ),
             ),
           ),
@@ -94,7 +95,6 @@ class HistorySessionList extends StatelessWidget {
         VSearchField(controller: searchController, hint: searchHint, onChanged: onQuery),
         const SizedBox(height: VSpace.xs),
         Flexible(
-          // Nothing listed is shown as nothing: no words that were not David's.
           child: sessions.isEmpty ? const SizedBox.shrink() : HistoryRows(sessions: sessions, onSelect: onSelect),
         ),
       ],
@@ -102,7 +102,7 @@ class HistorySessionList extends StatelessWidget {
   }
 }
 
-/// Conversations under the day they belong to, as every chat app lists them: a title on one line, and when.
+/// Conversations under the day they belong to: a title on one line, and when.
 class HistoryRows extends StatelessWidget {
   final List<ConversationHistorySession> sessions;
   final ValueChanged<ConversationHistorySession> onSelect;
@@ -126,7 +126,6 @@ class HistoryRows extends StatelessWidget {
           child: Text(g, style: VType.caption(color: VColors.textTertiary, weight: FontWeight.w600)),
         ));
       }
-      // The day heading says when. The row is the title alone, as every chat app lists them.
       rows.add(VHistoryRow(title: s.title, onTap: () => onSelect(s)));
     }
     return EdgeFade(
@@ -136,9 +135,8 @@ class HistoryRows extends StatelessWidget {
   }
 }
 
-
 /// The History pane's list (history_pane.dart): conversations under their day, a title each, the one being
-/// previewed lit. Scrolls within the pane. Made by Claude (2026-10-17).
+/// previewed lit. Scrolls within the pane.
 class VHistoryRowsGrouped extends StatelessWidget {
   final List<ConversationHistorySession> sessions;
   final String? selectedId;

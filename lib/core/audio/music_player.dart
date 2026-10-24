@@ -38,6 +38,9 @@ class MusicPlayer extends ChangeNotifier {
   List<MusicTrack> queue = const [];
   String queueId = '';
 
+  /// Individual tracks turned off by the user (PRD R31 / HIG-MC-18: "A track can be turned off on its own. Turning a track off stops that track").
+  final Set<String> disabledFiles = {};
+
   int? index; // null = nothing loaded, widget hidden
   bool playing = false;
   bool muted = false;
@@ -47,6 +50,23 @@ class MusicPlayer extends ChangeNotifier {
   MusicTrack? get current => index == null ? null : queue[index!];
   double get progress => duration > 0 ? (position / duration).clamp(0.0, 1.0) : 0;
 
+  bool isTrackEnabled(MusicTrack t) => !disabledFiles.contains(t.file);
+
+  /// Turns an individual track on or off. Turning an active track off stops that track immediately.
+  void toggleTrack(MusicTrack t) {
+    if (disabledFiles.contains(t.file)) {
+      disabledFiles.remove(t.file);
+    } else {
+      disabledFiles.add(t.file);
+      if (current?.file == t.file && playing) {
+        _engine.stop();
+        playing = false;
+        position = 0;
+      }
+    }
+    notifyListeners();
+  }
+
   /// Plays track [i] of [list]; with no list, of the current queue.
   void play(int i, {List<MusicTrack>? list, String? id}) {
     if (list != null) {
@@ -54,8 +74,10 @@ class MusicPlayer extends ChangeNotifier {
       queueId = id ?? '';
     }
     if (queue.isEmpty) return;
-    final same = index == i.clamp(0, queue.length - 1) && list == null;
-    index = i.clamp(0, queue.length - 1);
+    final clamped = i.clamp(0, queue.length - 1);
+    final same = index == clamped && list == null;
+    index = clamped;
+    disabledFiles.remove(queue[index!].file);
     if (!same) position = 0;
     // Flutter web serves bundled assets under /assets/<asset path>; songs from the bucket play from their address.
     final f = queue[index!].file;
@@ -83,11 +105,33 @@ class MusicPlayer extends ChangeNotifier {
   }
 
   void next() {
-    if (queue.isNotEmpty) play(((index ?? -1) + 1) % queue.length);
+    if (queue.isEmpty) return;
+    final start = index ?? -1;
+    for (int step = 1; step <= queue.length; step++) {
+      final candidate = (start + step) % queue.length;
+      if (!disabledFiles.contains(queue[candidate].file)) {
+        play(candidate);
+        return;
+      }
+    }
+    _engine.stop();
+    playing = false;
+    notifyListeners();
   }
 
   void previous() {
-    if (queue.isNotEmpty) play(((index ?? 1) - 1 + queue.length) % queue.length);
+    if (queue.isEmpty) return;
+    final start = index ?? 1;
+    for (int step = 1; step <= queue.length; step++) {
+      final candidate = (start - step + queue.length) % queue.length;
+      if (!disabledFiles.contains(queue[candidate].file)) {
+        play(candidate);
+        return;
+      }
+    }
+    _engine.stop();
+    playing = false;
+    notifyListeners();
   }
 
   /// Moves to a point in the track, 0 to 1.

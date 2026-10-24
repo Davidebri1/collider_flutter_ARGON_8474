@@ -15,6 +15,7 @@ class InAppBrowserSheet extends StatefulWidget {
   final List<BrowserTab> tabs;
   final Function(BrowserTab updatedTab)? onTabUpdated;
   final Function(BrowserTab newTab)? onNewUserTab;
+  final VoidCallback? onClose;
   final bool incognito;
 
   const InAppBrowserSheet({
@@ -23,6 +24,7 @@ class InAppBrowserSheet extends StatefulWidget {
     required this.tabs,
     this.onTabUpdated,
     this.onNewUserTab,
+    this.onClose,
     this.incognito = false,
   });
 
@@ -31,8 +33,8 @@ class InAppBrowserSheet extends StatefulWidget {
 }
 
 class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
-  static const _homePage = 'https://www.google.com/';
-  static const _search = 'https://www.google.com/search?q=';
+  static const _homePage = 'https://www.google.com/webhp?igu=1';
+  static const _search = 'https://www.google.com/search?igu=1&q=';
 
   late String _activeTabId;
   bool _overview = false;
@@ -45,6 +47,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
   double _zoom = 1;
   String? _shownUrl;
   String? _savedName;
+  double _loadProgress = 1.0;
 
   late final List<BrowserTab> _tabs = List.of(widget.tabs);
 
@@ -56,6 +59,39 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     _activeTabId = widget.initialTabId;
     BrowserStore.instance.init().then((_) {
       if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant InAppBrowserSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    for (final t in widget.tabs) {
+      final idx = _tabs.indexWhere((existing) => existing.id == t.id);
+      if (idx == -1) {
+        _tabs.add(t);
+      }
+    }
+    if (widget.initialTabId != oldWidget.initialTabId) {
+      _activeTabId = widget.initialTabId;
+      _overview = false;
+    }
+  }
+
+  void _closeSheet() {
+    if (widget.onClose != null) {
+      widget.onClose!();
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _triggerLoadBar() {
+    setState(() => _loadProgress = 0.28);
+    Future.delayed(const Duration(milliseconds: 220), () {
+      if (mounted) setState(() => _loadProgress = 0.76);
+    });
+    Future.delayed(const Duration(milliseconds: 520), () {
+      if (mounted) setState(() => _loadProgress = 1.0);
     });
   }
 
@@ -95,6 +131,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     if (i != -1) _tabs[i] = updated;
     widget.onTabUpdated?.call(updated);
     if (!widget.incognito) BrowserStore.instance.visited(updated.url, updated.title);
+    _triggerLoadBar();
     setState(() => _overview = false);
   }
 
@@ -104,6 +141,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     final isUrl = !q.contains(' ') && (q.contains('.') || q.startsWith('http'));
     final url = isUrl ? (q.startsWith('http') ? q : 'https://$q') : '$_search${Uri.encodeComponent(q)}';
     if (url == _tab.url) {
+      _triggerLoadBar();
       setState(() => _reload++);
       return;
     }
@@ -155,7 +193,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
       _addr.text = _site(tab.url);
     }
     final size = MediaQuery.sizeOf(context);
-    final h = math.max(size.height - 56 - 84 - 54, 320.0);
+    final h = (size.height * 0.66).clamp(320.0, 640.0);
     final canBack = (_back[tab.id] ?? const []).isNotEmpty;
     final canForward = (_forward[tab.id] ?? const []).isNotEmpty;
 
@@ -170,14 +208,14 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
 
     final phone = size.width < 768;
     final address = VRecessed(
-      height: phone ? 36 : 30,
+      height: phone ? 36 : 32,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Row(
         children: [
           VPress(
             tooltip: 'Text Size',
             onTap: () => setState(() => _zoom = _zoom >= 1.3 ? 1 : _zoom + 0.15),
-            child: Text('Aa', style: VType.caption(color: VColors.textPrimary, weight: FontWeight.w500).copyWith(fontSize: phone ? 14 : 12)),
+            child: Text('Aa', style: VType.caption(color: VColors.textPrimary, weight: FontWeight.w500)),
           ),
           const SizedBox(width: 4),
           const Icon(Icons.lock_rounded, size: 10, color: Color(0x99FFFFFF)),
@@ -187,7 +225,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
               controller: _addr,
               textAlign: TextAlign.center,
               cursorColor: VColors.textPrimary,
-              style: VType.caption(color: VColors.textPrimary, weight: FontWeight.w500).copyWith(fontSize: phone ? 14 : 12),
+              style: VType.caption(color: VColors.textPrimary, weight: FontWeight.w500),
               keyboardType: TextInputType.url,
               textInputAction: TextInputAction.go,
               decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
@@ -201,7 +239,10 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
           const SizedBox(width: 4),
           VPress(
             tooltip: 'Reload',
-            onTap: () => setState(() => _reload++),
+            onTap: () {
+              _triggerLoadBar();
+              setState(() => _reload++);
+            },
             child: Icon(Icons.refresh_rounded, size: phone ? 17 : 15, color: VColors.textPrimary),
           ),
         ],
@@ -216,16 +257,15 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     final share = round(Icons.ios_share_rounded, 'Share', _share);
     final newTab = round(Icons.add_rounded, 'New Tab', _newTab);
     final tabs = round(Icons.filter_none_rounded, 'Tabs (${_tabs.length})', () => setState(() => _overview = !_overview), on: _overview);
-    final closeBtn = round(Icons.close_rounded, 'Close Browser', () => Navigator.of(context).pop());
+    final closeBtn = round(Icons.close_rounded, 'Close Browser', _closeSheet);
 
     Widget capsule(Widget child) => GestureDetector(
           onVerticalDragEnd: (d) {
-            if ((d.primaryVelocity ?? 0) > 250) Navigator.of(context).pop();
+            if ((d.primaryVelocity ?? 0) > 250) _closeSheet();
           },
           child: VGlass(
             material: VMaterial.elevated,
             radius: VRadius.full,
-            fill: const Color(0x4D808080),
             padding: const EdgeInsets.all(6),
             child: child,
           ),
@@ -235,8 +275,8 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
         Positioned.fill(
           child: VGlass(
             material: VMaterial.work,
-            radius: 20,
-            padding: const EdgeInsets.all(5),
+            radius: VRadius.card,
+            padding: const EdgeInsets.all(8),
             child: AnimatedSwitcher(
               duration: VMotion.base,
               child: _overview ? _tabsOverview() : _page(tab),
@@ -252,10 +292,10 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
         Dialog(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          alignment: Alignment.topCenter,
+          alignment: Alignment.center,
           insetPadding: phone
-              ? const EdgeInsets.fromLTRB(VSpace.md, 52, VSpace.md, 92)
-              : const EdgeInsets.fromLTRB(VSpace.xl, 44, VSpace.xl, 92),
+              ? const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, 84)
+              : const EdgeInsets.fromLTRB(VSpace.xl, VSpace.lg, VSpace.xl, 84),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 920),
             child: Column(
@@ -264,7 +304,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
                   ? [
                       capsule(Row(children: [Expanded(child: address), const SizedBox(width: 6), closeBtn])),
                       const SizedBox(height: 10),
-                      SizedBox(height: math.max(size.height - 268, 280.0), child: window),
+                      SizedBox(height: h, child: window),
                       const SizedBox(height: 10),
                       capsule(Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [back, forward, share, newTab, tabs, sidebar])),
                     ]
@@ -368,7 +408,7 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
           row(Icons.tune_rounded, 'Settings', () => setState(() => _side = 'settings')),
           const Divider(height: 10, color: Color(0x1FFFFFFF)),
           row(_savedName != null ? Icons.check_rounded : Icons.download_rounded, _savedName ?? 'Save', _save),
-          row(Icons.close_rounded, 'Close', () => Navigator.of(context).pop()),
+          row(Icons.close_rounded, 'Close', _closeSheet),
         ];
     }
     return DecoratedBox(
@@ -392,13 +432,37 @@ class _InAppBrowserSheetState extends State<InAppBrowserSheet> {
     return ClipRRect(
       key: ValueKey('page-${tab.id}'),
       borderRadius: BorderRadius.circular(15),
-      child: WebFrame(
-        key: ValueKey('frame-${tab.id}'),
-        url: tab.url,
-        reload: _reload,
-        zoom: _zoom,
-        onNavigated: _onNavigated,
-        onDownloaded: _flashSaved,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: WebFrame(
+              key: ValueKey('frame-${tab.id}'),
+              url: tab.url,
+              reload: _reload,
+              zoom: _zoom,
+              onNavigated: _onNavigated,
+              onDownloaded: _flashSaved,
+            ),
+          ),
+          // Web Browser loading progress bar (PRD R42: "Scrollbar & progress bar permitted")
+          if (_loadProgress < 1.0)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: AnimatedFractionallySizedBox(
+                  duration: VMotion.fast,
+                  widthFactor: _loadProgress.clamp(0.0, 1.0),
+                  child: Container(
+                    height: 2.5,
+                    color: VColors.accentBlue,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

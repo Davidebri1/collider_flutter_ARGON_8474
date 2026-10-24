@@ -37,8 +37,29 @@ class PremiumThemeMarketView extends StatefulWidget {
 
 class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with SingleTickerProviderStateMixin {
   String _query = '';
+  String _activeTag = 'All Themes';
+  final Set<int> _disabledTracks = {};
   List<WallpaperTheme> _shown = const [];
   int _index = 0;
+
+  static const _categoryTags = [
+    'All Themes',
+    'Spatial Rooms',
+    'Nature & Sea',
+    'Sci-Fi & Cosmos',
+    'Architecture',
+  ];
+
+  static bool _matchesTag(WallpaperTheme t, String tag) {
+    if (tag == 'All Themes') return true;
+    final n = t.name.toLowerCase();
+    return switch (tag) {
+      'Nature & Sea' => n.contains('sea') || n.contains('ocean') || n.contains('forest') || n.contains('rain') || n.contains('mountain') || n.contains('beach') || n.contains('aurora') || n.contains('water'),
+      'Sci-Fi & Cosmos' => n.contains('nebula') || n.contains('space') || n.contains('cyber') || n.contains('galaxy') || n.contains('star') || n.contains('neon') || n.contains('orbit') || n.contains('moon'),
+      'Architecture' => n.contains('villa') || n.contains('loft') || n.contains('tokyo') || n.contains('city') || n.contains('sanctuary') || n.contains('temple') || n.contains('studio') || n.contains('hall'),
+      _ => true, // Spatial Rooms matches curated spatial scenes
+    };
+  }
 
   bool _dragging = false;
   double _dragStart = 0, _dragOffset = 0, _velocity = 0;
@@ -119,7 +140,10 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
     ];
     ThemePackStore.instance.loadPrices(all);
     final q = _query.trim().toLowerCase();
-    var found = q.isEmpty ? all : all.where((t) => t.name.toLowerCase().contains(q) || t.id.contains(q)).toList();
+    var found = all.where((t) {
+      final matchesQ = q.isEmpty || t.name.toLowerCase().contains(q) || t.id.contains(q);
+      return matchesQ && _matchesTag(t, _activeTag);
+    }).toList();
     if (found.isEmpty) found = all;
     final keep = _selected?.id;
     setState(() {
@@ -294,7 +318,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -309,6 +333,47 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                         onTap: widget.onClose,
                       ),
                     ],
+                  ),
+                ),
+                // R44: Title-Cased Tag Category Filter Bar
+                SizedBox(
+                  height: 32,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.symmetric(horizontal: isMobile ? 56 : 24),
+                    itemCount: _categoryTags.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 6),
+                    itemBuilder: (_, idx) {
+                      final tag = _categoryTags[idx];
+                      final sel = tag == _activeTag;
+                      return VPress(
+                        onTap: () {
+                          setState(() => _activeTag = tag);
+                          _reload();
+                        },
+                        child: AnimatedContainer(
+                          duration: VMotion.fast,
+                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: sel ? VColors.fillActive : VColors.glassElevated,
+                            borderRadius: BorderRadius.circular(VRadius.full),
+                            border: Border.all(
+                              color: sel ? VColors.accentBlue.withValues(alpha: 0.7) : VColors.borderLight,
+                              width: sel ? 0.9 : 0.5,
+                            ),
+                            boxShadow: sel ? VShadow.emissive(VColors.accentBlue, intensity: 0.5) : null,
+                          ),
+                          child: Text(
+                            tag,
+                            style: VType.caption(
+                              color: sel ? Colors.white : VColors.textSecondary,
+                              weight: sel ? FontWeight.w600 : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 Expanded(
@@ -359,8 +424,10 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
   }
 
   Widget _coverFlow(bool isMobile, double width, {double coverH = 340, bool compactH = false}) {
-    final albumSize = isMobile ? 156.0 : (compactH ? 176.0 : 196.0);
-    final spacing = isMobile ? 120.0 : 160.0;
+    // R32 & Settled Decisions: Vertical portrait wallpaper cards showing the whole portrait subject (never square album art).
+    final cardW = isMobile ? 136.0 : (compactH ? 156.0 : 172.0);
+    final cardH = isMobile ? 214.0 : (compactH ? 242.0 : 268.0);
+    final spacing = isMobile ? 114.0 : 152.0;
     final drag = _dragging ? _dragOffset / 100 : 0.0;
     final pos = _pos - drag;
     final reach = math.min(math.min(4, (width / spacing / 2).ceil() + 1), (_shown.length - 1) ~/ 2);
@@ -378,27 +445,27 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
-            for (final i in order) _cover(i, i - pos, albumSize, spacing),
+            for (final i in order) _cover(i, i - pos, cardW, cardH, spacing),
           ],
         ),
       ),
     );
   }
 
-  Widget _cover(int i, double offset, double size, double spacing) {
+  Widget _cover(int i, double offset, double cardW, double cardH, double spacing) {
     final t = _at(i);
     final center = offset.abs() < 0.1;
     final d = offset.abs();
     final m = Matrix4.identity()..setEntry(3, 2, 1 / 1500);
     if (center) {
       m
-        ..translate(0.0, 0.0, -260.0)
-        ..scale(1.24, 1.24, 1.24);
+        ..translate(0.0, 0.0, -240.0)
+        ..scale(1.18, 1.18, 1.18);
     } else {
-      final k = math.max(0.8, 1.12 - d * 0.04);
+      final k = math.max(0.78, 1.06 - d * 0.05);
       m
         ..translate(offset * spacing, 0.0, 80.0 * d)
-        ..rotateY((offset < 0 ? 55 : -55) * math.pi / 180)
+        ..rotateY((offset < 0 ? 52 : -52) * math.pi / 180)
         ..scale(k, k, 1.0);
     }
     const opacity = 1.0;
@@ -418,22 +485,22 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
         child: GestureDetector(
           onTap: () => _select(i),
           child: SizedBox(
-            width: size,
-            height: size,
+            width: cardW,
+            height: cardH,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: const [
                         BoxShadow(color: Color(0xE6000000), blurRadius: 50, spreadRadius: -12, offset: Offset(0, 25)),
                         BoxShadow(color: Color(0x99000000), blurRadius: 32, offset: Offset(0, 8)),
                       ],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(16),
                       child: Stack(fit: StackFit.expand, children: [
                         picture(),
                         const DecoratedBox(
@@ -441,7 +508,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                             gradient: LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [Color(0x1FFFFFFF), Color(0x0AFFFFFF), Color(0x00FFFFFF), Color(0x05000000), Color(0x14000000)],
+                              colors: [Color(0x1FFFFFFF), Color(0x0AFFFFFF), Color(0x00FFFFFF), Color(0x05000000), Color(0x28000000)],
                               stops: [0, 0.25, 0.5, 0.75, 1],
                             ),
                           ),
@@ -454,20 +521,20 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                   child: IgnorePointer(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white.withValues(alpha: isCurrent ? 0.35 : 0.12), width: 1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withValues(alpha: isCurrent ? 0.45 : 0.16), width: isCurrent ? 1.1 : 0.7),
                       ),
                     ),
                   ),
                 ),
                 Positioned(
-                  top: size,
+                  top: cardH,
                   left: 0,
-                  width: size,
-                  height: size,
+                  width: cardW,
+                  height: cardH * 0.45,
                   child: IgnorePointer(
                     child: Opacity(
-                      opacity: isCurrent ? 0.85 : 0.7,
+                      opacity: isCurrent ? 0.65 : 0.45,
                       child: Transform(
                         alignment: Alignment.center,
                         transform: Matrix4.diagonal3Values(1, -1, 1),
@@ -476,27 +543,19 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                           shaderCallback: (r) => const LinearGradient(
                             begin: Alignment.bottomCenter,
                             end: Alignment.topCenter,
-                            colors: [Color(0xBFFFFFFF), Color(0x66FFFFFF), Color(0x26FFFFFF), Color(0x00FFFFFF)],
-                            stops: [0, 0.2, 0.4, 0.6],
+                            colors: [Color(0xBFFFFFFF), Color(0x55FFFFFF), Color(0x00FFFFFF)],
+                            stops: [0, 0.35, 0.85],
                           ).createShader(r),
-                          child: ColorFiltered(
-                            colorFilter: const ColorFilter.matrix(<double>[
-                              0.78, 0, 0, 0, -38.25,
-                              0, 0.78, 0, 0, -38.25,
-                              0, 0, 0.78, 0, -38.25,
-                              0, 0, 0, 1, 0,
-                            ]),
-                            child: ClipRRect(borderRadius: BorderRadius.circular(10), child: picture()),
-                          ),
+                          child: ClipRRect(borderRadius: BorderRadius.circular(16), child: picture()),
                         ),
                       ),
                     ),
                   ),
                 ),
                 Positioned(
-                  top: size + 6,
+                  top: cardH + 4,
                   left: 0,
-                  width: size,
+                  width: cardW,
                   height: 12,
                   child: IgnorePointer(
                     child: Opacity(
@@ -537,6 +596,14 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
           return _TrackWheel(
             tracks: t.tracks,
             selected: (mine ? p.index! : _track).clamp(0, t.tracks.length - 1),
+            disabledTracks: _disabledTracks,
+            onToggleTrackEnabled: (i) => setState(() {
+              if (_disabledTracks.contains(i)) {
+                _disabledTracks.remove(i);
+              } else if (_disabledTracks.length < t.tracks.length - 1) {
+                _disabledTracks.add(i);
+              }
+            }),
             onSelect: (i) => _focusTrack(t, i),
             compactH: compactH,
           );
@@ -576,7 +643,7 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
                 : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(CupertinoIcons.lock_open, size: 14, color: Colors.white),
+                      const Icon(Icons.lock_open_rounded, size: 15, color: Colors.white),
                       const SizedBox(width: 6),
                       Text('Unlock $price', style: VType.callout(color: Colors.white, weight: FontWeight.w600)),
                     ],
@@ -610,9 +677,18 @@ class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with Si
 class _TrackWheel extends StatefulWidget {
   final List<AmbientTrack> tracks;
   final int selected;
+  final Set<int> disabledTracks;
+  final ValueChanged<int> onToggleTrackEnabled;
   final ValueChanged<int> onSelect;
   final bool compactH;
-  const _TrackWheel({required this.tracks, required this.selected, required this.onSelect, this.compactH = false});
+  const _TrackWheel({
+    required this.tracks,
+    required this.selected,
+    required this.disabledTracks,
+    required this.onToggleTrackEnabled,
+    required this.onSelect,
+    this.compactH = false,
+  });
 
   @override
   State<_TrackWheel> createState() => _TrackWheelState();
@@ -714,19 +790,45 @@ class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderState
   Widget _row(int i, double offset, double pos, TextStyle base) {
     final d = offset.abs().clamp(0.0, 2.5);
     final focus = (1 - d).clamp(0.0, 1.0);
-    Widget text = Text(
-      widget.tracks[i].title,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      textAlign: TextAlign.center,
-      style: base.copyWith(
-        fontWeight: FontWeight.lerp(FontWeight.w300, FontWeight.w600, focus),
-        shadows: const [Shadow(color: Color(0x80000000), blurRadius: 8, offset: Offset(0, 2))],
-      ),
+    final enabled = !widget.disabledTracks.contains(i);
+    final isCenter = d < 0.35;
+    Widget rowContent = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: () => widget.onToggleTrackEnabled(i),
+          child: Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Icon(
+              enabled ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+              size: 14,
+              color: enabled ? (isCenter ? VColors.accentBlue : VColors.textSecondary) : VColors.textTertiary,
+            ),
+          ),
+        ),
+        Flexible(
+          child: Text(
+            widget.tracks[i].title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: base.copyWith(
+              color: enabled ? Colors.white : VColors.textTertiary,
+              decoration: enabled ? null : TextDecoration.lineThrough,
+              fontWeight: FontWeight.lerp(FontWeight.w300, FontWeight.w600, focus),
+              shadows: const [Shadow(color: Color(0x80000000), blurRadius: 8, offset: Offset(0, 2))],
+            ),
+          ),
+        ),
+        if (isCenter) ...[
+          const SizedBox(width: 6),
+          const Icon(Icons.graphic_eq_rounded, size: 14, color: VColors.accentBlue),
+        ],
+      ],
     );
     if (d > 0.04) {
       final sigma = 1.6 * d;
-      text = ImageFiltered(imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.decal), child: text);
+      rowContent = ImageFiltered(imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.decal), child: rowContent);
     }
     return Positioned(
       left: 0,
@@ -738,7 +840,7 @@ class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderState
         child: Center(
           child: Opacity(
             opacity: (1 - 0.34 * d).clamp(0.15, 1.0),
-            child: Transform.scale(scale: 1 - 0.1 * d, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: text)),
+            child: Transform.scale(scale: 1 - 0.1 * d, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: rowContent)),
           ),
         ),
       ),

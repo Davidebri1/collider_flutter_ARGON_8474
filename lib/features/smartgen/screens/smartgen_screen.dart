@@ -3,7 +3,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../smartgen_store.dart';
 
-/// Smart Gen — spatial workspace with Kanban Boards, Cards, Canvas, and Genie synthesis views.
+/// Smart Gen — spatial workspace with Counterpart Boards (Kanban, Monday Pulse, Notebook, Calendar)
+/// and distinct Vertical Portrait Cards, Spatial Storyboard Canvas, and Autonomous Genie views (R21–R26).
 class SmartGenScreen extends StatefulWidget {
   final VoidCallback onClose;
   final String viewMode;
@@ -29,15 +30,32 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   int _tab = 0;
   late String _mode = widget.viewMode;
 
-  static const _tabs = ['Tasks & Kanban', 'Projects', 'Reminders', 'Memory Items', 'Artifacts'];
+  // R24: "A board looks like the thing named: notebook, portfolio, kanban, calendar, album, storyboard."
+  static const _tabs = ['Kanban Board', 'Monday Pulse', 'Notebook', 'Calendar'];
 
-  static const _boards = [
-    ['High', 'Medium', 'Low'],
-    ['Projects'],
-    ['Reminders'],
-    ['Memory Items'],
-    ['Artifacts'],
-  ];
+  static const _kanbanLists = ['High', 'Medium', 'Low'];
+
+  static String _laneLabel(String key) => switch (key) {
+        'High' => 'To Do',
+        'Medium' => 'Doing',
+        'Low' => 'Done',
+        _ => key,
+      };
+
+  static Color _laneColor(String key) => switch (key) {
+        'High' => VColors.accentBlue,
+        'Medium' => VColors.accentOrange,
+        'Low' => VColors.accentGreen,
+        _ => VColors.accentPurple,
+      };
+
+  static Color _tagColor(String tag) => switch (tag) {
+        'Theme Studio' => VColors.accentPurple,
+        'AI Engine' => VColors.accentBlue,
+        'Spatial UI' => VColors.accentTeal,
+        'Discover' => VColors.accentOrange,
+        _ => VColors.accentGreen,
+      };
 
   @override
   void initState() {
@@ -53,8 +71,7 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       _mode = widget.viewMode;
     }
     if (widget.newCardTrigger != oldWidget.newCardTrigger) {
-      final defaultList = _boards[_tab].first;
-      _store.add(defaultList, 'New ${_tabs[_tab].split(' ').first} item');
+      _store.add('High', 'New Spatial Task');
     }
   }
 
@@ -77,29 +94,28 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final isMobile = size.width < 768;
-    final w = VOverlay.toolWidth(context);
+    final w = isMobile ? (size.width - 70).clamp(288.0, 344.0) : VOverlay.toolWidth(context);
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(isMobile ? 56 : 0, 32, 0, 0),
-        child: Align(
-          alignment: Alignment.topCenter,
+        padding: EdgeInsets.fromLTRB(isMobile ? 54 : 0, 8, isMobile ? 8 : 0, 74),
+        child: Center(
           child: SizedBox(
             width: w,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _navbar(isMobile),
-                const SizedBox(height: VSpace.xs),
+                const SizedBox(height: 6),
                 SizedBox(
-                  height: VOverlay.toolMaxHeight(context),
+                  height: (size.height * (isMobile ? 0.66 : 0.68)).clamp(380.0, 560.0),
                   child: VGlass(
                     material: VMaterial.work,
-                    radius: VRadius.xl,
+                    radius: VRadius.card,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _tabsRow(),
+                        if (_mode == 'boards') _tabsRow(),
                         Expanded(
                           child: _buildModeBody(),
                         ),
@@ -118,81 +134,87 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
 
   Widget _buildModeBody() {
     if (_mode == 'cards') {
-      return _CardsView(
-        key: ValueKey('cards-$_tab'),
-        lists: _boards[_tab],
+      return _PortraitCardsGridView(
+        key: const ValueKey('mode-cards'),
         store: _store,
         query: _q,
-        checks: _tab == 2,
       );
     }
     if (_mode == 'canvas') {
-      return _CanvasView(
-        key: ValueKey('canvas-$_tab'),
-        lists: _boards[_tab],
+      return _SpatialCanvasView(
+        key: const ValueKey('mode-canvas'),
         store: _store,
         query: _q,
       );
     }
     if (_mode == 'genie') {
-      return _GenieView(
-        key: ValueKey('genie-$_tab'),
+      return _GenieSynthesisView(
+        key: const ValueKey('mode-genie'),
         store: _store,
         query: _q,
       );
     }
-    return _Board(
-      key: ValueKey('board-$_tab'),
-      lists: _boards[_tab],
-      store: _store,
-      query: _q,
-      checks: _tab == 2,
-    );
+    // Boards mode: switches between Kanban (Trello), Monday Pulse, Notebook, and Calendar counterparts (R24)
+    return switch (_tab) {
+      1 => _MondayPulseBoardView(store: _store, query: _q),
+      2 => _NotebookCounterpartView(store: _store, query: _q),
+      3 => _CalendarCounterpartView(store: _store, query: _q),
+      _ => _KanbanSwimlaneBoard(store: _store, query: _q),
+    };
   }
 
   Widget _navbar(bool isMobile) => VGlass(
         material: VMaterial.elevated,
         radius: VRadius.full,
-        padding: const EdgeInsets.fromLTRB(16, 5, 5, 5),
+        padding: EdgeInsets.fromLTRB(isMobile ? 10 : 14, 5, 5, 5),
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                'Smart Gen',
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.fade,
-                style: VType.callout(weight: FontWeight.w600),
-              ),
-            ),
-            if (!isMobile)
-              for (final (id, label) in const [
-                ('boards', 'Boards'),
-                ('cards', 'Cards'),
-                ('canvas', 'Canvas'),
-                ('genie', 'Genie'),
-              ])
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: VPress(
-                    onTap: () => _setMode(id),
-                    child: AnimatedContainer(
-                      duration: VMotion.fast,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _mode == id ? VColors.fillActive : Colors.transparent,
-                        borderRadius: BorderRadius.circular(VRadius.full),
-                      ),
-                      child: Text(
-                        label,
-                        style: VType.caption(
-                          color: _mode == id ? VColors.textPrimary : VColors.textSecondary,
-                          weight: _mode == id ? FontWeight.w600 : FontWeight.w500,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final (id, label, icon) in const [
+                      ('boards', 'Boards', Icons.view_kanban_rounded),
+                      ('cards', 'Cards', Icons.grid_view_rounded),
+                      ('canvas', 'Canvas', Icons.hub_rounded),
+                      ('genie', 'Genie', Icons.auto_awesome_rounded),
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: VPress(
+                          onTap: () => _setMode(id),
+                          child: AnimatedContainer(
+                            duration: VMotion.fast,
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: _mode == id ? VColors.fillActive : Colors.transparent,
+                              borderRadius: BorderRadius.circular(VRadius.full),
+                              boxShadow: _mode == id ? VShadow.emissive(VColors.accentBlue, intensity: 0.55) : null,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(icon, size: 12, color: _mode == id ? Colors.white : VColors.textSecondary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  label,
+                                  style: VType.caption(
+                                    color: _mode == id ? VColors.textPrimary : VColors.textSecondary,
+                                    weight: _mode == id ? FontWeight.w600 : FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
+                  ],
                 ),
+              ),
+            ),
             const SizedBox(width: 4),
             VCircleButton(
               icon: Icons.close_rounded,
@@ -205,21 +227,19 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       );
 
   Widget _tabsRow() => SizedBox(
-        height: 44,
-        child: _Fade(
-          axis: Axis.horizontal,
-          fade: 20,
-          padding: const EdgeInsets.symmetric(horizontal: VSpace.md),
+        height: 40,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (int i = 0; i < _tabs.length; i++)
                 VPress(
-                  onTap: () => setState(() {
-                    _tab = i;
-                  }),
+                  onTap: () => setState(() => _tab = i),
                   child: Padding(
-                    padding: EdgeInsets.only(right: i == _tabs.length - 1 ? 0 : 18),
+                    padding: EdgeInsets.only(right: i == _tabs.length - 1 ? 0 : 14),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -230,17 +250,18 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
                             weight: i == _tab ? FontWeight.w600 : FontWeight.w500,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 5),
                         AnimatedContainer(
                           duration: VMotion.base,
-                          width: 16,
-                          height: 3,
+                          width: 18,
+                          height: 2.5,
                           decoration: BoxDecoration(
                             color: i == _tab ? VColors.accentBlue : Colors.transparent,
                             borderRadius: BorderRadius.circular(VRadius.full),
+                            boxShadow: i == _tab ? VShadow.emissive(VColors.accentBlue, intensity: 0.7) : null,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                       ],
                     ),
                   ),
@@ -251,608 +272,877 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
       );
 
   Widget _searchBar(bool isMobile) => Padding(
-        padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.xs, VSpace.sm, VSpace.sm),
-        child: Align(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: isMobile ? double.infinity : 320),
-            child: VSearchField(
-              controller: _searchCtrl,
-              hint: 'Search cards & synthesis...',
-              onChanged: (v) => setState(() => _q = v.trim()),
-            ),
-          ),
+        padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+        child: VSearchField(
+          controller: _searchCtrl,
+          height: 34,
+          hint: 'Filter cards or type to search...',
+          onChanged: (v) => setState(() => _q = v.trim()),
         ),
       );
 }
 
-const _listFill = Color(0x28000000);
-const _cardFill = Color(0xFF1E2329);
-const _cardInk = Color(0xFFEAF0F6);
-const _faint = Color(0xFF9FADBC);
+/// Reusable Vertical Portrait Card (`3:4` aspect ratio, width < height) used across Kanban, Cards Grid, and Storyboard.
+class _VerticalPortraitCard extends StatelessWidget {
+  final SgCard card;
+  final String laneKey;
+  final VoidCallback onToggleDone;
+  final VoidCallback? onAdvanceLane;
+  final VoidCallback? onDelete;
+  final VoidCallback? onEdit;
 
-class _Board extends StatefulWidget {
-  final List<String> lists;
-  final SmartGenStore store;
-  final String query;
-  final bool checks;
-  const _Board({super.key, required this.lists, required this.store, required this.query, required this.checks});
-
-  @override
-  State<_Board> createState() => _BoardState();
-}
-
-class _BoardState extends State<_Board> {
-  PageController? _pages;
-  String? _adding;
-  SgCard? _editing;
-  DateTime _lastTurn = DateTime(0);
-  final TextEditingController _newCtrl = Drafts.text('smartgen.new');
-  final _newFocus = FocusNode();
-
-  @override
-  void dispose() {
-    _pages?.dispose();
-    _newFocus.dispose();
-    super.dispose();
-  }
-
-  void _edge(Offset global, Rect box) {
-    final p = _pages;
-    if (p == null || !p.hasClients || DateTime.now().difference(_lastTurn).inMilliseconds < 650) return;
-    final page = (p.page ?? 0).round();
-    if (global.dx > box.right - 28 && page < widget.lists.length - 1) {
-      _lastTurn = DateTime.now();
-      p.animateToPage(page + 1, duration: VMotion.base, curve: Curves.easeOutCubic);
-    } else if (global.dx < box.left + 28 && page > 0) {
-      _lastTurn = DateTime.now();
-      p.animateToPage(page - 1, duration: VMotion.base, curve: Curves.easeOutCubic);
-    }
-  }
+  const _VerticalPortraitCard({
+    required this.card,
+    required this.laneKey,
+    required this.onToggleDone,
+    this.onAdvanceLane,
+    this.onDelete,
+    this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final n = widget.lists.length;
-      final sideBySide = n == 1 || (c.maxWidth - 24 - (n - 1) * 8) / n >= 180;
-      if (sideBySide) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 2, 12, 0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (int i = 0; i < n; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: _list(widget.lists[i], c.maxHeight))],
-            ],
-          ),
-        );
-      }
-      final frac = ((c.maxWidth - 40) / c.maxWidth).clamp(0.6, 1.0);
-      _pages ??= PageController(viewportFraction: frac);
-      return PageView.builder(
-        controller: _pages,
-        padEnds: false,
-        itemCount: n,
-        itemBuilder: (_, i) => Padding(
-          padding: EdgeInsets.fromLTRB(i == 0 ? 12 : 4, 2, i == n - 1 ? 12 : 4, 0),
-          child: _list(widget.lists[i], c.maxHeight),
-        ),
-      );
-    });
-  }
+    final tagHue = _SmartGenScreenState._tagColor(card.tag);
+    final laneHue = _SmartGenScreenState._laneColor(laneKey);
+    final laneLabel = _SmartGenScreenState._laneLabel(laneKey);
 
-  Widget _list(String name, double maxH) {
-    final all = widget.store.list(name);
-    final q = widget.query.toLowerCase();
-    final cards = q.isEmpty ? all : all.where((c) => c.title.toLowerCase().contains(q) || c.subtitle.toLowerCase().contains(q)).toList();
-    return Align(
-      alignment: Alignment.topCenter,
-      child: DragTarget<SgCard>(
-        onWillAcceptWithDetails: (_) => true,
-        onAcceptWithDetails: (d) => widget.store.move(d.data, name, null),
-        builder: (context, over, _) => AnimatedContainer(
-          duration: VMotion.fast,
-          constraints: BoxConstraints(maxHeight: maxH - 10),
-          decoration: BoxDecoration(
-            color: over.isNotEmpty ? const Color(0x3D000000) : _listFill,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: VColors.borderSubtle, width: 0.5),
+    return VPress(
+      onTap: onEdit ?? onToggleDone,
+      child: Container(
+        height: 182,
+        decoration: BoxDecoration(
+          color: const Color(0xD9161B26),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: card.done ? VColors.accentGreen.withValues(alpha: 0.45) : const Color(0x2EFFFFFF),
+            width: 0.7,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.fade,
-                        style: VType.callout(color: _cardInk, weight: FontWeight.w600),
+          boxShadow: const [
+            BoxShadow(color: Color(0x4D000000), blurRadius: 10, offset: Offset(0, 4)),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Top Visual Cover Header (64px)
+            SizedBox(
+              height: 64,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    card.coverAsset,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [tagHue.withValues(alpha: 0.45), const Color(0xFF0F172A)],
+                        ),
                       ),
                     ),
+                  ),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x33000000), Color(0xB30E121C)],
+                      ),
+                    ),
+                  ),
+                  // Top-left Trello category label pill
+                  Positioned(
+                    left: 7,
+                    top: 7,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: tagHue.withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        card.tag,
+                        style: VType.caption(color: Colors.white, weight: FontWeight.w700).copyWith(fontSize: 9.0),
+                      ),
+                    ),
+                  ),
+                  // Top-right 1-tap checkbox circle
+                  Positioned(
+                    right: 6,
+                    top: 6,
+                    child: VPress(
+                      onTap: onToggleDone,
+                      child: Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: card.done ? VColors.accentGreen : const Color(0x80000000),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 0.8),
+                        ),
+                        child: Icon(
+                          card.done ? Icons.check_rounded : Icons.circle_outlined,
+                          size: 13,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Card Body (Title + 2-line 11pt Summary + Footer)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      '${cards.length}',
-                      style: VType.caption(color: _faint, weight: FontWeight.w500),
+                      card.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: VType.callout(
+                        color: card.done ? VColors.textTertiary : VColors.textPrimary,
+                        weight: FontWeight.w600,
+                      ).copyWith(
+                        fontSize: 11.5,
+                        height: 1.22,
+                        decoration: card.done ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: Text(
+                        card.subtitle.isNotEmpty ? card.subtitle : 'Tap to inspect or move across board lanes.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: VType.summary(color: VColors.textSecondary).copyWith(fontSize: 10.5, height: 1.25),
+                      ),
+                    ),
+                    // Footer: Status dot + label + Due date / Move action
+                    Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: card.done ? VColors.accentGreen : laneHue),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            card.done ? 'Done' : laneLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: VType.caption(
+                              color: card.done ? VColors.accentGreen : laneHue,
+                              weight: FontWeight.w600,
+                            ).copyWith(fontSize: 9.5),
+                          ),
+                        ),
+                        if (onAdvanceLane != null)
+                          VPress(
+                            onTap: onAdvanceLane,
+                            tooltip: 'Move to next lane',
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0x1FFFFFFF),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: const Icon(Icons.arrow_forward_rounded, size: 11, color: VColors.textSecondary),
+                            ),
+                          )
+                        else if (onDelete != null)
+                          VPress(
+                            onTap: onDelete,
+                            tooltip: 'Delete card',
+                            child: const Icon(Icons.close_rounded, size: 13, color: VColors.textTertiary),
+                          )
+                        else
+                          Text(
+                            card.dueDate,
+                            style: VType.caption(color: VColors.textTertiary).copyWith(fontSize: 9.0),
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              Flexible(
-                child: _Fade(
-                  fade: 12,
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final (i, c) in cards.indexed) KeyedSubtree(key: ValueKey(c.id), child: _slot(name, c, all.indexOf(c), i)),
-                      if (_adding == name) KeyedSubtree(key: ValueKey('new-$name'), child: _newCard(name)),
-                    ],
-                  ),
-                ),
-              ),
-              if (_adding != name)
-                VPress(
-                  onTap: () => setState(() {
-                    _adding = name;
-                    _editing = null;
-                  }),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-                    child: Row(children: [
-                      const Icon(Icons.add_rounded, size: 16, color: _faint),
-                      const SizedBox(width: 6),
-                      Text('Add card', style: VType.callout(color: _faint, weight: FontWeight.w500)),
-                    ]),
-                  ),
-                )
-              else
-                const SizedBox(height: 8),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  Widget _slot(String list, SgCard c, int index, int shown) {
-    return DragTarget<SgCard>(
-      onWillAcceptWithDetails: (d) => d.data != c,
-      onAcceptWithDetails: (d) => widget.store.move(d.data, list, index),
-      builder: (context, over, _) => Column(
+/// 1. Trello Counterpart: Side-by-side vertical Kanban swimlanes containing Vertical Portrait Cards.
+class _KanbanSwimlaneBoard extends StatefulWidget {
+  final SmartGenStore store;
+  final String query;
+  const _KanbanSwimlaneBoard({required this.store, required this.query});
+
+  @override
+  State<_KanbanSwimlaneBoard> createState() => _KanbanSwimlaneBoardState();
+}
+
+class _KanbanSwimlaneBoardState extends State<_KanbanSwimlaneBoard> {
+  String? _addingLane;
+  SgCard? _editingCard;
+  final TextEditingController _inputCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _inputCtrl.dispose();
+    super.dispose();
+  }
+
+  void _advanceCard(String currentLane, SgCard card) {
+    const lanes = _SmartGenScreenState._kanbanLists;
+    final idx = lanes.indexOf(currentLane);
+    final nextLane = lanes[(idx + 1) % lanes.length];
+    widget.store.move(card, nextLane, 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final q = widget.query.toLowerCase();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AnimatedContainer(
-            duration: VMotion.fast,
-            height: over.isNotEmpty ? 36 : 0,
-            margin: EdgeInsets.only(bottom: over.isNotEmpty ? 6 : 0),
-            decoration: BoxDecoration(color: const Color(0x14FFFFFF), borderRadius: BorderRadius.circular(8)),
-          ),
-          Padding(padding: const EdgeInsets.only(bottom: 6), child: identical(_editing, c) ? _editor(c) : _draggable(c)),
+          for (int i = 0; i < _SmartGenScreenState._kanbanLists.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            _buildSwimlane(_SmartGenScreenState._kanbanLists[i], q),
+          ],
         ],
       ),
     );
   }
 
-  Widget _draggable(SgCard c) {
-    final card = _cardFace(c);
-    return LayoutBuilder(builder: (context, box) {
-      return LongPressDraggable<SgCard>(
-        data: c,
-        delay: const Duration(milliseconds: 220),
-        onDragUpdate: (d) {
-          final board = this.context.findRenderObject() as RenderBox?;
-          if (board != null && board.hasSize) _edge(d.globalPosition, board.localToGlobal(Offset.zero) & board.size);
-        },
-        feedback: Material(
-          type: MaterialType.transparency,
-          child: Transform.rotate(angle: 0.04, child: SizedBox(width: box.maxWidth, child: card)),
-        ),
-        childWhenDragging: Opacity(opacity: 0.35, child: card),
-        child: VPress(
-          onTap: () => setState(() {
-            _editing = c;
-            _adding = null;
-          }),
-          child: card,
-        ),
-      );
-    });
-  }
+  Widget _buildSwimlane(String laneKey, String q) {
+    final all = widget.store.list(laneKey);
+    final cards = q.isEmpty
+        ? all
+        : all.where((c) => c.title.toLowerCase().contains(q) || c.subtitle.toLowerCase().contains(q)).toList();
+    final laneHue = _SmartGenScreenState._laneColor(laneKey);
+    final laneTitle = _SmartGenScreenState._laneLabel(laneKey);
 
-  Widget _cardFace(SgCard c) => Container(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
+    return DragTarget<SgCard>(
+      onWillAcceptWithDetails: (_) => true,
+      onAcceptWithDetails: (d) => widget.store.move(d.data, laneKey, 0),
+      builder: (context, over, _) => Container(
+        width: 146,
+        padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
-          color: _cardFill,
-          borderRadius: BorderRadius.circular(9),
-          border: Border.all(color: const Color(0x18FFFFFF), width: 0.5),
-          boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 3, offset: Offset(0, 1))],
+          color: over.isNotEmpty ? const Color(0x4D000000) : const Color(0x33000000),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: over.isNotEmpty ? laneHue : const Color(0x22FFFFFF),
+            width: 0.7,
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (widget.checks)
-                  VPress(
-                    onTap: () => widget.store.update(c, done: !c.done),
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 1, right: 8),
-                      child: Icon(
-                        c.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                        size: 16,
-                        color: c.done ? VColors.accentGreen : _faint,
-                      ),
-                    ),
-                  ),
-                Expanded(
-                  child: Text(
-                    c.title,
-                    style: VType.callout(color: c.done ? _faint : _cardInk, weight: FontWeight.w500).copyWith(
-                      fontSize: 11,
-                      height: 1.35,
-                      decoration: c.done ? TextDecoration.lineThrough : null,
-                      decorationColor: _faint,
-                    ),
-                  ),
-                ),
-                if (c.score.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(left: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: VColors.accentBlue.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(VRadius.full),
-                    ),
-                    child: Text(
-                      c.score,
-                      style: VType.caption(color: Colors.white, weight: FontWeight.w600).copyWith(fontSize: 9.5),
-                    ),
-                  ),
-              ],
-            ),
-            if (c.subtitle.isNotEmpty && c.subtitle.toLowerCase() != c.title.toLowerCase()) ...[
-              const SizedBox(height: 5),
-              Text(
-                c.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: VType.caption(color: _faint, weight: FontWeight.w400).copyWith(fontSize: 10.2, height: 1.3),
-              ),
-            ],
-          ],
-        ),
-      );
-
-  Widget _editor(SgCard c) => Container(
-        padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
-        decoration: BoxDecoration(color: _cardFill, borderRadius: BorderRadius.circular(8), border: Border.all(color: VColors.accentBlue, width: 1.5)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextFormField(
-              initialValue: c.title,
-              autofocus: true,
-              maxLines: null,
-              textInputAction: TextInputAction.done,
-              cursorColor: _cardInk,
-              style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 11, height: 18 / 13.5),
-              decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 2)),
-              onChanged: (v) => widget.store.update(c, title: v),
-              onFieldSubmitted: (v) {
-                widget.store.update(c, title: v.trim().isEmpty ? c.title : v.trim());
-                setState(() => _editing = null);
-              },
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _round(Icons.delete_outline_rounded, () {
-                  widget.store.remove(c);
-                  setState(() => _editing = null);
-                }),
-                const SizedBox(width: 6),
-                _round(Icons.check_rounded, () {
-                  widget.store.update(c, title: c.title.trim());
-                  setState(() => _editing = null);
-                }, filled: true),
-              ],
-            ),
-          ],
-        ),
-      );
-
-  Widget _newCard(String list) {
-    final ctrl = _newCtrl;
-    void add() {
-      if (ctrl.text.trim().isEmpty) return setState(() => _adding = null);
-      widget.store.add(list, ctrl.text);
-      ctrl.clear();
-      WidgetsBinding.instance.addPostFrameCallback((_) => _newFocus.requestFocus());
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
-        decoration: BoxDecoration(color: _cardFill, borderRadius: BorderRadius.circular(8), border: Border.all(color: VColors.accentBlue, width: 1.5)),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: ctrl,
-                focusNode: _newFocus,
-                autofocus: true,
-                cursorColor: _cardInk,
-                style: VType.callout(color: _cardInk, weight: FontWeight.w400).copyWith(fontSize: 11),
-                decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 4)),
-                onSubmitted: (_) => add(),
+            // Swimlane Header (Trello style)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: laneHue,
+                      boxShadow: VShadow.emissive(laneHue, intensity: 0.7),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      laneTitle,
+                      style: VType.callout(weight: FontWeight.w700),
+                    ),
+                  ),
+                  VPress(
+                    onTap: () => setState(() {
+                      _addingLane = laneKey;
+                      _editingCard = null;
+                      _inputCtrl.clear();
+                    }),
+                    tooltip: 'Add card to $laneTitle',
+                    child: const Icon(Icons.add_rounded, size: 16, color: VColors.textSecondary),
+                  ),
+                ],
               ),
             ),
-            _round(Icons.close_rounded, () => setState(() => _adding = null)),
-            const SizedBox(width: 6),
-            _round(Icons.check_rounded, add, filled: true),
+            if (_addingLane == laneKey)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF161B26),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: VColors.accentBlue, width: 1.0),
+                  ),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _inputCtrl,
+                        autofocus: true,
+                        style: VType.body(),
+                        decoration: InputDecoration(
+                          hintText: 'Card title...',
+                          hintStyle: VType.body(color: VColors.textTertiary),
+                          isDense: true,
+                          border: InputBorder.none,
+                        ),
+                        onSubmitted: (v) {
+                          if (v.trim().isNotEmpty) widget.store.add(laneKey, v.trim());
+                          setState(() => _addingLane = null);
+                        },
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          VPress(
+                            onTap: () => setState(() => _addingLane = null),
+                            child: const Icon(Icons.close_rounded, size: 15, color: VColors.textTertiary),
+                          ),
+                          const SizedBox(width: 8),
+                          VPress(
+                            onTap: () {
+                              if (_inputCtrl.text.trim().isNotEmpty) {
+                                widget.store.add(laneKey, _inputCtrl.text.trim());
+                              }
+                              setState(() => _addingLane = null);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: VColors.accentBlue, borderRadius: BorderRadius.circular(6)),
+                              child: Text('Add', style: VType.caption(color: Colors.white, weight: FontWeight.w600)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            // Vertical Portrait Cards inside the Swimlane
+            Expanded(
+              child: ListView.separated(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.zero,
+                itemCount: cards.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (_, idx) {
+                  final card = cards[idx];
+                  if (identical(_editingCard, card)) {
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161B26),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: VColors.accentBlue, width: 1.2),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextFormField(
+                            initialValue: card.title,
+                            autofocus: true,
+                            maxLines: 3,
+                            style: VType.body(),
+                            decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                            onChanged: (v) => widget.store.update(card, title: v),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              VPress(
+                                onTap: () {
+                                  widget.store.remove(card);
+                                  setState(() => _editingCard = null);
+                                },
+                                child: const Icon(Icons.delete_outline_rounded, size: 15, color: VColors.accentRed),
+                              ),
+                              VPress(
+                                onTap: () => setState(() => _editingCard = null),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(color: VColors.accentBlue, borderRadius: BorderRadius.circular(6)),
+                                  child: Text('Save', style: VType.caption(color: Colors.white, weight: FontWeight.w600)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return LongPressDraggable<SgCard>(
+                    data: card,
+                    delay: const Duration(milliseconds: 200),
+                    feedback: Material(
+                      type: MaterialType.transparency,
+                      child: SizedBox(
+                        width: 132,
+                        child: _VerticalPortraitCard(
+                          card: card,
+                          laneKey: laneKey,
+                          onToggleDone: () {},
+                        ),
+                      ),
+                    ),
+                    childWhenDragging: Opacity(
+                      opacity: 0.35,
+                      child: _VerticalPortraitCard(
+                        card: card,
+                        laneKey: laneKey,
+                        onToggleDone: () {},
+                      ),
+                    ),
+                    child: _VerticalPortraitCard(
+                      card: card,
+                      laneKey: laneKey,
+                      onToggleDone: () => widget.store.update(card, done: !card.done),
+                      onAdvanceLane: () => _advanceCard(laneKey, card),
+                      onEdit: () => setState(() {
+                        _editingCard = card;
+                        _addingLane = null;
+                      }),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Trello "+ Add a card" footer button
+            VPress(
+              onTap: () => setState(() {
+                _addingLane = laneKey;
+                _editingCard = null;
+                _inputCtrl.clear();
+              }),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0x18FFFFFF),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.add_rounded, size: 14, color: VColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Text('Add a card', style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
-
-  Widget _round(IconData icon, VoidCallback onTap, {bool filled = false}) => VPress(
-        onTap: onTap,
-        child: Container(
-          width: 26,
-          height: 26,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: filled ? VColors.accentBlue : const Color(0x1FFFFFFF)),
-          child: Icon(icon, size: 15, color: Colors.white),
-        ),
-      );
 }
 
-class _Fade extends StatefulWidget {
-  final Widget child;
-  final double fade;
-  final EdgeInsetsGeometry padding;
-  final Axis axis;
-  const _Fade({required this.child, this.fade = 18, this.padding = EdgeInsets.zero, this.axis = Axis.vertical});
-
-  @override
-  State<_Fade> createState() => _FadeState();
-}
-
-class _FadeState extends State<_Fade> {
-  final _c = ScrollController();
-  bool _lead = false, _trail = false;
-
-  void _update() {
-    if (!_c.hasClients || !_c.position.hasContentDimensions) return;
-    final p = _c.position;
-    final lead = p.pixels > 0.5, trail = p.pixels < p.maxScrollExtent - 0.5;
-    if (lead != _lead || trail != _trail) {
-      setState(() {
-        _lead = lead;
-        _trail = trail;
-      });
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _c.addListener(_update);
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _update());
-    final h = widget.axis == Axis.horizontal;
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (rect) {
-        final len = h ? rect.width : rect.height;
-        final f = (widget.fade / (len <= 0 ? 1 : len)).clamp(0.0, 0.3);
-        return LinearGradient(
-          begin: h ? Alignment.centerLeft : Alignment.topCenter,
-          end: h ? Alignment.centerRight : Alignment.bottomCenter,
-          colors: [_lead ? const Color(0x00FFFFFF) : Colors.white, Colors.white, Colors.white, _trail ? const Color(0x00FFFFFF) : Colors.white],
-          stops: [0, f, 1 - f, 1],
-        ).createShader(rect);
-      },
-      child: SingleChildScrollView(
-        controller: _c,
-        scrollDirection: widget.axis,
-        physics: const BouncingScrollPhysics(),
-        padding: widget.padding,
-        child: widget.child,
-      ),
-    );
-  }
-}
-
-class _CardsView extends StatelessWidget {
-  final List<String> lists;
+/// 2. Monday.com Counterpart: Color-coded Pulse Group Tables with full-fill interactive Status Cells.
+class _MondayPulseBoardView extends StatelessWidget {
   final SmartGenStore store;
   final String query;
-  final bool checks;
-  const _CardsView({super.key, required this.lists, required this.store, required this.query, required this.checks});
+  const _MondayPulseBoardView({required this.store, required this.query});
 
   @override
   Widget build(BuildContext context) {
     final q = query.toLowerCase();
-    final items = <(String, SgCard)>[
-      for (final l in lists)
-        for (final c in store.list(l))
-          if (q.isEmpty || c.title.toLowerCase().contains(q) || c.subtitle.toLowerCase().contains(q)) (l, c),
-    ];
-    return VFadeScroll(
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+      children: [
+        for (final (laneKey, groupTitle, groupColor) in const [
+          ('Medium', 'Active Sprint · Working On It', VColors.accentOrange),
+          ('High', 'Up Next · Backlog', VColors.accentBlue),
+          ('Low', 'Completed Sprint', VColors.accentGreen),
+        ]) ...[
+          _buildGroupTable(laneKey, groupTitle, groupColor, q),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildGroupTable(String laneKey, String groupTitle, Color groupColor, String q) {
+    final cards = store
+        .list(laneKey)
+        .where((c) => q.isEmpty || c.title.toLowerCase().contains(q) || c.subtitle.toLowerCase().contains(q))
+        .toList();
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0x38000000),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: groupColor.withValues(alpha: 0.40), width: 0.7),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 36),
-              child: Text('No cards match this filter.', textAlign: TextAlign.center, style: VType.callout(color: VColors.textTertiary)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            color: groupColor.withValues(alpha: 0.18),
+            child: Row(
+              children: [
+                Container(width: 4, height: 14, decoration: BoxDecoration(color: groupColor, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(groupTitle, style: VType.callout(color: Colors.white, weight: FontWeight.w700)),
+                ),
+                VPress(
+                  onTap: () => store.add(laneKey, 'New Pulse Item'),
+                  child: const Icon(Icons.add_circle_outline_rounded, size: 16, color: Colors.white),
+                ),
+              ],
             ),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final (listName, card) in items)
-                SizedBox(
-                  width: 240,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: _cardFill,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: VColors.borderLight, width: 0.5),
+          ),
+          for (final card in cards)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0x1AFFFFFF), width: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.asset(
+                      card.coverAsset,
+                      width: 28,
+                      height: 36,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(width: 28, height: 36, color: groupColor.withValues(alpha: 0.3)),
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(color: VColors.fillActive, borderRadius: BorderRadius.circular(VRadius.full)),
-                              child: Text(listName, style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600).copyWith(fontSize: 11)),
-                            ),
-                            if (card.score.isNotEmpty) ...[
-                              const SizedBox(width: 6),
-                              Text(card.score, style: VType.caption(color: VColors.accentBlue, weight: FontWeight.w600)),
-                            ],
-                            const Spacer(),
-                            VPress(
-                              onTap: () => store.update(card, done: !card.done),
-                              child: Icon(
-                                card.done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                                size: 16,
-                                color: card.done ? VColors.accentGreen : _faint,
+                        Text(card.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.body(weight: FontWeight.w600)),
+                        Text(card.tag, style: VType.caption(color: VColors.textTertiary).copyWith(fontSize: 9.5)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Monday.com full-fill interactive status cell
+                  VPress(
+                    onTap: () {
+                      const lanes = ['High', 'Medium', 'Low'];
+                      final next = lanes[(lanes.indexOf(laneKey) + 1) % lanes.length];
+                      store.move(card, next, 0);
+                    },
+                    child: Container(
+                      width: 82,
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: card.done ? VColors.accentGreen : groupColor,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        card.done
+                            ? 'Done'
+                            : (laneKey == 'Medium' ? 'Working on it' : (laneKey == 'Low' ? 'Done' : 'Ready')),
+                        style: VType.caption(color: Colors.white, weight: FontWeight.w700).copyWith(fontSize: 9.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 3. Notebook Counterpart (R24: "A board looks like the thing named: notebook, portfolio, kanban, calendar"):
+/// Looks like an actual ruled field notebook page with left red margin line, ruled horizontal lines, and checkable notes.
+class _NotebookCounterpartView extends StatelessWidget {
+  final SmartGenStore store;
+  final String query;
+  const _NotebookCounterpartView({required this.store, required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    final q = query.toLowerCase();
+    final items = <SgCard>[
+      for (final l in const ['High', 'Medium', 'Low', 'Projects', 'Reminders'])
+        for (final c in store.list(l))
+          if (q.isEmpty || c.title.toLowerCase().contains(q) || c.subtitle.toLowerCase().contains(q)) c,
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xD9141923),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0x33FFFFFF), width: 0.7),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Red left notebook margin line
+            Positioned(
+              left: 34,
+              top: 0,
+              bottom: 0,
+              child: Container(width: 1.2, color: VColors.accentRed.withValues(alpha: 0.45)),
+            ),
+            ListView.builder(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: items.length + 1,
+              itemBuilder: (_, i) {
+                if (i == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(44, 4, 12, 8),
+                    child: Row(
+                      children: [
+                        Text('Field Notebook · Spatial Synthesis', style: VType.callout(color: VColors.accentGold, weight: FontWeight.w700)),
+                        const Spacer(),
+                        VPress(
+                          onTap: () => store.add('Reminders', 'New Notebook Entry'),
+                          child: const Icon(Icons.note_add_rounded, size: 16, color: VColors.accentGold),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                final c = items[i - 1];
+                return VPress(
+                  onTap: () => store.update(c, done: !c.done),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Color(0x1CFFFFFF), width: 0.6)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 24,
+                          child: Icon(
+                            c.done ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                            size: 15,
+                            color: c.done ? VColors.accentGreen : VColors.textTertiary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                c.title,
+                                style: VType.body(
+                                  color: c.done ? VColors.textTertiary : VColors.textPrimary,
+                                  weight: FontWeight.w600,
+                                ).copyWith(decoration: c.done ? TextDecoration.lineThrough : null),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            VPress(
-                              onTap: () => store.remove(card),
-                              child: const Icon(Icons.close_rounded, size: 15, color: _faint),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          card.title,
-                          style: VType.callout(color: card.done ? _faint : _cardInk, weight: FontWeight.w500).copyWith(
-                            fontSize: 11,
-                            height: 1.35,
-                            decoration: card.done ? TextDecoration.lineThrough : null,
+                              if (c.subtitle.isNotEmpty)
+                                Text(c.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: VType.summary(color: VColors.textSecondary)),
+                            ],
                           ),
                         ),
-                        if (card.subtitle.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            card.subtitle,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: VType.caption(color: _faint, weight: FontWeight.w400).copyWith(fontSize: 10.2, height: 1.3),
-                          ),
-                        ],
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 4. Calendar Counterpart (R24): Schedule grid with day headers and vertical portrait schedule cards.
+class _CalendarCounterpartView extends StatelessWidget {
+  final SmartGenStore store;
+  final String query;
+  const _CalendarCounterpartView({required this.store, required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    final all = <SgCard>[
+      ...store.list('High'),
+      ...store.list('Medium'),
+      ...store.list('Projects'),
+    ];
+    const days = [
+      ('FRI', '24', true),
+      ('SAT', '25', false),
+      ('SUN', '26', false),
+      ('MON', '27', false),
+      ('TUE', '28', false),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Calendar Week Strip
+          Row(
+            children: [
+              for (final (dayName, dayNum, active) in days)
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      color: active ? VColors.accentBlue.withValues(alpha: 0.28) : const Color(0x26000000),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: active ? VColors.accentBlue : const Color(0x22FFFFFF), width: 0.6),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(dayName, style: VType.caption(color: active ? Colors.white : VColors.textTertiary, weight: FontWeight.w600).copyWith(fontSize: 9)),
+                        const SizedBox(height: 2),
+                        Text(dayNum, style: VType.callout(color: Colors.white, weight: FontWeight.w700)),
                       ],
                     ),
                   ),
                 ),
             ],
           ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: GridView.builder(
+              physics: const BouncingScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: 0.72,
+              ),
+              itemCount: all.length,
+              itemBuilder: (_, i) => _VerticalPortraitCard(
+                card: all[i],
+                laneKey: i.isEven ? 'High' : 'Medium',
+                onToggleDone: () => store.update(all[i], done: !all[i].done),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _CanvasView extends StatelessWidget {
-  final List<String> lists;
+/// Cards View (R26): 2-Column Vertical Portrait Card Gallery (`3:4` portrait ratio).
+class _PortraitCardsGridView extends StatelessWidget {
   final SmartGenStore store;
   final String query;
-  const _CanvasView({super.key, required this.lists, required this.store, required this.query});
+  const _PortraitCardsGridView({super.key, required this.store, required this.query});
 
   @override
   Widget build(BuildContext context) {
     final q = query.toLowerCase();
     final items = <(String, SgCard)>[
-      for (final l in lists)
+      for (final l in const ['High', 'Medium', 'Low', 'Projects', 'Reminders'])
         for (final c in store.list(l))
           if (q.isEmpty || c.title.toLowerCase().contains(q) || c.subtitle.toLowerCase().contains(q)) (l, c),
     ];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      child: GridView.builder(
+        physics: const BouncingScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 0.72,
+        ),
+        itemCount: items.length,
+        itemBuilder: (_, idx) {
+          final (laneKey, card) = items[idx];
+          return _VerticalPortraitCard(
+            card: card,
+            laneKey: laneKey,
+            onToggleDone: () => store.update(card, done: !card.done),
+            onDelete: () => store.remove(card),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Canvas View (R26): Spatial Storyboard Canvas with dotted grid, bezier connectors, and Vertical Portrait Cards.
+class _SpatialCanvasView extends StatelessWidget {
+  final SmartGenStore store;
+  final String query;
+  const _SpatialCanvasView({super.key, required this.store, required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    final q = query.toLowerCase();
+    final items = <(String, SgCard)>[
+      for (final l in const ['High', 'Medium', 'Low'])
+        for (final c in store.list(l))
+          if (q.isEmpty || c.title.toLowerCase().contains(q) || c.subtitle.toLowerCase().contains(q)) (l, c),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0x22000000),
+          color: const Color(0x33000000),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: VColors.borderLight, width: 0.5),
+          border: Border.all(color: VColors.borderLight, width: 0.6),
         ),
+        clipBehavior: Clip.antiAlias,
         child: Stack(
           fit: StackFit.expand,
           children: [
             CustomPaint(painter: _CanvasGridPainter()),
-            VFadeScroll(
-              padding: const EdgeInsets.all(16),
-              child: Wrap(
-                spacing: 14,
-                runSpacing: 14,
-                children: [
-                  for (final (idx, (listName, card)) in items.indexed)
-                    Transform.rotate(
-                      angle: (idx.isEven ? -0.012 : 0.012),
-                      child: SizedBox(
-                        width: 220,
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xE622272B),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: idx % 3 == 0 ? VColors.accentBlue.withValues(alpha: 0.45) : VColors.borderLight, width: 0.75),
-                            boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 12, offset: Offset(0, 5))],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(listName.toUpperCase(), style: VType.caption(color: VColors.textTertiary, weight: FontWeight.w600).copyWith(fontSize: 11)),
-                                  const Spacer(),
-                                  if (lists.length > 1)
-                                    VPress(
-                                      onTap: () {
-                                        final nextIdx = (lists.indexOf(listName) + 1) % lists.length;
-                                        store.move(card, lists[nextIdx], null);
-                                      },
-                                      tooltip: 'Cycle list',
-                                      child: const Icon(Icons.swap_horiz_rounded, size: 15, color: _faint),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(card.title, style: VType.callout(color: _cardInk, weight: FontWeight.w500).copyWith(fontSize: 11, height: 1.38)),
-                              if (card.subtitle.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Text(card.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: VType.caption(color: _faint).copyWith(fontSize: 10.2)),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+            GridView.builder(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.all(10),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 0.72,
               ),
+              itemCount: items.length,
+              itemBuilder: (_, idx) {
+                final (laneKey, card) = items[idx];
+                return Transform.rotate(
+                  angle: idx.isEven ? -0.014 : 0.014,
+                  child: _VerticalPortraitCard(
+                    card: card,
+                    laneKey: laneKey,
+                    onToggleDone: () => store.update(card, done: !card.done),
+                    onAdvanceLane: () {
+                      const lanes = ['High', 'Medium', 'Low'];
+                      final next = lanes[(lanes.indexOf(laneKey) + 1) % lanes.length];
+                      store.move(card, next, 0);
+                    },
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -864,123 +1154,99 @@ class _CanvasView extends StatelessWidget {
 class _CanvasGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = const Color(0x18FFFFFF);
-    const step = 24.0;
-    for (double x = 16; x < size.width; x += step) {
-      for (double y = 16; y < size.height; y += step) {
-        canvas.drawCircle(Offset(x, y), 1.0, p);
+    final p = Paint()..color = const Color(0x22FFFFFF);
+    const step = 22.0;
+    for (double x = 14; x < size.width; x += step) {
+      for (double y = 14; y < size.height; y += step) {
+        canvas.drawCircle(Offset(x, y), 1.1, p);
       }
     }
+    // Subtle spatial node connector curves
+    final linePaint = Paint()
+      ..color = VColors.accentBlue.withValues(alpha: 0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final path = Path()
+      ..moveTo(size.width * 0.28, 95)
+      ..cubicTo(size.width * 0.5, 95, size.width * 0.5, 130, size.width * 0.72, 130);
+    canvas.drawPath(path, linePaint);
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _GenieView extends StatelessWidget {
+/// Genie View (R26): Autonomous Synthesis Cards in a 2-Column Vertical Portrait Layout.
+class _GenieSynthesisView extends StatelessWidget {
   final SmartGenStore store;
   final String query;
-  const _GenieView({super.key, required this.store, required this.query});
+  const _GenieSynthesisView({super.key, required this.store, required this.query});
 
   @override
   Widget build(BuildContext context) {
-    const allLists = ['High', 'Medium', 'Low', 'Projects', 'Reminders', 'Memory Items', 'Artifacts'];
     final q = query.toLowerCase();
     final items = <(String, SgCard)>[
-      for (final l in allLists)
+      for (final l in const ['High', 'Medium', 'Low', 'Projects', 'Reminders'])
         for (final c in store.list(l))
           if (q.isEmpty || c.title.toLowerCase().contains(q) || c.subtitle.toLowerCase().contains(q)) (l, c),
     ];
-    return VFadeScroll(
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
-              color: VColors.fillRow,
+              color: VColors.accentBlue.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: VColors.borderLight, width: 0.5),
+              border: Border.all(color: VColors.accentBlue.withValues(alpha: 0.45), width: 0.6),
             ),
             child: Row(
               children: [
-                const Icon(Icons.auto_awesome_rounded, size: 17, color: VColors.accentBlue),
-                const SizedBox(width: 10),
+                const Icon(Icons.auto_awesome_rounded, size: 16, color: VColors.accentBlue),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Autonomous synthesis from your Collider sessions (${items.length} active items)',
+                    'Genie Autonomous Synthesis · Distilled from Consensus',
                     maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.fade,
-                    style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11),
+                    overflow: TextOverflow.ellipsis,
+                    style: VType.callout(weight: FontWeight.w600),
                   ),
                 ),
-                const SizedBox(width: 8),
                 VPress(
                   onTap: () => store.syncAutonomousCards(),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(color: VColors.fillActive, borderRadius: BorderRadius.circular(VRadius.full)),
-                    child: Text('Sync', style: VType.caption(color: Colors.white, weight: FontWeight.w600)),
+                    child: Text('Refresh', style: VType.caption(color: Colors.white, weight: FontWeight.w600)),
                   ),
                 ),
               ],
             ),
           ),
-          for (final (listName, card) in items)
-            Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                color: _cardFill,
-                borderRadius: BorderRadius.circular(10),
+          Expanded(
+            child: GridView.builder(
+              physics: const BouncingScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 0.72,
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: VColors.fillRow, borderRadius: BorderRadius.circular(VRadius.full)),
-                    child: Text(listName, style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600).copyWith(fontSize: 11)),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          card.title,
-                          maxLines: 2,
-                          softWrap: true,
-                          overflow: TextOverflow.fade,
-                          style: VType.callout(color: _cardInk, weight: FontWeight.w500).copyWith(fontSize: 11),
-                        ),
-                        if (card.subtitle.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              card.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: VType.caption(color: _faint).copyWith(fontSize: 10),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (listName != 'High')
-                    VPress(
-                      onTap: () => store.move(card, 'High', 0),
-                      tooltip: 'Promote to High',
-                      child: const Padding(
-                        padding: EdgeInsets.only(left: 8),
-                        child: Icon(Icons.arrow_upward_rounded, size: 16, color: VColors.accentBlue),
-                      ),
-                    ),
-                ],
-              ),
+              itemCount: items.length,
+              itemBuilder: (_, idx) {
+                final (laneKey, card) = items[idx];
+                return _VerticalPortraitCard(
+                  card: card,
+                  laneKey: laneKey,
+                  onToggleDone: () => store.update(card, done: !card.done),
+                  onAdvanceLane: () => store.move(card, 'Medium', 0),
+                );
+              },
             ),
+          ),
         ],
       ),
     );

@@ -1,12 +1,5 @@
-// The music bar. Made by Claude. Redrawn on 2026-10-04 from the frame David mapped to "Music widget":
+// The music bar.
 // Vision OS Design System 417:1777, "Media Controls and Play Bar".
-//   bar: a glass capsule; back, play/pause, forward as plain glyphs (white 85%), no circles
-//   chip: #000000 25%, radius 10; square cover with radius 5; title 500 12/14 white; second line 500 10/12 #C9C9C9;
-//         how far the track has played is a line along the chip's lower edge
-//   then the list glyph and the speaker glyph (tap: mute)
-// It floats over the app while a song is loaded.
-// Floating, it can be dragged anywhere and stays where it is put.
-// The list glyph drops a menu down: the songs, Music Player (the music in Files), and Close. A long press or a right click on the bar opens it too.
 import 'package:material_ui/material_ui.dart';
 import '../../core/audio/music_player.dart';
 import '../../core/vision/vision_kit.dart';
@@ -19,9 +12,8 @@ class MusicBar extends StatelessWidget {
   final VoidCallback onPrevious;
   final VoidCallback onPlayPause;
   final VoidCallback onNext;
-  /// What the list glyph drops down; also the bar's press menu.
   final List<VMenuItem> Function()? menu;
-  final ValueChanged<double>? onSeek; // touch along the chip to move through the track
+  final ValueChanged<double>? onSeek;
 
   const MusicBar({
     super.key,
@@ -37,7 +29,7 @@ class MusicBar extends StatelessWidget {
   });
 
   static const _glyph = Color(0xD9FFFFFF); // white 85%
-  static const _chipWidth = 132.0;
+  static const _chipWidth = 140.0;
 
   Widget _button(IconData icon, double size, String tip, VoidCallback onTap) => VPress(
         onTap: onTap,
@@ -49,53 +41,63 @@ class MusicBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = MusicPlayer.instance;
     Widget chip = ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        width: _chipWidth,
-        height: 36,
-        color: const Color(0x40000000),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    // A song from Files has no theme picture: the music colour with a note (Claude, 2026-10-20).
-                    child: track.art.isEmpty
-                        ? Container(
-                            width: 28,
-                            height: 28,
-                            decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFF7A95), Color(0xFFD0105C)])),
-                            child: const Icon(Icons.music_note_rounded, size: 16, color: Colors.white),
-                          )
-                        : Image.asset(track.art, width: 28, height: 28, fit: BoxFit.cover),
+      borderRadius: BorderRadius.circular(10),
+      child: Stack(
+        children: [
+          Container(
+            width: _chipWidth,
+            height: 36,
+            color: const Color(0x40000000),
+            padding: const EdgeInsets.all(4),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: track.art.isEmpty
+                      ? Container(
+                          width: 28,
+                          height: 28,
+                          decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFFFF7A95), Color(0xFFD0105C)])),
+                          child: const Icon(Icons.music_note_rounded, size: 16, color: Colors.white),
+                        )
+                      : Image.asset(track.art, width: 28, height: 28, fit: BoxFit.cover),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.fade,
+                        style: VType.caption(color: Colors.white, weight: FontWeight.w500),
+                      ),
+                      if (time != null)
+                        Text(
+                          time!,
+                          maxLines: 1,
+                          style: VType.metaCaption(color: const Color(0x99FFFFFF)),
+                        ),
+                    ],
                   ),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(track.title,
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.fade,
-                            style: VType.caption(color: Colors.white, weight: FontWeight.w500).copyWith(fontSize: 11, height: 14 / 12)),
-                        if (time != null)
-                          Text(time!,
-                              maxLines: 1,
-                              style: VType.caption(color: const Color(0xFFC9C9C9), weight: FontWeight.w500).copyWith(fontSize: 11, height: 12 / 10)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Positioned(left: 0, bottom: 0, child: Container(width: _chipWidth * progress, height: 2, color: Colors.white)),
-          ],
-        ),
+          ),
+          // Audio track progress bar (PRD R42 & Surfaces: "Audio track progress bar permitted")
+          Positioned(
+            left: 0,
+            bottom: 0,
+            child: Container(
+              width: _chipWidth * progress.clamp(0.0, 1.0),
+              height: 2,
+              color: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
     if (onSeek != null) {
@@ -145,7 +147,6 @@ class MusicBar extends StatelessWidget {
 
 /// The bar floating over the app while a track is loaded.
 class MusicWidget extends StatelessWidget {
-  /// Opens the music in Files.
   final VoidCallback onOpenLibrary;
   const MusicWidget({super.key, required this.onOpenLibrary});
 
@@ -170,8 +171,21 @@ class MusicWidget extends StatelessWidget {
                   onPrevious: p.previous,
                   onPlayPause: p.toggle,
                   onNext: p.next,
+                  onSeek: p.seek,
                   menu: () => [
-                    for (int i = 0; i < p.queue.length; i++) VMenuItem(null, p.queue[i].title, () => p.play(i), checked: i == p.index),
+                    for (int i = 0; i < p.queue.length; i++)
+                      VMenuItem(
+                        p.isTrackEnabled(p.queue[i]) ? Icons.music_note_rounded : Icons.music_off_rounded,
+                        p.queue[i].title,
+                        () => p.play(i),
+                        checked: i == p.index && p.isTrackEnabled(p.queue[i]),
+                      ),
+                    VMenuItem(
+                      p.isTrackEnabled(t) ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                      p.isTrackEnabled(t) ? 'Turn Off "${t.title}"' : 'Turn On "${t.title}"',
+                      () => p.toggleTrack(t),
+                      apart: true,
+                    ),
                     VMenuItem(null, 'Music Player', onOpenLibrary, apart: true),
                     VMenuItem(null, 'Close', p.close),
                   ],

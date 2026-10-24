@@ -6,10 +6,7 @@ import '../../../core/platform/open_url.dart';
 import '../../../core/vision/vision_kit.dart';
 import '../../../models/ticker_item.dart';
 
-/// An answer that drew on the web, opened as a document. Made by Claude (2026-10-20) after Claude's own research
-/// artifact: the report in a window that rises into place, each citation a small mark that opens its source, the
-/// sources listed under the report by the numbers the report cites, and Copy, Save and Share under the window.
-/// Research and Deep Research reports are also kept in Files > Generated when they finish.
+/// An answer that drew on the web, opened as a document.
 class ResearchDocument extends StatelessWidget {
   final TickerMessage message;
   final String modelName;
@@ -48,9 +45,8 @@ class ResearchDocument extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    // A reading window: most of a phone, about 60% of a wider screen, never wider than a comfortable line of text.
     final width = (size.width < 600 ? size.width - 32 : (size.width * 0.6).clamp(0.0, 720.0)).toDouble();
-    final body = VType.body().copyWith(fontSize: 11, height: 1.55);
+    final body = VType.body().copyWith(height: 1.5);
     final meta = VType.caption(color: VColors.textSecondary);
     void cite(int n) {
       if (n >= 1 && n <= sources.length) onOpenSource(n - 1);
@@ -71,7 +67,7 @@ class ResearchDocument extends StatelessWidget {
                 child: Transform.translate(offset: Offset(0, 24 * (1 - t)), child: Transform.scale(scale: 0.96 + 0.04 * t, child: child)),
               ),
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 92, top: VSpace.lg),
+                padding: const EdgeInsets.only(bottom: 84, top: VSpace.lg),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -99,7 +95,7 @@ class ResearchDocument extends StatelessWidget {
                                       MdText(message.text, style: body, onCite: cite),
                                       if (sources.isNotEmpty) ...[
                                         const SizedBox(height: VSpace.lg),
-                                        Text('Sources', style: body.copyWith(fontWeight: FontWeight.w700, fontSize: 16)),
+                                        Text('Sources', style: VType.headline()),
                                         const SizedBox(height: VSpace.xs),
                                         for (var i = 0; i < sources.length; i++)
                                           VPress(
@@ -110,7 +106,7 @@ class ResearchDocument extends StatelessWidget {
                                                 SizedBox(width: 26, child: Text('${i + 1}', style: meta)),
                                                 Expanded(
                                                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                                    Text('${sources[i]['title'] ?? ''}', style: body.copyWith(fontSize: 11, height: 1.35)),
+                                                    Text('${sources[i]['title'] ?? ''}', style: body),
                                                     Text(_host('${sources[i]['url'] ?? ''}'), style: meta),
                                                   ]),
                                                 ),

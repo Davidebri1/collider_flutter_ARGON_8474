@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
-enum ModelCategory { general, image, video, audio }
+enum ModelCategory { general, image, video, audio, coding }
 enum ModelTier { free, pro, elite }
 
 class ModelDef {
@@ -87,7 +87,7 @@ class ModelRoster {
       short: 'GLM5',
       desc: 'Z.ai flagship multi-step analytical & general reasoning model.',
       tier: ModelTier.free,
-      categories: [ModelCategory.general],
+      categories: [ModelCategory.general, ModelCategory.coding],
       providerColor: Color(0xFF60A5FA),
     ),
     ModelDef(
@@ -105,7 +105,7 @@ class ModelRoster {
       short: 'N3U',
       desc: 'NVIDIA deep frontier reasoning & high-consensus verifier.',
       tier: ModelTier.free,
-      categories: [ModelCategory.general],
+      categories: [ModelCategory.general, ModelCategory.coding],
       providerColor: Color(0xFF84CC16),
     ),
     ModelDef(
@@ -141,7 +141,7 @@ class ModelRoster {
       short: 'Gm4',
       desc: 'Google open-weights 31B instruction-tuned reasoning model.',
       tier: ModelTier.free,
-      categories: [ModelCategory.general],
+      categories: [ModelCategory.general, ModelCategory.coding],
       providerColor: Color(0xFF7FD8C4),
     ),
     ModelDef(
@@ -150,7 +150,7 @@ class ModelRoster {
       short: 'G20B',
       desc: 'OpenAI open-weights compact general reasoning engine.',
       tier: ModelTier.free,
-      categories: [ModelCategory.general],
+      categories: [ModelCategory.general, ModelCategory.coding],
       providerColor: Color(0xFF10B981),
     ),
     ModelDef(
@@ -159,7 +159,7 @@ class ModelRoster {
       short: 'DS41',
       desc: 'DeepSeek sparse-attention high-throughput reasoning engine.',
       tier: ModelTier.free,
-      categories: [ModelCategory.general],
+      categories: [ModelCategory.general, ModelCategory.coding],
       providerColor: Color(0xFF0EA5E9),
     ),
 
@@ -324,16 +324,36 @@ class ModelRoster {
   /// Live roster. Starts from the full seed (including General, Image, Video, Audio).
   static List<ModelDef> allModels = List<ModelDef>.from(_seed);
 
-  /// Live text & picture models from the Collider server replace General/Image while preserving Video & Audio categories.
+  /// Live text & picture models from the Collider server replace General/Image while preserving Video, Audio & Coding categories.
   static void setLive(List<ModelDef> live) {
-    final hasImage = live.any((m) => m.categories.contains(ModelCategory.image));
-    final hasVideo = live.any((m) => m.categories.contains(ModelCategory.video));
-    final hasAudio = live.any((m) => m.categories.contains(ModelCategory.audio));
+    final enrichedLive = [
+      for (final m in live)
+        if (!m.isMedia &&
+            !m.categories.contains(ModelCategory.coding) &&
+            RegExp(r'glm|deepseek|qwen|claude|gpt|nemotron|gemma|coder', caseSensitive: false).hasMatch(m.id))
+          ModelDef(
+            id: m.id,
+            label: m.label,
+            short: m.short,
+            desc: m.desc,
+            tier: m.tier,
+            categories: [...m.categories, ModelCategory.coding],
+            providerColor: m.providerColor,
+            isMedia: m.isMedia,
+          )
+        else
+          m,
+    ];
+    final hasImage = enrichedLive.any((m) => m.categories.contains(ModelCategory.image));
+    final hasVideo = enrichedLive.any((m) => m.categories.contains(ModelCategory.video));
+    final hasAudio = enrichedLive.any((m) => m.categories.contains(ModelCategory.audio));
+    final hasCoding = enrichedLive.any((m) => m.categories.contains(ModelCategory.coding));
     final merged = <ModelDef>[
-      ...live,
+      ...enrichedLive,
       if (!hasImage) ..._seed.where((m) => m.categories.contains(ModelCategory.image)),
       if (!hasVideo) ..._seed.where((m) => m.categories.contains(ModelCategory.video)),
       if (!hasAudio) ..._seed.where((m) => m.categories.contains(ModelCategory.audio)),
+      if (!hasCoding) ..._seed.where((m) => m.categories.contains(ModelCategory.coding)),
     ];
     final seen = <String>{};
     allModels = [

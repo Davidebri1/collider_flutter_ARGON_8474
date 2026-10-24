@@ -8,15 +8,96 @@ import 'vision_tokens.dart';
 import 'hues.dart';
 
 export 'package:cupertino_ui/cupertino_ui.dart'
-    show
-        CupertinoIcons,
-        CupertinoSwitch,
-        CupertinoSlidingSegmentedControl,
-        CupertinoSearchTextField,
-        CupertinoScrollbar,
-        CupertinoActivityIndicator,
-        CupertinoButton,
-        CupertinoColors;
+    hide
+        RefreshCallback,
+         FlowDelegate,
+        BoxShadow,
+        LinearGradient,
+        RadialGradient,
+        SweepGradient,
+        Alignment,
+        AlignmentDirectional,
+        AlignmentGeometry,
+        Border,
+        BorderDirectional,
+        BorderRadius,
+        BorderRadiusDirectional,
+        BorderRadiusGeometry,
+        BorderSide,
+        BoxBorder,
+        BoxConstraints,
+        BoxDecoration,
+        BoxFit,
+        BoxPainter,
+        BoxShape,
+        ClipContext,
+        Color,
+        ColorFilter,
+        ColorProperty,
+        ColorSwatch,
+        Colors,
+        Decoration,
+        DecorationImage,
+        DecorationImagePainter,
+        EdgeInsets,
+        EdgeInsetsDirectional,
+        EdgeInsetsGeometry,
+        FlutterLogoDecoration,
+        FontWeight,
+        FractionalOffset,
+        Gradient,
+        GradientRotation,
+        GradientTransform,
+        HSLColor,
+        HSVColor,
+        ImageChunkEvent,
+        ImageConfiguration,
+        ImageInfo,
+        ImageProvider,
+        ImageRepeat,
+        ImageShader,
+        ImageSizeInfo,
+        ImageStream,
+        ImageStreamCompleter,
+        ImageStreamCompleterHandle,
+        ImageStreamListener,
+        InlineSpan,
+        InlineSpanSemanticsInformation,
+        KeyedSubtree,
+        MatrixUtils,
+        MultiFrameImageStreamCompleter,
+        NetworkImage,
+        NotchedShape,
+        OneFrameImageStreamCompleter,
+        OvalBorder,
+        Paint,
+        PaintingBinding,
+        PlaceholderDimensions,
+        PlaceholderSpan,
+        ResizeImage,
+        ResizeImageKey,
+        RoundedRectangleBorder,
+        ShaderWarmUp,
+        ShapeBorder,
+        ShapeDecoration,
+        StadiumBorder,
+        StrutStyle,
+        TextAlignVertical,
+        TextBaseline,
+        TextBox,
+        TextDecoration,
+        TextDecorationStyle,
+        TextDirection,
+        TextHeightBehavior,
+        TextOverflow,
+        TextPainter,
+        TextPosition,
+        TextRange,
+        TextSelection,
+        TextSpan,
+        TextStyle,
+        TextWidthBasis,
+        TransformProperty;
 export 'vision_tokens.dart';
 export 'hues.dart';
 export '../theme/edge_fade.dart';
@@ -421,7 +502,7 @@ class VCircleButton extends StatelessWidget {
 
 enum VButtonVariant { primary, secondary, ghost, destructive }
 
-/// Kit Button: height 48 (36 dense), capsule, label 15/500.
+/// Kit Button: height 48 (36 dense), capsule, label 12pt.
 class VButton extends StatelessWidget {
   final String label;
   final IconData? icon;
@@ -473,7 +554,7 @@ class VButton extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: VType.callout(color: fg, weight: FontWeight.w600).copyWith(fontSize: dense ? VType.sm : VType.md),
+                style: VType.callout(color: fg, weight: FontWeight.w600),
               ),
             ),
           ],
@@ -508,6 +589,7 @@ class VRailItem {
 }
 
 /// Side navigation rail: visionOS glass capsule floating beside the main spatial window.
+/// Unified with PermanentNavBar on VMaterial.elevated + VShadow.emissive light emittance.
 class VOrnamentRail extends StatelessWidget {
   final List<VRailItem> items;
   final int active;
@@ -519,59 +601,98 @@ class VOrnamentRail extends StatelessWidget {
     required this.items,
     required this.active,
     required this.onSelect,
-    this.size = 36,
+    this.size = 38,
     this.dim = const {},
   });
 
+  String _shortLabel(String s) {
+    final parts = s.trim().split(RegExp(r'\s+'));
+    if (parts.length == 1) return s;
+    if (s.toLowerCase().startsWith('new ')) return 'New';
+    if (s.toLowerCase().startsWith('my ')) return parts.last;
+    if (s.toLowerCase().contains('premium')) return 'Premium';
+    if (s.toLowerCase().contains('theme')) return 'Themes';
+    if (s.toLowerCase().contains('all ')) return 'All';
+    return parts.first;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // visionOS tab bar (Claude, 2026-10-23): a glass capsule beside the window; each place its glyph on a disc, its name
-    // under it, the chosen one lit. 11 points, one word to a line.
-    return DecoratedBox(
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(VRadius.full), boxShadow: VShadow.ornament),
-      child: VGlass(
-        material: VMaterial.elevated,
-        radius: VRadius.full,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (int i = 0; i < items.length; i++) ...[
-              if (i > 0) const SizedBox(height: 10),
-              Semantics(
-                button: true,
-                label: items[i].label,
-                child: VPress(
-                  onTap: dim.contains(i) ? null : () => onSelect(i),
-                  child: SizedBox(
-                    width: 56,
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+    final compact = size <= 38;
+    final btnSize = compact ? 36.0 : 42.0;
+    return VGlass(
+      material: VMaterial.elevated,
+      radius: VRadius.full,
+      padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 7, vertical: compact ? 8 : 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (int i = 0; i < items.length; i++) ...[
+            if (i > 0) SizedBox(height: compact ? 8 : 10),
+            Semantics(
+              button: true,
+              label: items[i].label,
+              child: VPress(
+                tooltip: items[i].label,
+                onTap: dim.contains(i) ? null : () => onSelect(i),
+                child: SizedBox(
+                  width: compact ? 44 : 54,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       AnimatedContainer(
                         duration: VMotion.fast,
-                        width: 44,
-                        height: 44,
+                        width: btnSize,
+                        height: btnSize,
                         alignment: Alignment.center,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: i == active ? VColors.fillActive : VColors.fillCell),
-                        child: Icon(items[i].icon, size: 20, color: dim.contains(i) ? const Color(0x59FFFFFF) : VColors.textPrimary),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i == active
+                              ? (vHueFor(items[i].icon) ?? VColors.accentBlue).withValues(alpha: 0.24)
+                              : VColors.fillCell,
+                          border: Border.all(
+                            color: i == active
+                                ? (vHueFor(items[i].icon) ?? VColors.accentBlue).withValues(alpha: 0.65)
+                                : const Color(0x24FFFFFF),
+                            width: i == active ? 1.0 : 0.6,
+                          ),
+                          boxShadow: i == active
+                              ? VShadow.emissive(
+                                  vHueFor(items[i].icon) ?? VColors.accentBlue,
+                                  intensity: 0.95,
+                                )
+                              : null,
+                        ),
+                        child: Icon(
+                          items[i].icon,
+                          size: compact ? 18 : 20,
+                          color: dim.contains(i)
+                              ? const Color(0x59FFFFFF)
+                              : (i == active
+                                  ? Colors.white
+                                  : (vHueFor(items[i].icon) ?? VColors.textPrimary)),
+                        ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 3),
                       Text(
-                        items[i].label.replaceAll(' ', '\n'),
+                        _shortLabel(items[i].label),
+                        maxLines: 1,
                         textAlign: TextAlign.center,
-                        softWrap: false,
-                        overflow: TextOverflow.visible,
+                        overflow: TextOverflow.ellipsis,
                         style: VType.caption(
-                          color: dim.contains(i) ? const Color(0x59FFFFFF) : (i == active ? VColors.textPrimary : VColors.textSecondary),
-                          weight: FontWeight.w500,
-                        ).copyWith(fontSize: 11, height: 13 / 11),
+                          color: dim.contains(i)
+                              ? const Color(0x59FFFFFF)
+                              : (i == active ? VColors.textPrimary : VColors.textSecondary),
+                          weight: i == active ? FontWeight.w600 : FontWeight.w500,
+                        ).copyWith(fontSize: compact ? 9.5 : 10.0),
                       ),
-                    ]),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -598,7 +719,7 @@ class VHistoryRow extends StatelessWidget {
                 title,
                 maxLines: 1,
                 softWrap: false,
-                overflow: TextOverflow.fade,
+                overflow: TextOverflow.ellipsis,
                 style: VType.callout(weight: FontWeight.w500),
               ),
             ),
@@ -652,7 +773,7 @@ class VSegmented extends StatelessWidget {
                   style: VType.callout(
                     color: i == safeActive ? VColors.textPrimary : VColors.textSecondary,
                     weight: i == safeActive ? FontWeight.w600 : FontWeight.w500,
-                  ).copyWith(fontSize: 12),
+                  ),
                 ),
               ),
           },
@@ -762,6 +883,8 @@ class VSearchField extends StatelessWidget {
           backgroundColor: Colors.transparent,
           itemColor: VColors.textTertiary,
           itemSize: 16,
+          prefixIcon: const Icon(Icons.search_rounded, size: 16, color: VColors.textTertiary),
+          suffixIcon: const Icon(Icons.cancel_rounded, size: 16, color: VColors.textTertiary),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           style: VType.callout(weight: FontWeight.w400),
           placeholderStyle: VType.callout(color: VColors.textTertiary, weight: FontWeight.w400),
@@ -859,7 +982,7 @@ class VListRow extends StatelessWidget {
           if (trailing != null) ...[const SizedBox(width: VSpace.xs), trailing!],
           if (chevron) ...[
             const SizedBox(width: VSpace.xxs),
-            const Icon(CupertinoIcons.chevron_right, size: 16, color: VColors.textTertiary),
+            const Icon(Icons.chevron_right_rounded, size: 18, color: VColors.textTertiary),
           ],
         ],
       ),
@@ -1113,7 +1236,7 @@ class VAlert extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 320),
       child: VGlass(
         material: VMaterial.modal,
-        radius: 32,
+        radius: VRadius.card,
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1125,10 +1248,10 @@ class VAlert extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(title, textAlign: TextAlign.center, style: VType.title2(color: const Color(0xF5FFFFFF)).copyWith(fontSize: 19, height: 24 / 19)),
+                  Text(title, textAlign: TextAlign.center, style: VType.title2(color: const Color(0xF5FFFFFF))),
                   if (message != null) ...[
                     const SizedBox(height: 2),
-                    Text(message!, textAlign: TextAlign.center, style: VType.body(color: VColors.textSecondary).copyWith(height: 20 / 15)),
+                    Text(message!, textAlign: TextAlign.center, style: VType.body(color: VColors.textSecondary)),
                   ],
                 ],
               ),
@@ -1145,11 +1268,11 @@ class VAlert extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: actions[i].emphasized ? VColors.fillCell : Colors.transparent,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(VRadius.row),
                   ),
                   child: Text(
                     actions[i].label,
-                    style: VType.headline(color: actions[i].destructive ? VColors.accentRed : const Color(0xF5FFFFFF)).copyWith(height: 20 / 17),
+                    style: VType.headline(color: actions[i].destructive ? VColors.accentRed : const Color(0xF5FFFFFF)),
                   ),
                 ),
               ),
@@ -1207,22 +1330,13 @@ class VFadeScroll extends StatelessWidget {
   }
 }
 
-/// Summary text helper for 2-line ticker summaries.
+/// Summary text helper for 2-line ticker summaries (standardized 11pt body/summary text, up to 2 lines).
 class VOneLine extends StatelessWidget {
   final String text;
   final TextStyle? style;
   const VOneLine({super.key, required this.text, this.style});
 
-  static TextStyle get rowStyle => VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11, height: 15 / 11);
-
-  /// How many characters [maxLines] of [width] hold in the row style.
-  static int charsFor(double width, {int maxLines = 2}) {
-    const sample = 'Seal leaks and lower the thermostat. Water boils at 100 C at sea level. Yes, with a cold-climate model.';
-    final p = TextPainter(text: TextSpan(text: sample, style: rowStyle), maxLines: 1, textDirection: TextDirection.ltr)..layout();
-    final per = p.width / sample.length;
-    p.dispose();
-    return ((width / per) * (maxLines * 0.925)).floor().clamp(90, 135);
-  }
+  static TextStyle get rowStyle => VType.summary(weight: FontWeight.w400);
 
   @override
   Widget build(BuildContext context) {
@@ -1291,7 +1405,7 @@ Future<void> showVMenu(BuildContext context, Offset at, List<VMenuItem> items, {
         type: MaterialType.transparency,
         child: VGlass(
           material: VMaterial.modal,
-          radius: 16,
+          radius: VRadius.row,
           padding: const EdgeInsets.all(6),
           child: IntrinsicWidth(
             child: Column(
@@ -1326,7 +1440,7 @@ Future<void> showVMenu(BuildContext context, Offset at, List<VMenuItem> items, {
                               child: it.checked
                                   ? const Align(
                                       alignment: Alignment.centerRight,
-                                      child: Icon(CupertinoIcons.checkmark_alt, size: 16, color: VColors.textPrimary),
+                                      child: Icon(Icons.check_rounded, size: 16, color: VColors.textPrimary),
                                     )
                                   : null,
                             ),

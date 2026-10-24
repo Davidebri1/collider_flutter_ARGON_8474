@@ -5,18 +5,12 @@ import '../../../core/vision/vision_kit.dart';
 import '../../../core/api/collider_api.dart';
 import '../../../core/platform/open_url.dart';
 
-/// The message, zoomed. Rewritten by Claude on 2026-10-04 to David's own line:
-/// "zoomed in view (also scrollable) with blurred background or dimmed and with action options along the
-/// bottom of the message and with no visible window and with faded edges".
-/// Claude, 2026-10-23: now the app's one detail view (DetailView): Copy and Save, then Send, Open and Close, each with
-/// its name under it.
+/// The message, zoomed in DetailView: centered with faded edges and action buttons directly underneath.
 class MessageZoomOverlay extends StatelessWidget {
   final TickerMessage message;
   final String modelName;
   final Color providerColor;
   final VoidCallback onClose;
-
-  /// Opens the message as a document (Documents).
   final VoidCallback? onOpen;
 
   const MessageZoomOverlay({
@@ -34,7 +28,6 @@ class MessageZoomOverlay extends StatelessWidget {
       behavior: SnackBarBehavior.floating,
       backgroundColor: VColors.glassDark,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(VRadius.full)),
-      // a short pill above the dock, never across it
       margin: EdgeInsets.fromLTRB(MediaQuery.sizeOf(context).width * 0.24, 0, MediaQuery.sizeOf(context).width * 0.24, 100),
       elevation: 0,
       content: Text(text, textAlign: TextAlign.center, style: VType.callout()),
@@ -46,7 +39,6 @@ class MessageZoomOverlay extends StatelessWidget {
     _toast(context, 'Copied');
   }
 
-  /// Saves the message as a file in Files > Generated.
   Future<void> _save(BuildContext context) async {
     final words = message.text.replaceAll(RegExp(r'[#*_`>\[\]\n]'), ' ').trim().split(RegExp(r'\s+')).take(6).join(' ');
     final name = await ColliderApi.instance.saveGenerated('$modelName - $words.md', message.text, model: modelName);
@@ -74,7 +66,7 @@ class MessageZoomOverlay extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 26),
           child: MdText(
             message.text,
-            style: VType.body().copyWith(fontSize: 11, height: 1.5, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 14)]),
+            style: VType.body().copyWith(height: 1.5, shadows: const [Shadow(color: Color(0x99000000), blurRadius: 14)]),
           ),
         ),
       ),

@@ -224,40 +224,18 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
     );
   }
 
-  /// Play, how far the theme's music has played, and the speaker. Frame: glyph, line 520 of 646, glyph.
+  /// Play and speaker controls for the theme's ambient audio (no progress bar outside VideoPlayer).
   Widget _playRow(double k) {
     const white = Colors.white;
-    final progress = _mine ? _p.progress : 0.0;
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         VPress(
           onTap: _playPause,
           tooltip: _mine && _p.playing ? 'Pause' : 'Play',
           child: Icon(_mine && _p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 24, color: white, shadows: _shadow),
         ),
-        SizedBox(width: math.max(39 * k, 12)),
-        Expanded(
-          child: LayoutBuilder(
-            builder: (_, c) => GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (d) {
-                if (_mine && _p.duration > 0) _p.seek(d.localPosition.dx / c.maxWidth);
-              },
-              child: SizedBox(
-                height: 24,
-                child: Center(
-                  child: Stack(
-                    children: [
-                      Container(height: 3, decoration: BoxDecoration(color: const Color(0x80FFFFFF), borderRadius: BorderRadius.circular(2))),
-                      Container(width: c.maxWidth * progress, height: 3, decoration: BoxDecoration(color: white, borderRadius: BorderRadius.circular(2))),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: math.max(34 * k, 12)),
+        const SizedBox(width: 16),
         VPress(
           onTap: _p.toggleMute,
           tooltip: _p.muted ? 'Sound On' : 'Mute',

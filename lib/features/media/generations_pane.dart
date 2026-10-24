@@ -210,15 +210,12 @@ class _GenerationsPaneState extends State<GenerationsPane> {
       if (groups.isNotEmpty) ...[
         const SizedBox(height: 6),
         Flexible(
-          child: EdgeFade(
-            focus: FadeFocus.top,
-            child: LayoutBuilder(
-              builder: (_, box) => ListView(
-                shrinkWrap: true,
-                physics: const BouncingScrollPhysics(),
-                padding: EdgeInsets.zero,
-                children: [for (final c in groups) _group(c, box.maxWidth)],
-              ),
+          child: LayoutBuilder(
+            builder: (_, box) => ListView(
+              shrinkWrap: true,
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.zero,
+              children: [for (final c in groups) _group(c, box.maxWidth)],
             ),
           ),
         ),

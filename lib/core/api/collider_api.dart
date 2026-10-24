@@ -53,7 +53,7 @@ class ModelResult {
   final String text;
   final String essence;
   final String? error;
-  final String line; // the complete summary (up to 2 lines) that fits the ticker row
+  final String line; // the short summary for the ticker row
   final List<Map<String, String>> messages; // full multi-turn thread [{role, content}, ...]
   const ModelResult(this.status, this.text, this.essence, this.error, [this.line = '', this.messages = const []]);
   factory ModelResult.fromJson(Map<String, dynamic> j) => ModelResult(
@@ -67,21 +67,32 @@ class ModelResult {
 }
 
 class ConsensusResult {
-  final String status; // pending | done | unavailable
   final String summary;
   final String score;
   final List<String> dissent;
   final String need;
   final List<List<String>> groups;
   final Map<String, int> chains;
+  final Map<String, String> essences;
+  final int consensusChain;
   final String tieBasis;
   final String line; // the winning group's summary line, word for word
-  const ConsensusResult(this.status, this.summary, this.score, this.dissent, this.need,
-      [this.groups = const [], this.chains = const {}, this.tieBasis = '', this.line = '']);
+  const ConsensusResult(
+    this.summary,
+    this.score,
+    this.dissent,
+    this.need, [
+    this.groups = const [],
+    this.chains = const {},
+    this.essences = const {},
+    this.consensusChain = 0,
+    this.tieBasis = '',
+    this.line = '',
+  ]);
+  bool get hasConsensus => score.isNotEmpty || summary.isNotEmpty || groups.isNotEmpty;
   factory ConsensusResult.fromJson(Map<String, dynamic>? j) {
-    final dissent = j?['dissent'], groups = j?['groups'], chains = j?['chains'];
+    final dissent = j?['dissent'], groups = j?['groups'], chains = j?['chains'], essences = j?['essences'];
     return ConsensusResult(
-      j?['status'] == null ? 'pending' : _s(j!['status']),
       _s(j?['summary']),
       _s(j?['score']),
       [for (final e in (dissent is List ? dissent : const [])) _s(e)],
@@ -91,6 +102,10 @@ class ConsensusResult {
         for (final e in (chains is Map ? chains : const {}).entries)
           _s(e.key): e.value is num ? (e.value as num).toInt() : int.tryParse(_s(e.value)) ?? 0
       },
+      {
+        for (final e in (essences is Map ? essences : const {}).entries) _s(e.key): _s(e.value),
+      },
+      j?['consensus_chain'] is num ? (j!['consensus_chain'] as num).toInt() : int.tryParse(_s(j?['consensus_chain'])) ?? 0,
       _s(j?['tie_basis']),
       _s(j?['line']),
     );
@@ -202,7 +217,6 @@ class ColliderApi {
   Map<String, List<ColliderFile>>? cachedFiles;
   List<JobState>? cachedHistory;
   final Map<String, String> _fileTextCache = {};
-  final Set<String> _linesResolvedCache = {};
 
   static Color _hex(String h) => Color(int.parse('FF${h.replaceAll('#', '')}', radix: 16));
 
@@ -387,11 +401,9 @@ class ColliderApi {
     required bool autosave,
     required bool incognito,
     List<String> attachments = const [],
-    int line = 115,
     String? sessionId,
   }) async {
     final r = await _dio.post('$_base/api/ask', data: {
-      'line': line,
       'prompt': prompt,
       'attachments': attachments,
       'models': models,
@@ -427,7 +439,6 @@ class ColliderApi {
     required List<Map<String, String>> messages,
     required AskMode mode,
     List<String> attachments = const [],
-    int line = 115,
     String? jobId,
   }) async* {
     final r = await _dio.post('$_base/api/reply/start', data: {
@@ -435,7 +446,6 @@ class ColliderApi {
       'messages': messages,
       'mode': mode.wire,
       'attachments': attachments,
-      'line': line,
       if (jobId != null && jobId.isNotEmpty) 'job_id': jobId,
     });
     final id = _s(r.data['id']);
@@ -466,7 +476,6 @@ class ColliderApi {
     required List<Map<String, String>> messages,
     required AskMode mode,
     List<String> attachments = const [],
-    int line = 115,
     String? jobId,
   }) async {
     final r = await _dio.post('$_base/api/reply', data: {
@@ -474,7 +483,6 @@ class ColliderApi {
       'messages': messages,
       'mode': mode.wire,
       'attachments': attachments,
-      'line': line,
       if (jobId != null && jobId.isNotEmpty) 'job_id': jobId,
     });
     final rawMsgs = r.data['messages'] as List?;
@@ -493,21 +501,6 @@ class ColliderApi {
       line: r.data['line'] as String? ?? '',
       messages: parsedMsgs,
     );
-  }
-
-  /// Summary lines for a saved conversation that has none, or has them for a wider row.
-  Future<JobState?> lines(String id, int line) async {
-    final key = '$id:$line';
-    if (_linesResolvedCache.contains(key)) return null;
-    try {
-      final r = await _dio.post('$_base/api/lines', data: {'id': id, 'line': line});
-      final m = Map<String, dynamic>.from(r.data as Map);
-      if (m['error'] != null) return null;
-      _linesResolvedCache.add(key);
-      return JobState.fromJson({...m, 'status': 'done'});
-    } catch (_) {
-      return null;
-    }
   }
 
   Future<List<JobState>> history({bool forceRefresh = false}) async {

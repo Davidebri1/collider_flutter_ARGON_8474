@@ -122,10 +122,13 @@ class Tunnel:
         link = self.link()
         if not link:
             return ""
-        import segno
-        buf = io.BytesIO()
-        segno.make(link, error="m").save(buf, kind="png", scale=8, border=2, dark="#000000", light="#FFFFFF")
-        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+        try:
+            import segno
+            buf = io.BytesIO()
+            segno.make(link, error="m").save(buf, kind="png", scale=8, border=2, dark="#000000", light="#FFFFFF")
+            return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+        except Exception:
+            return ""
 
     def stop(self):
         p, self._proc = self._proc, None  # ends the watch too

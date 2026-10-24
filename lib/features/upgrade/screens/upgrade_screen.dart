@@ -17,69 +17,87 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenH = MediaQuery.sizeOf(context).height;
+    final wide = MediaQuery.sizeOf(context).width >= 820;
+    final cards = [
+      _tier(
+        'Free Tier',
+        '\$0',
+        _activePlan == 'Free Tier' ? 'Current Plan' : 'Switch to Free',
+        false,
+        const [
+          '5 Free models (Nemotron 3.5 Lightning, Gemma 4, etc.)',
+          '50 Daily queries',
+          'Standard single-stream consensus',
+          'Curated Live Wallpaper themes',
+        ],
+      ),
+      _tier(
+        'Pro Tier',
+        '\$19 / mo',
+        _activePlan == 'Pro Tier' ? 'Active Plan ✓' : 'Upgrade to Pro',
+        true,
+        const [
+          'Unlock all Pro General, Image, Video & Audio models',
+          'Parallel multi-model streaming up to 6 models',
+          'Interactive 3D Consensus View',
+          'SmartGen Boards, Canvas & Genie synthesis',
+          '2,000 monthly credits',
+        ],
+      ),
+      _tier(
+        'Elite Tier',
+        '\$49 / mo',
+        _activePlan == 'Elite Tier' ? 'Active Plan ✓' : 'Upgrade to Elite',
+        false,
+        const [
+          'All Pro capabilities + 9-model comparison grid',
+          'Full 120 FPS high-fidelity spatial glass effects',
+          'Unlimited Smart Gen household projects',
+          '10,000 monthly credits',
+          'Instant priority model responses',
+        ],
+      ),
+    ];
     return Stack(
       fit: StackFit.expand,
       children: [
         VScrim(onTap: widget.onClose, blur: true),
         SafeArea(
-          child: Align(
-            alignment: Alignment.center,
+          child: Center(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(VSpace.md, 16, VSpace.md, 76),
               child: VWindow(
                 title: 'Tiers & Entitlements',
                 centerTitle: true,
-                maxWidth: VOverlay.menuWidth(context) + 36,
-                maxHeight: (screenH * 0.78).clamp(420.0, 680.0),
+                maxWidth: wide ? 860 : VOverlay.menuWidth(context) + 36,
                 leading: VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', onTap: widget.onClose),
-                child: VFadeScroll(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _tier(
-                        'Free Tier',
-                        '\$0',
-                        _activePlan == 'Free Tier' ? 'Current Plan' : 'Switch to Free',
-                        false,
-                        const [
-                          '5 Free models (Nemotron 3.5 Lightning, Gemma 4, etc.)',
-                          '50 Daily queries',
-                          'Standard single-stream consensus',
-                          'Curated Live Wallpaper themes',
-                        ],
+                child: wide
+                    ? IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(child: cards[0]),
+                            const SizedBox(width: VSpace.sm),
+                            Expanded(child: cards[1]),
+                            const SizedBox(width: VSpace.sm),
+                            Expanded(child: cards[2]),
+                          ],
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            cards[0],
+                            const SizedBox(height: VSpace.sm),
+                            cards[1],
+                            const SizedBox(height: VSpace.sm),
+                            cards[2],
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: VSpace.sm),
-                      _tier(
-                        'Pro Tier',
-                        '\$19 / mo',
-                        _activePlan == 'Pro Tier' ? 'Active Plan ✓' : 'Upgrade to Pro',
-                        true,
-                        const [
-                          'Unlock all Pro General, Image, Video & Audio models',
-                          'Parallel multi-model streaming up to 6 models',
-                          'Interactive 3D Consensus View',
-                          'SmartGen Boards, Canvas & Genie synthesis',
-                          '2,000 monthly credits',
-                        ],
-                      ),
-                      const SizedBox(height: VSpace.sm),
-                      _tier(
-                        'Elite Tier',
-                        '\$49 / mo',
-                        _activePlan == 'Elite Tier' ? 'Active Plan ✓' : 'Upgrade to Elite',
-                        false,
-                        const [
-                          'All Pro capabilities + 9-model comparison grid',
-                          'Full 120 FPS high-fidelity spatial glass effects',
-                          'Unlimited Smart Gen household projects',
-                          '10,000 monthly credits',
-                          'Instant priority model responses',
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
               ),
             ),
           ),
@@ -120,7 +138,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
                   child: Icon(
-                    CupertinoIcons.checkmark_alt,
+                    Icons.check_rounded,
                     size: 14,
                     color: isCurrent ? VColors.accentBlue : VColors.textSecondary,
                   ),

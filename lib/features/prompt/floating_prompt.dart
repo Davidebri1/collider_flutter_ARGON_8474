@@ -108,15 +108,10 @@ class _FloatingPromptState extends State<FloatingPrompt> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onVerticalDragEnd: (d) {
-        final v = d.primaryVelocity ?? 0;
-        if (v > 200 && widget.summoned) widget.onTuck();
-        if (v < -200 && !widget.summoned) widget.onSummon();
-      },
       child: AnimatedSize(
         duration: const Duration(milliseconds: 320),
         curve: Curves.easeOutCubic,
-        alignment: Alignment.bottomCenter,
+        alignment: Alignment.topCenter,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 240),
           switchInCurve: Curves.easeOutCubic,
@@ -124,39 +119,14 @@ class _FloatingPromptState extends State<FloatingPrompt> {
             opacity: a,
             child: SlideTransition(position: Tween(begin: const Offset(0, 0.06), end: Offset.zero).animate(a), child: child),
           ),
-          child: widget.summoned ? _open() : _tucked(),
-        ),
-      ),
-    );
-  }
-
-  Widget _tucked() {
-    return VPress(
-      key: const ValueKey('tucked'),
-      onTap: widget.onSummon,
-      tooltip: 'Compose',
-      child: const SizedBox(
-        width: 72,
-        height: 22,
-        child: Icon(
-          Icons.keyboard_arrow_up_rounded,
-          size: 22,
-          color: Color(0xD9FFFFFF),
-          shadows: [Shadow(color: Color(0x99000000), blurRadius: 8)],
+          child: _open(),
         ),
       ),
     );
   }
 
   Widget _open() {
-    final cont = widget.continuingTitle?.trim() ?? '';
     final chosen = <Widget>[
-      if (cont.isNotEmpty && widget.onNewConversation != null)
-        VChip(
-          label: 'Continuing: ${cont.length > 22 ? "${cont.substring(0, 21)}…" : cont}  ×',
-          selected: true,
-          onTap: widget.onNewConversation!,
-        ),
       if (widget.mode != AskMode.chat) VChip(label: widget.mode.label, selected: true, onTap: () => widget.onMode(AskMode.chat)),
       if (widget.voice != null) VChip(label: 'Voice Chat', selected: true, onTap: () => widget.onVoiceChat?.call(false)),
       if (widget.incognito) VChip(label: 'Private', selected: true, onTap: () => widget.onIncognito(false)),
@@ -174,22 +144,13 @@ class _FloatingPromptState extends State<FloatingPrompt> {
     ];
     return VGlass(
       key: const ValueKey('open'),
-      material: VMaterial.resting,
+      material: VMaterial.elevated,
       radius: 26,
-      padding: const EdgeInsets.fromLTRB(VSpace.xs, 4, VSpace.xs, 8),
+      padding: const EdgeInsets.fromLTRB(VSpace.xs, 6, VSpace.xs, 6),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: VPress(
-              onTap: widget.onTuck,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 18, vertical: 2),
-                child: Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: VColors.textSecondary),
-              ),
-            ),
-          ),
           AnimatedSize(
             duration: VMotion.base,
             curve: Curves.easeOutCubic,
@@ -201,7 +162,6 @@ class _FloatingPromptState extends State<FloatingPrompt> {
               padding: const EdgeInsets.only(bottom: 6),
               child: Wrap(spacing: 6, runSpacing: 6, children: chosen),
             ),
-          const SizedBox(height: 2),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -215,14 +175,14 @@ class _FloatingPromptState extends State<FloatingPrompt> {
               const SizedBox(width: 8),
               Expanded(
                 child: VRecessed(
-                  radius: 17,
+                  radius: 18,
                   padding: const EdgeInsets.fromLTRB(14, 0, 5, 0),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8.5),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           child: TextField(
                             controller: _ctrl,
                             focusNode: _focus,
@@ -230,11 +190,10 @@ class _FloatingPromptState extends State<FloatingPrompt> {
                             maxLines: 5,
                             cursorColor: VColors.textPrimary,
                             textInputAction: TextInputAction.send,
-                            style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11, height: 17 / 13),
+                            style: VType.body(weight: FontWeight.w500),
                             decoration: InputDecoration(
                               hintText: 'Enter message',
-                              hintStyle: VType.callout(color: const Color(0x99FFFFFF), weight: FontWeight.w400)
-                                  .copyWith(fontSize: 11, height: 17 / 13),
+                              hintStyle: VType.body(color: const Color(0x99FFFFFF), weight: FontWeight.w400),
                               border: InputBorder.none,
                               isDense: true,
                               contentPadding: EdgeInsets.zero,

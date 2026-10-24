@@ -141,13 +141,12 @@ class _HistoryPaneState extends State<HistoryPane> {
       fit: StackFit.expand,
       children: [
         VScrim(onTap: widget.onClose),
-        Align(
-          alignment: wide ? Alignment.center : Alignment.topCenter,
+        Center(
           child: Padding(
-            padding: EdgeInsets.only(top: wide ? 0 : 56, bottom: wide ? 40 : 0),
+            padding: const EdgeInsets.only(bottom: 64),
             child: GestureDetector(
               onTap: () {},
-              child: VGlass(material: VMaterial.modal, radius: VRadius.lg + 4, child: pane),
+              child: VGlass(material: VMaterial.modal, radius: VRadius.card, child: pane),
             ),
           ),
         ),
@@ -253,7 +252,7 @@ class _PreviewState extends State<_Preview> {
           margin: const EdgeInsets.only(bottom: 8, left: 32),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(color: VColors.fillActive, borderRadius: BorderRadius.circular(VRadius.row)),
-          child: Text(q, style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11)),
+          child: Text(q, style: VType.body(weight: FontWeight.w500)),
         ),
       );
 
@@ -302,7 +301,7 @@ class _PreviewState extends State<_Preview> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(color: VColors.accentBlue, borderRadius: BorderRadius.circular(VRadius.full)),
-                child: Text('Load Conversation', style: VType.caption(color: Colors.white, weight: FontWeight.w600).copyWith(fontSize: 11)),
+                child: Text('Load Conversation', style: VType.caption(color: Colors.white, weight: FontWeight.w600)),
               ),
             ),
           ]),
@@ -321,7 +320,7 @@ class _PreviewState extends State<_Preview> {
                     borderRadius: BorderRadius.circular(VRadius.row),
                     border: Border.all(color: VColors.borderLight, width: 0.5),
                   ),
-                  child: MdText(consensus, style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11, height: 1.4)),
+                  child: MdText(consensus, style: VType.body(weight: FontWeight.w500)),
                 ),
               if (job != null)
                 for (final e in job.results.entries)
@@ -359,10 +358,10 @@ class _PreviewState extends State<_Preview> {
                       maxLines: 4,
                       cursorColor: VColors.textPrimary,
                       textInputAction: TextInputAction.send,
-                      style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11, height: 17 / 13),
+                      style: VType.body(weight: FontWeight.w500),
                       decoration: InputDecoration(
                         hintText: 'Enter message',
-                        hintStyle: VType.callout(color: const Color(0x99FFFFFF), weight: FontWeight.w400).copyWith(fontSize: 11, height: 17 / 13),
+                        hintStyle: VType.body(color: const Color(0x99FFFFFF), weight: FontWeight.w400),
                         border: InputBorder.none,
                         isDense: true,
                         contentPadding: EdgeInsets.zero,

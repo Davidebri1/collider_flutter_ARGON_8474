@@ -7,11 +7,7 @@ import '../../../core/api/collider_api.dart';
 import '../../../core/drafts.dart';
 import '../../../core/platform/open_url.dart';
 
-/// One model's conversation, opened. Made by Claude on 2026-10-04.
-/// David's reference map, row 15 (wechat vision os 0:639): "Collapsed is left column, Expanded is middle area;
-/// expanded is closeable". This is the middle area of that frame: the name and a round button at the top,
-/// the messages as bubbles with their time under the text, the entry box at the foot.
-/// What a message can do is in its press menu, and what the conversation can do is in the header's menu.
+/// One model's conversation, opened.
 class ConversationView extends StatefulWidget {
   final TickerItem item;
   final VoidCallback onClose;
@@ -21,10 +17,7 @@ class ConversationView extends StatefulWidget {
   final VoidCallback? onOpenLocalHistory;
   final VoidCallback? onSend; // the conversation through the share sheet
   final VoidCallback? onOpen; // the conversation as a document
-  /// Opened under its own summary, which already shows the model's name and closes it on a tap (Claude, 2026-10-21).
   final bool attached;
-
-  /// Fills the height it is given (the side-by-side pane): the messages take the room, the entry box sits at the foot.
   final bool fill;
 
   const ConversationView({
@@ -46,7 +39,6 @@ class ConversationView extends StatefulWidget {
 }
 
 class _ConversationViewState extends State<ConversationView> {
-  // the reply being written is kept per model in Drafts: closing this view or opening another keeps it (Claude, 2026-10-21)
   late final TextEditingController _reply = Drafts.text('reply:${widget.item.modelDef.id}');
   late final TextEditingController _search = Drafts.text('conversation.search:${widget.item.modelDef.id}');
   bool _searching = false;
@@ -70,7 +62,6 @@ class _ConversationViewState extends State<ConversationView> {
     super.dispose();
   }
 
-  /// While an answer drafts, the newest words stay in view (unless the reader has scrolled up to read).
   @override
   void didUpdateWidget(ConversationView old) {
     super.didUpdateWidget(old);
@@ -123,7 +114,6 @@ class _ConversationViewState extends State<ConversationView> {
     if (mounted) _toast(name == null ? 'Not saved' : 'Saved to Files');
   }
 
-  /// A message's press menu.
   void _messageMenu(Offset at, TickerMessage m) {
     showVMenu(context, at, [
       VMenuItem(Icons.copy_rounded, 'Copy', () {
@@ -135,10 +125,8 @@ class _ConversationViewState extends State<ConversationView> {
     ]);
   }
 
-  /// What can be done with this conversation.
   void _menu(BuildContext anchor) {
     final box = anchor.findRenderObject() as RenderBox;
-    // Under its button, its right edge on the button's right edge: it stays inside the window.
     final at = box.localToGlobal(Offset(box.size.width, box.size.height));
     showVMenu(context, at, align: VMenuAlign.end, [
       VMenuItem(Icons.search_rounded, 'Search', () => setState(() {
@@ -160,41 +148,36 @@ class _ConversationViewState extends State<ConversationView> {
       for (final m in item.conversation)
         if (_filter.isEmpty || m.text.toLowerCase().contains(_filter)) m,
     ];
-    // The model is writing and nothing of its answer has arrived yet: its bubble shows that it is drafting.
     final drafting = item.isStreaming && (item.conversation.isEmpty || item.conversation.last.sender == 'user');
     return Column(
       mainAxisSize: widget.fill ? MainAxisSize.max : MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 0:639 header: the name, and a round button at the right. Attached under its summary, there is none.
         if (!widget.attached)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 2, 0, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: widget.attached
-                    ? const SizedBox.shrink()
-                    : Text(item.modelDef.label, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.headline().copyWith(fontSize: 15, height: 20 / 15)),
-              ),
-              Builder(builder: (c) => VCircleButton(icon: Icons.more_horiz_rounded, size: 30, tooltip: 'More', onTap: () => _menu(c))),
-              if (!widget.attached) ...[
-                const SizedBox(width: 6),
-                VCircleButton(icon: Icons.close_rounded, size: 30, tooltip: 'Close', onTap: widget.onClose),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 2, 0, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: widget.attached
+                      ? const SizedBox.shrink()
+                      : Text(item.modelDef.label, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: VType.headline()),
+                ),
+                Builder(builder: (c) => VCircleButton(icon: Icons.more_horiz_rounded, size: 30, tooltip: 'More', onTap: () => _menu(c))),
+                if (!widget.attached) ...[
+                  const SizedBox(width: 6),
+                  VCircleButton(icon: Icons.close_rounded, size: 30, tooltip: 'Close', onTap: widget.onClose),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
         if (_searching) ...[
           VSearchField(controller: _search, hint: 'Search', height: 32, onChanged: (v) => setState(() => _filter = v.toLowerCase())),
           const SizedBox(height: VSpace.xs),
         ],
         Flexible(
           fit: widget.fill ? FlexFit.tight : FlexFit.loose,
-          child: EdgeFade(
-            fadeHeight: 16,
-            focus: FadeFocus.bottom, // the newest message is at the bottom; older ones recede upwards
-            child: ListView.builder(
+          child: ListView.builder(
               controller: _scroll,
               shrinkWrap: true,
               physics: const BouncingScrollPhysics(),
@@ -221,10 +204,10 @@ class _ConversationViewState extends State<ConversationView> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             isUser
-                                ? Text(m.text, style: VType.callout(weight: FontWeight.w400).copyWith(height: 1.4))
+                                ? Text(m.text, style: VType.body(weight: FontWeight.w400))
                                 : MdText(m.text),
                             const SizedBox(height: 3),
-                            Text(time, style: VType.caption(color: VColors.textTertiary).copyWith(fontSize: 11, height: 12 / 10)),
+                            Text(time, style: VType.caption(color: VColors.textTertiary)),
                           ],
                         ),
                       ),
@@ -233,7 +216,6 @@ class _ConversationViewState extends State<ConversationView> {
                 );
               },
             ),
-          ),
         ),
         if (_files.isNotEmpty) ...[
           const SizedBox(height: VSpace.xs),
@@ -241,15 +223,19 @@ class _ConversationViewState extends State<ConversationView> {
             spacing: 6,
             runSpacing: 6,
             children: [
-              for (final f in _files) VChip(label: f.length > 22 ? '${f.substring(0, 21)}…' : f, selected: true, onTap: () {
-                setState(() => _files.remove(f));
-                Drafts.touch();
-              }),
+              for (final f in _files)
+                VChip(
+                  label: f.length > 22 ? '${f.substring(0, 21)}…' : f,
+                  selected: true,
+                  onTap: () {
+                    setState(() => _files.remove(f));
+                    Drafts.touch();
+                  },
+                ),
             ],
           ),
         ],
         const SizedBox(height: VSpace.xs),
-        // 0:639 entry box: recessed, the words to type, send at the right.
         VRecessed(
           radius: 20,
           padding: EdgeInsets.fromLTRB(widget.attached ? 4 : 14, 0, 4, 0),
@@ -265,10 +251,10 @@ class _ConversationViewState extends State<ConversationView> {
                   child: TextField(
                     controller: _reply,
                     cursorColor: VColors.textPrimary,
-                    style: VType.callout(weight: FontWeight.w400),
+                    style: VType.body(weight: FontWeight.w400),
                     decoration: InputDecoration(
                       hintText: 'Enter message',
-                      hintStyle: VType.callout(color: VColors.textTertiary, weight: FontWeight.w400),
+                      hintStyle: VType.body(color: VColors.textTertiary, weight: FontWeight.w400),
                       border: InputBorder.none,
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
@@ -286,7 +272,6 @@ class _ConversationViewState extends State<ConversationView> {
   }
 }
 
-/// Three dots that brighten in turn while the model drafts, as in Messages (Claude, 2026-10-19).
 class _Drafting extends StatefulWidget {
   const _Drafting();
   @override
@@ -323,7 +308,6 @@ class _DraftingState extends State<_Drafting> with SingleTickerProviderStateMixi
       );
 }
 
-/// Speech bubble, WeChat visionOS 0:639: one small corner on the speaker's side.
 class _Bubble extends StatelessWidget {
   final bool isUser;
   final Widget child;
@@ -331,14 +315,14 @@ class _Bubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const r = Radius.circular(14);
-    const tail = Radius.circular(3);
+    const r = Radius.circular(16);
+    const tail = Radius.circular(4);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 5),
       constraints: const BoxConstraints(maxWidth: 270),
       padding: const EdgeInsets.fromLTRB(13, 9, 13, 8),
       decoration: BoxDecoration(
-        color: isUser ? VColors.fillActive : const Color(0x4D808080),
+        color: isUser ? VColors.fillActive : VColors.fillCell,
         borderRadius: isUser
             ? const BorderRadius.only(topLeft: r, topRight: tail, bottomLeft: r, bottomRight: r)
             : const BorderRadius.only(topLeft: tail, topRight: r, bottomLeft: r, bottomRight: r),

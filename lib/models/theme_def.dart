@@ -124,6 +124,7 @@ class WallpaperCatalog {
   /// The live wallpapers: David's Cloudflare bucket "collider-themes" (ThemeCloud). Nothing is built into the app;
   /// the last list read is kept on the device so the market opens at once.
   static List<WallpaperTheme> get premiumThemes => ThemeCloud.instance.themes;
+  static List<WallpaperTheme> get allThemes => [...freeThemes, ...premiumThemes];
 
   /// A theme's songs. The live wallpapers carry their own (the bucket's songs); a built-in theme takes five of the
   /// bucket's songs, a different five for each theme. Made by Claude (2026-10-18), replacing the made-up titles.

@@ -2,9 +2,9 @@ import 'package:material_ui/material_ui.dart';
 import '../../../core/vision/vision_kit.dart';
 import 'model_pill.dart';
 
-/// The consensus, first line of the ticker. Rewritten by Claude (2026-10-23): a line in the window's list like the model
-/// rows, no box of its own, no words that were not asked for. The score leads its words, coloured red to green by how
-/// many agree; two lines are kept for the words; tapping opens the consensus map.
+/// The consensus, first line of the ticker.
+/// The score leads its words, coloured red to green with emissive light bloom by how many agree;
+/// standardized 11pt 2-line summary; tapping opens the 3D Consensus Map.
 class ConsensusRow extends StatelessWidget {
   final String agreementRatio;
   final String summary;
@@ -26,26 +26,42 @@ class ConsensusRow extends StatelessWidget {
     final score = agreementRatio.replaceAll('Consensus', '').trim();
     final m = RegExp(r'^(\d+)\s*/\s*(\d+)$').firstMatch(score);
     final double? agree = m == null || int.parse(m.group(2)!) == 0 ? null : int.parse(m.group(1)!) / int.parse(m.group(2)!);
-    final Color ink = agree == null ? VColors.textTertiary : HSVColor.fromAHSV(1, 120 * agree.clamp(0.0, 1.0), 0.6, 1).toColor();
+    final Color ink = agree == null ? VColors.accentBlue : HSVColor.fromAHSV(1, 130 * agree.clamp(0.0, 1.0), 0.72, 1).toColor();
     return VPress(
       onTap: onTap ?? onGenerateConsensus,
       child: Container(
-        color: const Color(0x00000000),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: SizedBox(
-          height: 30,
-          width: double.infinity,
-          child: Text.rich(
-            TextSpan(children: [
-              TextSpan(
-                text: agree == null ? '–/–' : score,
-                style: VType.caption(color: ink, weight: FontWeight.w700).copyWith(fontSize: 11, height: 15 / 11),
+        decoration: BoxDecoration(
+          color: ink.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(ModelPill.radius),
+          border: Border.all(color: ink.withValues(alpha: 0.35), width: 0.6),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 3, right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: ink.withValues(alpha: 0.22),
+                borderRadius: BorderRadius.circular(VRadius.full),
+                border: Border.all(color: ink.withValues(alpha: 0.65), width: 0.6),
+                boxShadow: VShadow.emissive(ink, intensity: 0.75),
               ),
-              if (summary.isNotEmpty) TextSpan(text: '   $summary', style: VOneLine.rowStyle.copyWith(color: VColors.textPrimary)),
-            ]),
-            maxLines: 2,
-            overflow: TextOverflow.fade,
-          ),
+              child: Text(
+                agree == null ? '–/–' : score,
+                style: VType.caption(color: Colors.white, weight: FontWeight.w700),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                summary.isNotEmpty ? summary : (isGenerating ? 'Synthesizing multi-model consensus…' : 'Tap to inspect 3D Consensus Galaxy'),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: VType.summary(color: VColors.textPrimary, weight: FontWeight.w500),
+              ),
+            ),
+          ],
         ),
       ),
     );

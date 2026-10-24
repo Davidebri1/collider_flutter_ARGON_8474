@@ -28,7 +28,7 @@ class _N {
   static const hint = VColors.textTertiary;
 
   static TextStyle text(double size, FontWeight w, Color c, {double? height}) =>
-      GoogleFonts.inter(fontSize: size, fontWeight: w, color: c, height: height, decoration: TextDecoration.none);
+      GoogleFonts.instrumentSans(fontSize: size < 9.5 ? 9.5 : size, fontWeight: w, color: c, height: height, decoration: TextDecoration.none);
 }
 
 class _Source {
@@ -419,25 +419,36 @@ class _FilesScreenState extends State<FilesScreen> {
   Widget _browse() {
     final home = _view.source == 'home';
     final list = _shown();
-    return EdgeFade(
-      focus: FadeFocus.top,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
-        physics: const BouncingScrollPhysics(),
-        children: [
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+      physics: const BouncingScrollPhysics(),
+      children: [
           if (home) ...[
-            Row(children: [
-              for (int i = 0; i < _sources.length; i++) ...[
-                if (i > 0) const SizedBox(width: 10),
-                Expanded(
-                  child: _SourceCard(
-                    source: _sources[i],
-                    count: (_files[_sources[i].key] ?? const []).length,
-                    onTap: () => _go(_View(_sources[i].key, kind: _view.kind)),
-                  ),
-                ),
-              ],
-            ]),
+            LayoutBuilder(builder: (context, c) {
+              Widget card(_Source s) => Expanded(
+                    child: _SourceCard(
+                      source: s,
+                      count: (_files[s.key] ?? const []).length,
+                      onTap: () => _go(_View(s.key, kind: _view.kind)),
+                    ),
+                  );
+              if (c.maxWidth < 520) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(children: [card(_sources[0]), const SizedBox(width: 10), card(_sources[1])]),
+                    const SizedBox(height: 10),
+                    Row(children: [card(_sources[2]), const SizedBox(width: 10), card(_sources[3])]),
+                  ],
+                );
+              }
+              return Row(children: [
+                for (int i = 0; i < _sources.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  card(_sources[i]),
+                ],
+              ]);
+            }),
             const SizedBox(height: 16),
             if (list.isNotEmpty) ...[
               Container(height: 0.5, color: VColors.borderLight),
@@ -502,8 +513,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   _FileRow(file: f, api: _api, onTap: () => _open(f), onLongPress: f.asset ? null : () => _detail(f)),
             ]),
         ],
-      ),
-    );
+      );
   }
 
   Future<void> _send(ColliderFile f) async {
@@ -953,9 +963,18 @@ class _SongRow extends StatelessWidget {
     return AnimatedBuilder(
       animation: p,
       builder: (_, __) {
-        final on = p.queueId == theme.id && p.index == index && p.playing;
+        final songs = MusicPlayer.forTheme(theme);
+        final track = index < songs.length ? songs[index] : MusicTrack(title, theme.assetPath, '');
+        final enabled = p.isTrackEnabled(track);
+        final on = enabled && p.queueId == theme.id && p.index == index && p.playing;
         return VPress(
-          onTap: onTap,
+          onTap: () {
+            if (on) {
+              p.toggle();
+            } else {
+              onTap();
+            }
+          },
           child: Container(
             margin: const EdgeInsets.only(bottom: 4),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -969,19 +988,22 @@ class _SongRow extends StatelessWidget {
                 child: SizedBox(
                   width: 40,
                   height: 40,
-                  child: theme.assetPath.startsWith('http')
-                      ? Image.network(
-                          theme.assetPath,
-                          fit: BoxFit.cover,
-                          filterQuality: FilterQuality.medium,
-                          errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF282C34)),
-                        )
-                      : Image.asset(
-                          theme.assetPath,
-                          fit: BoxFit.cover,
-                          filterQuality: FilterQuality.medium,
-                          errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF282C34)),
-                        ),
+                  child: Opacity(
+                    opacity: enabled ? 1.0 : 0.45,
+                    child: theme.assetPath.startsWith('http')
+                        ? Image.network(
+                            theme.assetPath,
+                            fit: BoxFit.cover,
+                            filterQuality: FilterQuality.medium,
+                            errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF282C34)),
+                          )
+                        : Image.asset(
+                            theme.assetPath,
+                            fit: BoxFit.cover,
+                            filterQuality: FilterQuality.medium,
+                            errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF282C34)),
+                          ),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -991,23 +1013,34 @@ class _SongRow extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: _N.text(11.5, FontWeight.w600, on ? const Color(0xFFFF7A95) : _N.title),
+                    style: _N.text(11.0, FontWeight.w600, !enabled ? _N.hint : (on ? const Color(0xFFFF7A95) : _N.title)),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     theme.name.replaceAll(RegExp(r'\s*4K$'), '').trim(),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: _N.text(10.5, FontWeight.w500, _N.hint),
+                    style: _N.text(9.5, FontWeight.w500, _N.hint),
                   ),
                 ]),
               ),
               Icon(
-                on ? CupertinoIcons.pause_fill : CupertinoIcons.play_arrow_solid,
-                size: 15,
+                on ? Icons.pause_rounded : (enabled ? Icons.play_arrow_rounded : Icons.music_off_rounded),
+                size: 16,
                 color: on ? const Color(0xFFFF7A95) : _N.hint,
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 24,
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: CupertinoSwitch(
+                    value: enabled,
+                    activeTrackColor: const Color(0xFFD65983),
+                    onChanged: (_) => p.toggleTrack(track),
+                  ),
+                ),
+              ),
             ]),
           ),
         );
@@ -1073,7 +1106,6 @@ class _SongState extends StatelessWidget {
       animation: s,
       builder: (_, __) {
         final on = s.isPlaying(url);
-        final started = s.url == url && s.position > 0;
         return Stack(alignment: Alignment.center, children: [
           child,
           AnimatedOpacity(
@@ -1086,21 +1118,6 @@ class _SongState extends StatelessWidget {
               child: const Icon(Icons.pause_rounded, size: 20, color: Colors.white),
             ),
           ),
-          if (started)
-            Positioned(
-              left: 6,
-              right: 6,
-              bottom: 6,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: LinearProgressIndicator(
-                  value: s.progressOf(url),
-                  minHeight: 3,
-                  backgroundColor: const Color(0x40FFFFFF),
-                  valueColor: const AlwaysStoppedAnimation(Colors.white),
-                ),
-              ),
-            ),
         ]);
       },
     );

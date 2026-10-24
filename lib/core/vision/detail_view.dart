@@ -1,45 +1,36 @@
-// Made by Claude (2026-10-23). The one detail view of the app: a message, a conversation, a file or a picture opened large.
-// David, 23 Oct: "the same for all": the room behind blurred and dimmed, edge fades, action buttons with icon and
-// text label, no tray holding them, the content raised off the room, cinematic. Each kind brings its own actions;
-// every kind has Send, Open and Close.
+// Unified DetailView (Message Zoom, Picture Viewer, File Preview):
+// Centered hologram projection with vertical edge fades and action context paired directly underneath.
 import 'dart:ui';
 
 import 'package:material_ui/material_ui.dart';
 
 import 'vision_tokens.dart';
-import 'vision_kit.dart' show VPress;
+import 'vision_kit.dart' show VGlass, VMaterial, VPress, VShadow, vHueFor;
 
 class DetailAction {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
-  final Color? tint; // an action that is on (a kept picture)
+  final Color? tint;
   const DetailAction(this.icon, this.label, this.onTap, {this.tint});
 }
 
 class DetailView extends StatefulWidget {
-  /// What is opened. It sizes itself inside the room it is given and scrolls itself when it is long.
   final Widget child;
-
-  /// This kind's own actions; Send, Open and Close follow them.
   final List<DetailAction> actions;
   final VoidCallback? onSend;
   final VoidCallback? onOpen;
   final VoidCallback onClose;
-
-  /// Pictures: the media column, as wide as the pictures' ticker.
   final bool media;
 
-  /// The work column: as wide as the ticker window it opens from (phone 300, wider screens 480; pictures 360 and 780).
   static double zoneWidth(BuildContext context, {bool media = false}) {
     final phone = MediaQuery.sizeOf(context).width < 768;
-    return phone ? (media ? 360 : 300) : (media ? 780 : 480);
+    return phone ? (media ? 356 : 310) : (media ? 760 : 480);
   }
 
-  /// The tallest the content may be: the work column above the dock, less the actions under it.
   static double zoneHeight(BuildContext context) {
     final m = MediaQuery.of(context);
-    return m.size.height - m.padding.top - m.padding.bottom - 16 - 92 - 74;
+    return (m.size.height - m.padding.top - m.padding.bottom - 180).clamp(220.0, 520.0);
   }
 
   const DetailView({
@@ -57,8 +48,7 @@ class DetailView extends StatefulWidget {
 }
 
 class _DetailViewState extends State<DetailView> with SingleTickerProviderStateMixin {
-  // summoned: the room goes out of focus as the content rises toward the viewer
-  late final AnimationController _in = AnimationController(vsync: this, duration: const Duration(milliseconds: 360))..forward();
+  late final AnimationController _in = AnimationController(vsync: this, duration: const Duration(milliseconds: 320))..forward();
 
   @override
   void dispose() {
@@ -71,7 +61,7 @@ class _DetailViewState extends State<DetailView> with SingleTickerProviderStateM
     final t = CurvedAnimation(parent: _in, curve: Curves.easeOutCubic);
     final all = [
       ...widget.actions,
-      if (widget.onSend != null) DetailAction(Icons.ios_share_rounded, 'Send', widget.onSend),
+      if (widget.onSend != null) DetailAction(Icons.ios_share_rounded, 'Share', widget.onSend),
       if (widget.onOpen != null) DetailAction(Icons.open_in_new_rounded, 'Open', widget.onOpen),
       DetailAction(Icons.close_rounded, 'Close', widget.onClose),
     ];
@@ -80,54 +70,70 @@ class _DetailViewState extends State<DetailView> with SingleTickerProviderStateM
       builder: (context, _) {
         final v = t.value;
         return Stack(fit: StackFit.expand, children: [
-          // The room: out of focus, and darker toward the top and bottom edges than behind the content, so the eye
-          // settles in the middle.
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: widget.onClose,
             child: ClipRect(
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 24 * v, sigmaY: 24 * v),
+                filter: ImageFilter.blur(sigmaX: 22 * v, sigmaY: 22 * v),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Color.fromRGBO(0, 0, 0, 0.72 * v),
-                        Color.fromRGBO(0, 0, 0, 0.42 * v),
-                        Color.fromRGBO(0, 0, 0, 0.42 * v),
-                        Color.fromRGBO(0, 0, 0, 0.80 * v),
+                        Color.fromRGBO(6, 8, 14, 0.72 * v),
+                        Color.fromRGBO(6, 8, 14, 0.46 * v),
+                        Color.fromRGBO(6, 8, 14, 0.46 * v),
+                        Color.fromRGBO(6, 8, 14, 0.78 * v),
                       ],
-                      stops: const [0, 0.3, 0.62, 1],
+                      stops: const [0, 0.28, 0.68, 1],
                     ),
                   ),
                 ),
               ),
             ),
           ),
-          // The content and its actions are one group in the work column, standing where the ticker and the composer
-          // stand: the actions right under what they act on (Claude, 2026-10-23; they were pinned to the screen's foot,
-          // far from short content, and the content took the screen's width).
+          // Centered hologram projection with paired action capsule directly underneath.
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, VSpace.md, 0, 92),
-              child: Align(
-                alignment: Alignment.bottomCenter,
+              padding: const EdgeInsets.fromLTRB(VSpace.md, VSpace.md, VSpace.md, 76),
+              child: Center(
                 child: SizedBox(
                   width: DetailView.zoneWidth(context, media: widget.media),
                   child: Opacity(
                     opacity: v,
                     child: Transform.translate(
-                      offset: Offset(0, 14 * (1 - v)),
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Flexible(child: Transform.scale(scale: 0.94 + 0.06 * v, child: widget.child)),
-                        const SizedBox(height: VSpace.sm),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [for (final a in all) _ActionButton(a)],
-                        ),
-                      ]),
+                      offset: Offset(0, 12 * (1 - v)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Transform.scale(
+                              scale: 0.95 + 0.05 * v,
+                              child: widget.child,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          // Paired directly beneath the zoomed content, centered as a cohesive ornament.
+                          VGlass(
+                            material: VMaterial.elevated,
+                            radius: VRadius.full,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                for (int i = 0; i < all.length; i++) ...[
+                                  if (i > 0) const SizedBox(width: 8),
+                                  _ActionButton(all[i]),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -140,48 +146,47 @@ class _DetailViewState extends State<DetailView> with SingleTickerProviderStateM
   }
 }
 
-/// An action: its glyph on a glass disc and its name under it. No tray behind the row.
 class _ActionButton extends StatelessWidget {
   final DetailAction a;
   const _ActionButton(this.a);
 
   @override
   Widget build(BuildContext context) {
+    final hue = a.tint ?? vHueFor(a.icon) ?? VColors.textPrimary;
     return Semantics(
       button: true,
       label: a.label,
       child: VPress(
         onTap: a.onTap,
-        child: SizedBox(
-          width: 50, // six fit the phone's column
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            ClipOval(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  alignment: Alignment.center,
-                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x33FFFFFF)),
-                  child: Icon(a.icon, size: 20, color: a.tint ?? VColors.textPrimary),
-                ),
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(a.label,
+        tooltip: a.label,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(VRadius.full),
+            color: VColors.fillCell,
+            border: Border.all(color: VColors.borderSubtle, width: 0.6),
+            boxShadow: a.tint != null ? VShadow.emissive(a.tint!, intensity: 0.4, radius: 10) : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(a.icon, size: 15, color: hue),
+              const SizedBox(width: 4),
+              Text(
+                a.label,
                 maxLines: 1,
                 softWrap: false,
-                overflow: TextOverflow.fade,
-                style: VType.caption(color: const Color(0xE6FFFFFF), weight: FontWeight.w500)
-                    .copyWith(shadows: const [Shadow(color: Color(0x99000000), blurRadius: 8)])),
-          ]),
+                overflow: TextOverflow.ellipsis,
+                style: VType.caption(color: VColors.textPrimary, weight: FontWeight.w600),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Raised content: a soft shadow under it, as if lifted toward the viewer.
 class DetailRaised extends StatelessWidget {
   final Widget child;
   final double radius;

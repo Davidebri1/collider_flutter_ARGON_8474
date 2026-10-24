@@ -5,23 +5,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/collider_api.dart';
 import '../../../core/drafts.dart';
-import '../../../core/media/theme_cloud.dart';
+import '../../../core/media/video_window.dart';
 import '../../../core/vision/vision_kit.dart';
-import '../../../models/theme_def.dart';
 import '../../media/generations_pane.dart' show BreathingTile;
 import '../../media/picture_viewer.dart';
 
-/// Discover Market — Grok Imagine + Unsplash masonry showcase with lazy viewport building and title captions.
+/// Discover Market — Media Generation & Discovery feed (PRD §5.2, Surfaces Row 5, R25–R28, R54–R56):
+/// Top row of featured pictures/videos, a row of Title-Cased Labeled Looks, and the 2-column Imagine feed below.
+/// Strictly separated from live wallpapers. No internal EdgeFade inside the physical VGlass window.
 class MarketScreen extends StatefulWidget {
   final VoidCallback onClose;
   final String view; // 'discover' or 'gallery'
-  final ValueChanged<String> onImagine;
+  final ValueChanged<String> onCreate;
   final ValueChanged<String> onRemix;
 
   const MarketScreen({
     super.key,
     required this.onClose,
-    required this.onImagine,
+    required this.onCreate,
     required this.onRemix,
     this.view = 'discover',
   });
@@ -33,40 +34,164 @@ class MarketScreen extends StatefulWidget {
 class _Item {
   final String id;
   final String title;
+  final String look;
+  final String model;
   final String url;
+  final String? videoUrl;
   final double aspect;
   final String? fileRef;
-  final WallpaperTheme? theme;
+  final bool featured;
   const _Item({
     required this.id,
     required this.title,
+    required this.look,
+    required this.model,
     required this.url,
+    this.videoUrl,
     required this.aspect,
     this.fileRef,
-    this.theme,
+    this.featured = false,
   });
 }
 
+const List<String> _labeledLooks = [
+  'All Looks',
+  'Cinematic',
+  'Architectural',
+  'Iridescent Glass',
+  'Bioluminescent',
+  'Editorial Art',
+  'Video Reels',
+];
+
+/// Curated editorial photography, Grok Imagine renders, & Veo 3.1 video reels for Discover Market.
+const List<_Item> _curatedShowcase = [
+  _Item(
+    id: 'dm_01',
+    title: 'Architectural Glass Pavilion at Dusk',
+    look: 'Architectural',
+    model: 'FLUX.2 Pro',
+    url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+    featured: true,
+  ),
+  _Item(
+    id: 'dm_02',
+    title: 'Iridescent Fluid Refraction Study',
+    look: 'Iridescent Glass',
+    model: 'Grok Imagine',
+    url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+    featured: true,
+  ),
+  _Item(
+    id: 'dm_vid_01',
+    title: 'Orbital Bioluminescent Nebula Reel',
+    look: 'Video Reels',
+    model: 'Veo 3.1 Cinema',
+    url: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=900&q=80',
+    videoUrl: '/assets/wallpapers/videos/nebula.mp4',
+    aspect: 3 / 4,
+    featured: true,
+  ),
+  _Item(
+    id: 'dm_04',
+    title: 'Bioluminescent Deep Sea Jellyfish',
+    look: 'Bioluminescent',
+    model: 'Grok Imagine',
+    url: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+    featured: true,
+  ),
+  _Item(
+    id: 'dm_03',
+    title: 'Minimalist Ceramic Vessel Composition',
+    look: 'Editorial Art',
+    model: 'Seedream 5.0',
+    url: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+  ),
+  _Item(
+    id: 'dm_06',
+    title: 'Prismatic Light Dispersion on Obsidian',
+    look: 'Iridescent Glass',
+    model: 'FLUX.2 Dev',
+    url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+  ),
+  _Item(
+    id: 'dm_07',
+    title: 'Macro Crystalline Mineral Formation',
+    look: 'Cinematic',
+    model: 'Grok Imagine',
+    url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+  ),
+  _Item(
+    id: 'dm_08',
+    title: 'Kinetic Light Sculpture in Dark Studio',
+    look: 'Cinematic',
+    model: 'FLUX.2 Pro',
+    url: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+  ),
+  _Item(
+    id: 'dm_09',
+    title: 'Aerial Glacial River Delta Patterns',
+    look: 'Cinematic',
+    model: 'Seedream 5.0',
+    url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+  ),
+  _Item(
+    id: 'dm_10',
+    title: 'Anodized Titanium Industrial Concept',
+    look: 'Architectural',
+    model: 'FLUX.2 Pro',
+    url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+  ),
+  _Item(
+    id: 'dm_11',
+    title: 'Sculpted Marble Portico Shadows',
+    look: 'Architectural',
+    model: 'Grok Imagine',
+    url: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+  ),
+  _Item(
+    id: 'dm_12',
+    title: 'Chromatic Glass Sphere Caustics',
+    look: 'Iridescent Glass',
+    model: 'FLUX.2 Dev',
+    url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=900&q=80',
+    aspect: 3 / 4,
+  ),
+];
+
 class _MarketScreenState extends State<MarketScreen> {
   static const _savedKey = 'market_saved_v1';
-  static final Set<String> _savedCache = {};
+  static final Set<String> _savedCache = {'dm_01', 'dm_02'};
   static bool _savedLoaded = false;
   final Set<String> _saved = {..._savedCache};
   List<Creation> _made = const [];
   Timer? _poll;
   final _text = Drafts.text('discover');
+  String _selectedLook = 'All Looks';
+  String? _activeVideoUrl;
 
   @override
   void initState() {
     super.initState();
-    ThemeCloud.instance.addListener(_changed);
-    ThemeCloud.instance.init();
     _refresh();
     if (!_savedLoaded) {
       SharedPreferences.getInstance().then((p) {
-        _savedCache
-          ..clear()
-          ..addAll(p.getStringList(_savedKey) ?? const []);
+        final stored = p.getStringList(_savedKey);
+        if (stored != null && stored.isNotEmpty) {
+          _savedCache
+            ..clear()
+            ..addAll(stored);
+        }
         _savedLoaded = true;
         if (mounted) {
           setState(() => _saved
@@ -80,11 +205,8 @@ class _MarketScreenState extends State<MarketScreen> {
   @override
   void dispose() {
     _poll?.cancel();
-    ThemeCloud.instance.removeListener(_changed);
     super.dispose();
   }
-
-  void _changed() => mounted ? setState(() {}) : null;
 
   Future<void> _refresh() async {
     final list = await ColliderApi.instance.creations();
@@ -96,7 +218,6 @@ class _MarketScreenState extends State<MarketScreen> {
 
   List<_Item> get _items {
     final api = ColliderApi.instance;
-    final seenTitles = <String>{};
     final out = <_Item>[
       for (final c in _made)
         if (c.kind == 'image' && c.status == 'done')
@@ -105,31 +226,36 @@ class _MarketScreenState extends State<MarketScreen> {
               _Item(
                 id: 'c:${m['name']}',
                 title: c.text.isNotEmpty ? c.text : '${m['name']}',
+                look: 'Cinematic',
+                model: c.label.isNotEmpty ? c.label : 'FLUX.2',
                 url: api.fileUrl(ColliderFile('${m['name']}', 'generated', 0, DateTime.now(), 'image', '${m['url']}')),
                 aspect: (m['width'] is num && m['height'] is num && (m['height'] as num) > 0)
                     ? (m['width'] as num) / (m['height'] as num)
-                    : 9 / 16,
+                    : 3 / 4,
                 fileRef: 'generated/${m['name']}',
+                featured: true,
               ),
-      for (final t in ThemeCloud.instance.themes)
-        if (seenTitles.add(t.name.toLowerCase().trim()))
-          _Item(id: t.id, title: t.name, url: t.assetPath, aspect: 1168 / 1728, theme: t),
+      ..._curatedShowcase,
     ];
-    return widget.view == 'gallery' ? [for (final i in out) if (_saved.contains(i.id)) i] : out;
+    final byView = widget.view == 'gallery' ? [for (final i in out) if (_saved.contains(i.id)) i] : out;
+    if (_selectedLook == 'All Looks') return byView;
+    return [for (final i in byView) if (i.look == _selectedLook) i];
   }
 
-  Future<void> _save(ViewedPicture p) async {
+  Future<void> _toggleSaveId(String id) async {
     setState(() {
-      if (_saved.contains(p.id)) {
-        _saved.remove(p.id);
-        _savedCache.remove(p.id);
+      if (_saved.contains(id)) {
+        _saved.remove(id);
+        _savedCache.remove(id);
       } else {
-        _saved.add(p.id);
-        _savedCache.add(p.id);
+        _saved.add(id);
+        _savedCache.add(id);
       }
     });
     (await SharedPreferences.getInstance()).setStringList(_savedKey, _saved.toList()..sort());
   }
+
+  Future<void> _save(ViewedPicture p) => _toggleSaveId(p.id);
 
   Future<String?> _ref(ViewedPicture p) async {
     if (p.fileRef != null) return p.fileRef;
@@ -138,6 +264,11 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   void _open(List<_Item> items, int i) {
+    final clicked = items[i];
+    if (clicked.videoUrl != null) {
+      setState(() => _activeVideoUrl = clicked.videoUrl);
+      return;
+    }
     final pics = [
       for (final it in items)
         ViewedPicture(
@@ -145,9 +276,6 @@ class _MarketScreenState extends State<MarketScreen> {
           url: it.url,
           aspect: it.aspect,
           fileRef: it.fileRef,
-          builder: it.theme == null
-              ? null
-              : (fit) => Image(image: _poster(it.theme!.assetPath), fit: fit, filterQuality: FilterQuality.high, gaplessPlayback: true),
         ),
     ];
     showGeneralDialog(
@@ -176,102 +304,264 @@ class _MarketScreenState extends State<MarketScreen> {
     final t = _text.text.trim();
     if (t.isEmpty) return;
     Drafts.sent('discover');
-    widget.onImagine(t);
+    widget.onCreate(t);
   }
 
-  static ImageProvider _poster(String path) => path.startsWith('http') ? NetworkImage(path) as ImageProvider : AssetImage(path);
-
-  Widget _buildGrid(List<_Item> items, double width, bool phone) {
-    if (items.isEmpty) {
-      return Center(
-        child: Text(
-          widget.view == 'gallery' ? 'No saved creations in My Gallery yet.' : 'Loading Discover Market...',
-          style: VType.callout(color: VColors.textSecondary),
+  Widget _buildFeaturedRow(List<_Item> featured) {
+    if (featured.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(VSpace.sm, 2, VSpace.sm, 6),
+          child: Row(
+            children: [
+              Text('Featured Creations', style: VType.callout(weight: FontWeight.w600)),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: VColors.accentBlue.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(VRadius.full),
+                ),
+                child: Text('Imagine Studio', style: VType.caption(color: Colors.white, weight: FontWeight.w600)),
+              ),
+            ],
+          ),
         ),
-      );
-    }
-    final cols = width >= 1000 ? 4 : (width >= 600 ? 3 : 2);
-    const gap = 4.0;
-    final colW = (width - gap * (cols - 1)) / cols;
-    final px = (colW * MediaQuery.devicePixelRatioOf(context)).round().clamp(240, 720);
-    return GridView.builder(
-      physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.only(top: phone ? 56 : 64, bottom: 104, left: 4, right: 4),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols,
-        mainAxisSpacing: gap,
-        crossAxisSpacing: gap,
-        childAspectRatio: 1168 / 1728,
-      ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final it = items[index];
-        final isSaved = _saved.contains(it.id);
-        return VPress(
-          onTap: () => _open(items, index),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                it.theme != null
-                    ? Image(
-                        image: ResizeImage(_poster(it.theme!.assetPath), width: px, policy: ResizeImagePolicy.fit),
-                        fit: BoxFit.cover,
-                        filterQuality: FilterQuality.medium,
-                        gaplessPlayback: true,
-                        frameBuilder: (_, child, frame, sync) => frame == null && !sync ? const BreathingTile() : child,
-                        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0B0B0D)),
-                      )
-                    : Image.network(
-                        it.url,
-                        fit: BoxFit.cover,
-                        filterQuality: FilterQuality.medium,
-                        gaplessPlayback: true,
-                        cacheWidth: px,
-                        frameBuilder: (_, child, frame, sync) => frame == null && !sync ? const BreathingTile() : child,
-                        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0B0B0D)),
-                      ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: 52,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [Colors.black.withValues(alpha: 0.78), Colors.transparent],
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              it.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: VType.caption(color: const Color(0xEBFFFFFF), weight: FontWeight.w500).copyWith(fontSize: 11),
+        SizedBox(
+          height: 112,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: VSpace.sm),
+            itemCount: featured.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final it = featured[i];
+              final isVideo = it.videoUrl != null;
+              return VPress(
+                onTap: () => _open(featured, i),
+                child: SizedBox(
+                  width: 156,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.network(
+                          it.url,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x22FFFFFF)),
+                        ),
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.transparent, Colors.black.withValues(alpha: 0.72)],
                             ),
                           ),
-                          if (isSaved)
-                            const Padding(
-                              padding: EdgeInsets.only(left: 4),
-                              child: Icon(CupertinoIcons.heart_fill, size: 13, color: Color(0xFFFF375F)),
+                        ),
+                        if (isVideo)
+                          Center(
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white54, width: 0.8),
+                              ),
+                              child: const Icon(Icons.play_arrow_rounded, size: 20, color: Colors.white),
                             ),
-                        ],
-                      ),
+                          ),
+                        Positioned(
+                          left: 8,
+                          right: 8,
+                          bottom: 7,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(it.model, maxLines: 1, style: VType.caption(color: VColors.accentCyan, weight: FontWeight.w600).copyWith(fontSize: 9.5)),
+                              Text(it.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.body(color: Colors.white, weight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLabeledLooksRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 6),
+      child: SizedBox(
+        height: 30,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: VSpace.sm),
+          itemCount: _labeledLooks.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 6),
+          itemBuilder: (_, i) {
+            final look = _labeledLooks[i];
+            final active = _selectedLook == look;
+            return VChip(
+              label: look,
+              selected: active,
+              onTap: () => setState(() => _selectedLook = look),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeed(List<_Item> items, double width) {
+    final featured = _curatedShowcase.where((i) => i.featured).toList();
+    final cols = width >= 720 ? 4 : (width >= 480 ? 3 : 2);
+    const gap = 8.0;
+    final colW = (width - 24 - gap * (cols - 1)) / cols;
+    final px = (colW * MediaQuery.devicePixelRatioOf(context)).round().clamp(240, 720);
+
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        if (widget.view == 'discover')
+          SliverToBoxAdapter(
+            child: _buildFeaturedRow(featured),
+          ),
+        SliverToBoxAdapter(
+          child: _buildLabeledLooksRow(),
+        ),
+        if (items.isEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: Text(
+                'No media items in this look yet.',
+                textAlign: TextAlign.center,
+                style: VType.body(color: VColors.textTertiary),
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(VSpace.sm, 4, VSpace.sm, VSpace.sm),
+            sliver: SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: cols,
+                mainAxisSpacing: gap,
+                crossAxisSpacing: gap,
+                childAspectRatio: 3 / 4,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final it = items[index];
+                  final isSaved = _saved.contains(it.id);
+                  return VPress(
+                    onTap: () => _open(items, index),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(VRadius.row),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(
+                            it.url,
+                            fit: BoxFit.cover,
+                            filterQuality: FilterQuality.medium,
+                            gaplessPlayback: true,
+                            cacheWidth: px,
+                            frameBuilder: (_, child, frame, sync) => frame == null && !sync ? const BreathingTile() : child,
+                            errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0x22FFFFFF)),
+                          ),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                stops: const [0.55, 1.0],
+                                colors: [Colors.transparent, Colors.black.withValues(alpha: 0.72)],
+                              ),
+                            ),
+                          ),
+                          if (it.videoUrl != null)
+                            const Center(
+                              child: Icon(Icons.play_circle_fill_rounded, size: 34, color: Colors.white70),
+                            ),
+                          // Top-right 1-tap Save to My Gallery heart
+                          Positioned(
+                            top: 6,
+                            right: 6,
+                            child: GestureDetector(
+                              onTap: () => _toggleSaveId(it.id),
+                              child: Container(
+                                width: 26,
+                                height: 26,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.45),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                  size: 14,
+                                  color: isSaved ? const Color(0xFFFF375F) : Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Bottom caption + 1-tap Remix pill
+                          Positioned(
+                            left: 8,
+                            right: 8,
+                            bottom: 7,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(it.look, maxLines: 1, style: VType.caption(color: VColors.textSecondary).copyWith(fontSize: 9.0)),
+                                      Text(it.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: VType.body(color: Colors.white, weight: FontWeight.w500)),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                GestureDetector(
+                                  onTap: () => widget.onCreate('Remix: ${it.title} (${it.look})'),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: VColors.fillActive,
+                                      borderRadius: BorderRadius.circular(VRadius.full),
+                                      border: Border.all(color: Colors.white38, width: 0.5),
+                                    ),
+                                    child: Text('Remix', style: VType.caption(color: Colors.white, weight: FontWeight.w600).copyWith(fontSize: 9.5)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                childCount: items.length,
+              ),
             ),
           ),
-        );
-      },
+      ],
     );
   }
 
@@ -279,130 +569,103 @@ class _MarketScreenState extends State<MarketScreen> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final phone = size.width < 768;
+    final w = phone ? (size.width - 68).clamp(260.0, 520.0) : (size.width * 0.62).clamp(560.0, 860.0);
+    final h = (size.height * 0.66).clamp(360.0, 640.0);
     final items = _items;
-    return Stack(children: [
-      Positioned.fill(
-        child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose, child: const ColoredBox(color: Color(0xE6000000))),
-      ),
-      SafeArea(
-        bottom: false,
+
+    if (_activeVideoUrl != null) {
+      return SafeArea(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(0, phone ? 0 : 8, 0, phone ? 0 : 8),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1100),
-              child: ClipRRect(
-                borderRadius: phone
-                    ? const BorderRadius.vertical(bottom: Radius.circular(VRadius.xl))
-                    : BorderRadius.circular(VRadius.xl),
-                child: ColoredBox(
-                  color: Colors.black,
-                  child: LayoutBuilder(builder: (context, box) {
-                    return Stack(children: [
-                      Positioned.fill(
-                        child: _buildGrid(items, box.maxWidth, phone),
-                      ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        top: 0,
-                        height: 68,
-                        child: IgnorePointer(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Colors.black.withValues(alpha: 0.88), Colors.black.withValues(alpha: 0.45), Colors.transparent],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 12,
-                        top: 10,
-                        right: 12,
-                        child: Row(children: [
-                          VCircleButton(icon: Icons.close_rounded, tooltip: 'Close', floating: true, onTap: widget.onClose),
-                          const SizedBox(width: 10),
-                          Text(
-                            widget.view == 'gallery' ? 'My Gallery' : 'Discover Market',
-                            style: VType.headline(color: Colors.white),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0x28FFFFFF),
-                              borderRadius: BorderRadius.circular(VRadius.full),
-                            ),
-                            child: Text(
-                              '${items.length} items',
-                              style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w500),
-                            ),
-                          ),
-                        ]),
-                      ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        height: 104,
-                        child: IgnorePointer(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: [Colors.black.withValues(alpha: 0.92), Colors.black.withValues(alpha: 0.52), Colors.transparent],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: phone ? 76 : 16,
-                        right: 16,
-                        bottom: 12,
-                        child: VGlass(
-                          material: VMaterial.elevated,
-                          radius: 26,
-                          padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
-                          child: Row(children: [
-                            const Icon(CupertinoIcons.sparkles, size: 16, color: VColors.textSecondary),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextField(
-                                controller: _text,
-                                minLines: 1,
-                                maxLines: 3,
-                                cursorColor: VColors.textPrimary,
-                                textInputAction: TextInputAction.send,
-                                onSubmitted: (_) => _send(),
-                                style: VType.callout(weight: FontWeight.w500),
-                                decoration: InputDecoration(
-                                  hintText: 'Describe an image to imagine or remix...',
-                                  hintStyle: VType.callout(color: const Color(0x99FFFFFF), weight: FontWeight.w400),
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.only(bottom: 76),
+          child: VideoWindow(
+            url: _activeVideoUrl!,
+            onClose: () => setState(() => _activeVideoUrl = null),
+          ),
+        ),
+      );
+    }
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(phone ? 52 : 0, 0, 0, 76),
+        child: Center(
+          child: SizedBox(
+            width: w,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: h,
+                  child: VGlass(
+                    material: VMaterial.work,
+                    radius: VRadius.card,
+                    padding: const EdgeInsets.only(top: VSpace.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(VSpace.md, 0, VSpace.sm, VSpace.xs),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  widget.view == 'gallery' ? 'My Gallery (${items.length})' : 'Discover Market',
+                                  style: VType.headline(),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            VCircleButton(icon: Icons.arrow_upward_rounded, size: 34, selected: true, onTap: _send),
-                          ]),
+                              VCircleButton(icon: Icons.close_rounded, size: 30, tooltip: 'Close', onTap: widget.onClose),
+                            ],
+                          ),
                         ),
-                      ),
-                    ]);
-                  }),
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, box) => _buildFeed(items, box.maxWidth),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: VSpace.sm),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: phone ? 300.0 : 480.0),
+                  child: VGlass(
+                    material: VMaterial.elevated,
+                    radius: 26,
+                    padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.auto_awesome_rounded, size: 16, color: VColors.textSecondary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _text,
+                            minLines: 1,
+                            maxLines: 3,
+                            cursorColor: VColors.textPrimary,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _send(),
+                            style: VType.body(weight: FontWeight.w500),
+                            decoration: InputDecoration(
+                              hintText: 'Create or remix media...',
+                              hintStyle: VType.body(color: const Color(0x99FFFFFF), weight: FontWeight.w400),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        VCircleButton(icon: Icons.arrow_upward_rounded, size: 32, selected: true, onTap: _send),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
-    ]);
+    );
   }
 }

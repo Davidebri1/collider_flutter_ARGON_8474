@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/vision/vision_kit.dart';
 import 'core/api/collider_api.dart';
@@ -58,6 +59,7 @@ Future<void> main() async {
   ThemeBlurCache.instance.prewarmThemes(WallpaperCatalog.freeThemes);
   ConsensusWebView.preload();
   SmartGenStore.instance.load();
+  await AccountStore.load();
   await Drafts.load();
   runApp(const ColliderApp());
 }
@@ -70,6 +72,7 @@ class ColliderApp extends StatelessWidget {
     return MaterialApp(
       title: 'Collider',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const MaterialScrollBehavior().copyWith(scrollbars: false),
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: const Color(0xFF07080B),
         textTheme: ThemeData.dark().textTheme.apply(fontFamily: GoogleFonts.instrumentSans().fontFamily),
@@ -111,11 +114,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   int _mediaRefresh = 0;
 
   String? _activeDrawer;
+  String? _activeOverlay;
+  final Set<String> _mountedSurfaces = {};
   ModelDef? _localHistoryModel;
   TickerMessage? _zoomedMessage;
   ModelDef? _zoomedModelDef;
   final Set<String> _expandedModelIds = {};
-  bool _isComposerSummoned = false;
+  bool _isComposerSummoned = true;
   bool _isMobileSideNavOpen = false;
   String _currentPrompt = '';
 
@@ -173,11 +178,19 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     if (Uri.base.queryParameters['drawer'] == 'premium' ||
         (Uri.base.queryParameters['drawer'] == 'market' && Uri.base.queryParameters['sub'] == 'themes')) {
       _activeDrawer = 'premium';
+      _mountedSurfaces.add('premium');
     } else if (Uri.base.queryParameters['drawer'] == 'music') {
       _activeDrawer = 'files';
       _filesPlace = 'music';
+      _mountedSurfaces.add('files');
     } else if (Uri.base.queryParameters['drawer'] != null) {
-      _activeDrawer = Uri.base.queryParameters['drawer'];
+      final d = Uri.base.queryParameters['drawer']!;
+      if (const {'apps', 'settings', 'history', 'upgrade', 'skills'}.contains(d)) {
+        _activeOverlay = d;
+      } else {
+        _activeDrawer = d;
+        _mountedSurfaces.add(d);
+      }
     }
     if (Uri.base.queryParameters['composer'] == '1') _isComposerSummoned = true;
     if (Uri.base.queryParameters['rail'] == '1') _isMobileSideNavOpen = true;
@@ -215,21 +228,60 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     return '${d.inDays}d ago';
   }
 
+  static const _kThemeId = 'collider_theme_id_v1';
+  static const _kSelectedModels = 'collider_selected_models_v1';
+  static const _kActiveCat = 'collider_active_cat_v1';
+  static const _kAutosave = 'collider_autosave_v1';
+
+  Future<void> _persistState() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kThemeId, _currentTheme.id);
+    await p.setStringList(_kSelectedModels, _selectedModelIds);
+    await p.setString(_kActiveCat, _activeCategory.name);
+    await p.setBool(_kAutosave, _autosave);
+  }
+
   Future<void> _boot() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedThemeId = prefs.getString(_kThemeId);
+    if (savedThemeId != null) {
+      final found = WallpaperCatalog.allThemes.where((t) => t.id == savedThemeId).firstOrNull;
+      if (found != null && mounted) {
+        setState(() {
+          _currentTheme = found;
+          _savedThemeBeforePreview = found;
+        });
+      }
+    }
+    final savedCat = prefs.getString(_kActiveCat);
+    if (savedCat != null) {
+      final cat = ModelCategory.values.where((c) => c.name == savedCat).firstOrNull;
+      if (cat != null && mounted) setState(() => _activeCategory = cat);
+    }
+    final savedAutosave = prefs.getBool(_kAutosave);
+    if (savedAutosave != null && mounted) setState(() => _autosave = savedAutosave);
+
     final ok = await ColliderApi.instance.loadRoster();
     if (!mounted || !ok) return;
     ColliderApi.instance.files();
     SmartGenStore.instance.syncAutonomousCards();
+    final savedModels = prefs.getStringList(_kSelectedModels);
     final seen = <String>{};
     final live = <String>[
       for (final m in ModelRoster.allModels.where((m) => !m.isMedia))
         if (seen.add(m.desc)) m.id,
     ];
     setState(() {
-      _selectedModelIds
-        ..clear()
-        ..addAll(live.take(6))
-        ..addAll(ModelRoster.forCategory(ModelCategory.image).take(1).map((m) => m.id));
+      if (savedModels != null && savedModels.isNotEmpty) {
+        _selectedModelIds
+          ..clear()
+          ..addAll(savedModels);
+      } else {
+        _selectedModelIds
+          ..clear()
+          ..addAll(live.take(5))
+          ..addAll(ModelRoster.forCategory(ModelCategory.image).take(1).map((m) => m.id));
+      }
     });
     await _reloadHistory(restoreLatest: true);
     final qp = Uri.base.queryParameters;
@@ -270,6 +322,17 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     ];
   }
 
+  static bool _isTrivialPrompt(String p) {
+    final t = p.trim().toLowerCase();
+    return t.isEmpty ||
+        t == 'ok then' ||
+        t == 'hi' ||
+        t == 'hello' ||
+        t == 'test' ||
+        t.contains('what model are you') ||
+        t.contains('2+2');
+  }
+
   Future<void> _reloadHistory({bool restoreLatest = false, bool forceRefresh = false}) async {
     final hist = await ColliderApi.instance.history(forceRefresh: forceRefresh);
     if (!mounted) return;
@@ -277,9 +340,13 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       for (final j in hist) {
         _jobsById[j.id] = j;
       }
-      _globalHistorySessions = [for (final j in hist) _sessionFromJob(j)];
+      _globalHistorySessions = [
+        for (final j in hist)
+          if (!_isTrivialPrompt(j.prompt)) _sessionFromJob(j),
+      ];
       final local = <String, List<ConversationHistorySession>>{};
       for (final j in hist) {
+        if (_isTrivialPrompt(j.prompt)) continue;
         j.results.forEach((mid, r) {
           if (r.status != 'done') return;
           (local[mid] ??= []).add(ConversationHistorySession(
@@ -294,7 +361,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         });
       }
       _localHistorySessions = local;
-      if (restoreLatest && hist.isNotEmpty && _tickerItems.isEmpty) _applyJob(hist.first, restored: true);
+      if (restoreLatest && hist.isNotEmpty && _tickerItems.isEmpty) {
+        final meaningful = hist.where((j) => !_isTrivialPrompt(j.prompt)).firstOrNull;
+        if (meaningful != null) _applyJob(meaningful, restored: true);
+      }
     });
   }
 
@@ -327,8 +397,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       final def = ModelRoster.byId(mid);
       if (def == null) return;
       final prev = _tickerItems.where((t) => t.modelDef.id == mid).toList();
-      final noLine = r.status == 'done' && r.line.isEmpty && !_lineFailed.contains(j.id);
-      final waiting = r.status == 'pending' || noLine;
+      final waiting = r.status == 'pending';
       final serverConv = _messagesFromResult(j, mid, r);
       final usePrevConv = !restored && prev.isNotEmpty && prev.first.conversation.length > serverConv.length;
       final conv = usePrevConv
@@ -338,10 +407,15 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 TickerMessage(id: '${j.id}_draft_$mid', sender: 'model', text: r.text, timestamp: j.created),
             ]
           : serverConv;
+      final summaryText = r.status == 'error'
+          ? ''
+          : (r.line.isNotEmpty
+              ? r.line
+              : (r.essence.isNotEmpty ? _plain(r.essence) : _firstSentence(r.text)));
       items.add(TickerItem(
         modelDef: def,
         relativeTime: restored ? _ago(j.created) : 'just now',
-        summary: r.status == 'error' ? '' : (r.line.isNotEmpty ? r.line : _plain(r.essence)),
+        summary: summaryText,
         isStreaming: waiting,
         isIsolated: prev.isNotEmpty && prev.first.isIsolated && !restored,
         conversation: conv,
@@ -362,7 +436,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       ];
     }
     if (restored) {
-      // Only mark models that actually answered as active/lit; unanswered models are dimmed below
       final answeredIds = j.results.entries
           .where((e) => e.value.status == 'done' && e.value.text.isNotEmpty && ModelRoster.byId(e.key) != null)
           .map((e) => e.key)
@@ -377,35 +450,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     }
     final c = j.consensus;
     _isConsensusGenerating = !j.done;
-    _consensusRatio = c.status == 'done' && c.score.isNotEmpty ? c.score : 'Consensus';
-    _consensusSummary = c.line.isNotEmpty || !_lineFailed.contains(j.id) ? c.line : c.summary;
-    if (j.done && _needsLines(j)) _ensureLines(j);
+    _consensusRatio = c.score.isNotEmpty ? c.score : 'Consensus';
+    _consensusSummary = c.line.isNotEmpty ? c.line : c.summary;
   }
 
-  /// 2-line summary budget (~115 chars on desktop, ~76 chars on mobile).
-  int get _lineChars => VOneLine.charsFor((MediaQuery.of(context).size.width < 768 ? 260.0 : 480.0) - 42, maxLines: 2);
-
-  final Set<String> _lineAsked = {};
-  final Set<String> _lineFailed = {};
-
-  bool _needsLines(JobState j) {
-    final n = _lineChars;
-    return j.results.values.any((r) => r.status == 'done' && r.text.isNotEmpty && (r.line.isEmpty || r.line.length > n + 6)) ||
-        (j.consensus.status == 'done' && (j.consensus.line.isEmpty || j.consensus.line.length > n + 6));
-  }
-
-  Future<void> _ensureLines(JobState j) async {
-    if (!_lineAsked.add(j.id)) return;
-    final fresh = await ColliderApi.instance.lines(j.id, _lineChars);
-    if (!mounted) return;
-    setState(() {
-      if (fresh == null) {
-        _lineFailed.add(j.id);
-      } else {
-        _jobsById[j.id] = fresh;
-      }
-      if (_currentJobId == j.id) _applyJob(fresh ?? j, restored: true);
-    });
+  static String _firstSentence(String s) {
+    final cleaned = _plain(s);
+    if (cleaned.isEmpty) return '';
+    return cleaned.split(RegExp(r'(?<=[.!?])\s+')).first.trim();
   }
 
   void _initializeHistorySessions() {
@@ -415,14 +467,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   void _initializeBrowserTabs() {
     _browserTabs = [
-      BrowserTab(id: 'user_default', title: 'Search', url: 'https://www.google.com/', isUserControlling: true),
+      BrowserTab(id: 'user_default', title: 'Search', url: 'https://www.google.com/?igu=1', isUserControlling: true),
     ];
   }
 
   static String _plain(String s) => s.replaceAll(RegExp(r'\*\*|__|`'), '').replaceFirst(RegExp(r'^\s*(#+|[-*>])\s+'), '').trim();
 
+  static const _kLightweightOverlays = {'apps', 'settings', 'history', 'upgrade', 'skills'};
+
   void _closeAllPanes() {
     _activeDrawer = null;
+    _activeOverlay = null;
+    _browserOpen = false;
     _localHistoryModel = null;
     _zoomedMessage = null;
     _zoomedModelDef = null;
@@ -434,6 +490,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   void _proceedSwitchSurface(String? targetDrawer) {
+    if (targetDrawer != null && _kLightweightOverlays.contains(targetDrawer)) {
+      setState(() {
+        _activeOverlay = (_activeOverlay == targetDrawer) ? null : targetDrawer;
+      });
+      return;
+    }
     setState(() {
       if ((_activeDrawer == 'themes' || _activeDrawer == 'premium') &&
           targetDrawer != 'themes' &&
@@ -443,6 +505,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
       }
       _closeAllPanes();
       _activeDrawer = targetDrawer;
+      if (targetDrawer != null) _mountedSurfaces.add(targetDrawer);
       _isComposerSummoned = (targetDrawer == null);
       if (targetDrawer == 'themes' || targetDrawer == 'premium') {
         if (!_locked(_currentTheme)) {
@@ -453,6 +516,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   void _openDrawer(String drawer) {
+    if (_kLightweightOverlays.contains(drawer)) {
+      setState(() {
+        _activeOverlay = (_activeOverlay == drawer) ? null : drawer;
+      });
+      return;
+    }
     if (drawer == 'files') _filesPlace = 'home';
     _requestSwitchSurface(drawer);
   }
@@ -629,7 +698,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         model: modelId,
         mode: _mode,
         attachments: files,
-        line: _lineChars,
         jobId: activeJobId,
         messages: [for (final m in conv) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text}],
       )) {
@@ -756,7 +824,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
         autosave: _autosave,
         incognito: _incognito,
         attachments: files,
-        line: _lineChars,
         sessionId: continuingSessionId,
       );
       await for (final j in ColliderApi.instance.watch(id)) {
@@ -828,38 +895,17 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   }
 
   bool _browserOpen = false;
+  bool _browserEverOpened = false;
+  String _browserInitialTabId = 'user_default';
 
   List<Map<String, dynamic>> get _currentSources => _jobsById[_currentJobId]?.sources ?? const [];
 
   void _openBrowserForTab(String tabId) {
     setState(() {
-      _activeDrawer = null;
+      _activeOverlay = null;
+      _browserInitialTabId = tabId;
+      _browserEverOpened = true;
       _browserOpen = true;
-    });
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: VOverlay.scrim,
-      builder: (ctx) {
-        return InAppBrowserSheet(
-          initialTabId: tabId,
-          tabs: _browserTabs,
-          incognito: _incognito,
-          onTabUpdated: (updated) {
-            setState(() {
-              final idx = _browserTabs.indexWhere((t) => t.id == updated.id);
-              if (idx != -1) _browserTabs[idx] = updated;
-            });
-          },
-          onNewUserTab: (newTab) {
-            setState(() {
-              _browserTabs.add(newTab);
-            });
-          },
-        );
-      },
-    ).then((_) {
-      if (mounted) setState(() => _browserOpen = false);
     });
   }
 
@@ -868,7 +914,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   Widget _buildSideNav({required bool isMobile}) {
     final surface = _currentActiveSurface;
     final String? railKey = switch (surface) {
-      ActiveWorkSurface.chat => _activeDrawer == 'history' ? 'history' : (_isMobileSideNavOpen ? _chatSection : null),
+      ActiveWorkSurface.chat => _activeOverlay == 'history' ? 'history' : (_isMobileSideNavOpen ? _chatSection : null),
       ActiveWorkSurface.smartgen => _smartGenView,
       ActiveWorkSurface.market => _marketCategory,
       ActiveWorkSurface.themes => _activeDrawer == 'premium' ? 'premium' : 'gallery',
@@ -885,7 +931,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SideNavRail(
           surface: surface,
@@ -1001,34 +1047,53 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     );
   }
 
-  bool _isPillActive(TickerItem it) => _selectedModelIds.contains(it.modelDef.id);
+  /// Selects a model, or removes it (one stays selected; nine at most), and persists selection.
+  void _toggleModel(String id) {
+    setState(() {
+      if (_selectedModelIds.contains(id)) {
+        if (_selectedModelIds.length > 1) _selectedModelIds.remove(id);
+        _expandedModelIds.remove(id);
+      } else if (_selectedModelIds.length < 9) {
+        _selectedModelIds.add(id);
+      }
+    });
+    _persistState();
+  }
 
-  /// The arrow under the model rows is open: the models not selected show, and a tap selects or removes a model.
-  bool _choosing = false;
+  static String _categoryLabel(ModelCategory c) => switch (c) {
+        ModelCategory.general => 'General',
+        ModelCategory.image => 'Image',
+        ModelCategory.video => 'Video',
+        ModelCategory.audio => 'Music',
+        ModelCategory.coding => 'Coding',
+      };
 
-  /// Selects a model, or removes it (one stays selected; nine at most).
-  void _toggleModel(String id) => setState(() {
-        if (_selectedModelIds.contains(id)) {
-          if (_selectedModelIds.length > 1) _selectedModelIds.remove(id);
-          _expandedModelIds.remove(id);
-        } else if (_selectedModelIds.length < 9) {
-          _selectedModelIds.add(id);
-        }
-      });
+  void _cycleCategory(int delta) {
+    const cats = ModelCategory.values;
+    final idx = cats.indexOf(_activeCategory);
+    final next = cats[(idx + delta + cats.length) % cats.length];
+    setState(() {
+      _activeCategory = next;
+      _expandedModelIds.clear();
+    });
+    _persistState();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Include all models in the current category that have a response or are selected,
-    // sorted with ACTIVE models at the top (lit) and INACTIVE models below (dimmed).
-    // (1) every selected model has a row, whether or not it has spoken yet; (3) the others wait under the arrow.
     TickerItem rowFor(ModelDef d) =>
-        _tickerItems.where((t) => t.modelDef.id == d.id).firstOrNull ?? TickerItem(modelDef: d, relativeTime: '', summary: '', conversation: const []);
+        _tickerItems.where((t) => t.modelDef.id == d.id).firstOrNull ??
+        TickerItem(modelDef: d, relativeTime: '', summary: d.desc, conversation: const []);
     final roster = ModelRoster.forCategory(_activeCategory);
-    final activePills = [
+    var activePills = [
       for (final id in _selectedModelIds)
         if (roster.where((m) => m.id == id).firstOrNull case final d?) rowFor(d),
     ];
-    final idlePills = [for (final m in roster) if (!_selectedModelIds.contains(m.id)) rowFor(m)];
+    if (activePills.isEmpty && roster.isNotEmpty) {
+      activePills = [rowFor(roster.first)];
+    }
+    final activeIdsInRoster = {for (final p in activePills) p.modelDef.id};
+    final idlePills = [for (final m in roster) if (!activeIdsInRoster.contains(m.id)) rowFor(m)];
 
     final media = _activeCategory == ModelCategory.image;
     final isMobile = MediaQuery.of(context).size.width < 768;
@@ -1057,11 +1122,49 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             onOpen: () => _openTextAsDocument(openItem.modelDef.label, _conversationText(openItem), openItem.modelDef.label),
           );
 
-    // The ticker's column: the consensus, a hairline, the selected models; under the arrow, the rest (David's diagram).
+    // Category swipe header inside Ticker (PRD Rev 4 R08, R14: < General >, < Image >, < Video >, < Music >, < Coding >)
+    final Widget categoryHeader = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragEnd: (d) {
+        final v = d.primaryVelocity ?? 0;
+        if (v.abs() > 100) _cycleCategory(v < 0 ? 1 : -1);
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+        child: Row(
+          children: [
+            VCircleButton(
+              icon: Icons.chevron_left_rounded,
+              size: 26,
+              tooltip: 'Previous Category',
+              onTap: () => _cycleCategory(-1),
+            ),
+            Expanded(
+              child: Center(
+                child: Text(
+                  _categoryLabel(_activeCategory),
+                  style: VType.callout(weight: FontWeight.w600),
+                ),
+              ),
+            ),
+            VCircleButton(
+              icon: Icons.chevron_right_rounded,
+              size: 26,
+              tooltip: 'Next Category',
+              onTap: () => _cycleCategory(1),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // The ticker's column: category header, consensus, hairline, active models (pinned at top),
+    // and unselected models dimmed in place below retaining their 2-line 11pt summary (no EdgeFade inside glass!).
     final Widget rows = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        categoryHeader,
         if (_tickerItems.isNotEmpty) ...[
           ConsensusRow(
             agreementRatio: _consensusRatio,
@@ -1072,27 +1175,31 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           const TickerDivider(),
         ],
         Flexible(
-          child: EdgeFade(
-            fadeHeight: 14,
-            focus: FadeFocus.top,
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final p in activePills)
-                    ModelPill(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final p in activePills)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: ModelPill(
                       key: p.modelDef.id == openId ? _openKey : ValueKey('on-${p.modelDef.id}'),
                       item: p,
                       isActive: true,
-                      isExpanded: !_choosing && p.modelDef.id == openId,
+                      isExpanded: p.modelDef.id == openId,
                       compact: openItem != null,
-                      onToggleExpand: () => _choosing ? _toggleModel(p.modelDef.id) : _onTogglePill(p.modelDef.id),
+                      onToggleExpand: () => _onTogglePill(p.modelDef.id),
+                      onDeactivate: () => _toggleModel(p.modelDef.id),
                     ),
-                  if (_choosing)
-                    for (final p in idlePills)
-                      ModelPill(
+                  ),
+                if (idlePills.isNotEmpty) ...[
+                  const TickerDivider(),
+                  for (final p in idlePills)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: ModelPill(
                         key: ValueKey('off-${p.modelDef.id}'),
                         item: p,
                         isActive: false,
@@ -1100,33 +1207,19 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                         compact: openItem != null,
                         onToggleExpand: () => _toggleModel(p.modelDef.id),
                       ),
+                    ),
                 ],
-              ),
+              ],
             ),
           ),
         ),
-        if (idlePills.isNotEmpty || _choosing)
-          VPress(
-            onTap: () => setState(() => _choosing = !_choosing),
-            child: SizedBox(
-              height: 28,
-              child: Center(
-                child: AnimatedRotation(
-                  turns: _choosing ? 0.5 : 0,
-                  duration: VMotion.base,
-                  curve: Curves.easeOutCubic,
-                  child: const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: VColors.textSecondary),
-                ),
-              ),
-            ),
-          ),
       ],
     );
 
     if (ThemeBlurCache.instance.activeAssetPath != _currentTheme.assetPath) {
       ThemeBlurCache.instance.setActiveTheme(_currentTheme);
     }
-    final desktopSurfaceLeft = isMobile ? 0.0 : (_isMobileSideNavOpen ? 340.0 : 0.0);
+    final desktopSurfaceLeft = isMobile ? 0.0 : (_isMobileSideNavOpen ? 240.0 : 0.0);
 
     return Scaffold(
       body: Stack(
@@ -1151,114 +1244,136 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           // ================= PLANE 1: RESTING WORKSPACE =================
           Positioned.fill(
-            bottom: 78,
+            bottom: 72,
             child: Builder(builder: (context) {
-              final resting = !_browserOpen &&
+              // R60: Full-view takeovers hide & pause the active layer; lightweight overlays (apps, settings, history)
+              // are strictly exempt from hiding the underlying layer, only pausing it while open.
+              final restingVisible = !_browserOpen &&
                   !(isMobile && _isMobileSideNavOpen) &&
                   !const {
                     'premium',
                     'themes',
-                    'apps',
-                    'settings',
                     'smartgen',
                     'market',
                     'files',
                     'consensus',
-                    'upgrade',
                     'documents',
                   }.contains(_activeDrawer);
+              final restingEnabled = restingVisible && _activeOverlay == null && _localHistoryModel == null && _zoomedMessage == null;
+              final windowMaxWidth = sideBySide
+                  ? (isMobile ? screenW - 20 : (screenW - 260).clamp(480.0, 880.0))
+                  : isMobile
+                      ? (media ? 320.0 : 284.0)
+                      : (media ? 760.0 : 480.0);
               return Visibility(
-                visible: resting,
+                visible: restingVisible,
                 maintainState: true,
                 child: TickerMode(
-                  enabled: resting,
-                  child: SafeArea(
+                  enabled: restingEnabled,
+                  child: IgnorePointer(
+                    ignoring: !restingEnabled,
+                    child: SafeArea(
                     bottom: false,
+                    // R08 & R11: Ticker and Composer rest pinned to the bottom of the screen above the bottom dock.
                     child: Align(
                       alignment: Alignment.bottomCenter,
                       child: Padding(
-                        padding: EdgeInsets.zero,
-                        child: Column(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Padding(
-                              padding: EdgeInsets.only(left: isMobile && !media && !sideBySide ? 76 : 0),
-                              child: Center(
-                                child: Container(
-                                  constraints: BoxConstraints(
-                                    maxWidth: sideBySide
-                                        ? (isMobile ? screenW - 20 : (screenW - 220).clamp(480.0, 872.0))
-                                        : isMobile
-                                            ? (media ? 360.0 : 300.0)
-                                            : (media ? 780.0 : 480.0),
-                                    // Sized to comfortably display Consensus + at least 3-4 2-line model responses at once
-                                    maxHeight: (MediaQuery.of(context).size.height *
-                                            (sideBySide || (media && _mediaExpanded) ? 0.54 : 0.46))
-                                        .clamp(310.0, 450.0),
-                                  ),
-                                  height: sideBySide ? MediaQuery.of(context).size.height * 0.52 : null,
-                                  margin: EdgeInsets.symmetric(horizontal: sideBySide ? 0 : (isMobile ? 12 : 24)),
-                                  child: VGlass(
-                                    radius: VRadius.card,
-                                    material: VMaterial.resting,
-                                    padding: const EdgeInsets.all(VSpace.xs),
-                                    child: media
-                                        ? GenerationsPane(
-                                            aspect: _aspect,
-                                            count: _count,
-                                            onAspect: (a) => setState(() => _aspect = a),
-                                            onCount: (n) => setState(() => _count = n),
-                                            expanded: _mediaExpanded,
-                                            onToggleExpanded: () => setState(() => _mediaExpanded = !_mediaExpanded),
-                                            onRemix: (ref) => _toImageChat(reference: ref),
-                                            refresh: _mediaRefresh,
-                                          )
-                                        : sideBySide
-                                            ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                                                SizedBox(width: isMobile ? 136 : 300, child: Align(alignment: Alignment.topCenter, child: rows)),
-                                                Container(
-                                                  width: 1,
-                                                  margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 18),
-                                                  decoration: const BoxDecoration(
-                                                    gradient: LinearGradient(
-                                                      begin: Alignment.topCenter,
-                                                      end: Alignment.bottomCenter,
-                                                      colors: [Color(0x00FFFFFF), Color(0x24FFFFFF), Color(0x24FFFFFF), Color(0x00FFFFFF)],
-                                                      stops: [0, 0.15, 0.85, 1],
+                            // Context-paired SideNavRail centered directly next to the active window (R38)
+                            if (railVisible) ...[
+                              _buildSideNav(isMobile: isMobile),
+                              SizedBox(width: isMobile ? 10 : 14),
+                            ],
+                            Flexible(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: windowMaxWidth,
+                                      // Resting Ticker height capped <= 40% of screen height (0.39) per PRD R16
+                                      maxHeight: (MediaQuery.of(context).size.height *
+                                              (sideBySide || (media && _mediaExpanded) ? 0.56 : 0.39))
+                                          .clamp(240.0, 440.0),
+                                    ),
+                                    child: SizedBox(
+                                      height: sideBySide ? (MediaQuery.of(context).size.height * 0.54).clamp(320.0, 480.0) : null,
+                                      child: VGlass(
+                                        radius: VRadius.card,
+                                        material: VMaterial.resting,
+                                        padding: const EdgeInsets.all(VSpace.sm),
+                                        child: media
+                                            ? Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                children: [
+                                                  categoryHeader,
+                                                  Flexible(
+                                                    child: GenerationsPane(
+                                                      aspect: _aspect,
+                                                      count: _count,
+                                                      onAspect: (a) => setState(() => _aspect = a),
+                                                      onCount: (n) => setState(() => _count = n),
+                                                      expanded: _mediaExpanded,
+                                                      onToggleExpanded: () => setState(() => _mediaExpanded = !_mediaExpanded),
+                                                      onRemix: (ref) => _toImageChat(reference: ref),
+                                                      refresh: _mediaRefresh,
                                                     ),
                                                   ),
-                                                ),
-                                                Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(4, 4, 4, 2), child: conversation)),
-                                              ])
-                                            : rows,
+                                                ],
+                                              )
+                                            : sideBySide
+                                                ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                                                    SizedBox(width: isMobile ? 136 : 280, child: Align(alignment: Alignment.topCenter, child: rows)),
+                                                    Container(
+                                                      width: 1,
+                                                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                                                      decoration: const BoxDecoration(
+                                                        gradient: LinearGradient(
+                                                          begin: Alignment.topCenter,
+                                                          end: Alignment.bottomCenter,
+                                                          colors: [Color(0x00FFFFFF), Color(0x28FFFFFF), Color(0x28FFFFFF), Color(0x00FFFFFF)],
+                                                          stops: [0, 0.15, 0.85, 1],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(4, 2, 4, 2), child: conversation)),
+                                                  ])
+                                                : rows,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: EdgeInsets.only(left: isMobile && !media ? 76 : 0),
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(maxWidth: isMobile ? 300.0 : 480.0),
-                                child: FloatingPrompt(
-                                  summoned: _isComposerSummoned,
-                                  busy: _busy,
-                                  mode: _mode,
-                                  incognito: _incognito,
-                                  onMode: (m) => setState(() => _mode = m),
-                                  onIncognito: (v) => setState(() => _incognito = v),
-                                  onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
-                                  voice: _voiceChat ? _voicePhase : null,
-                                  onVoiceChat: _setVoiceChat,
-                                  onMic: _onMic,
-                                  continuingTitle: (_tickerItems.isNotEmpty && _currentJobId != null) ? _currentPrompt : null,
-                                  onNewConversation: _newConversation,
-                                  onSummon: () => setState(() {
-                                    _closeAllPanes();
-                                    _isComposerSummoned = true;
-                                  }),
-                                  onTuck: () => setState(() => _isComposerSummoned = false),
-                                ),
+                                  const SizedBox(height: 12),
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(maxWidth: isMobile ? 284.0 : 480.0),
+                                    child: FloatingPrompt(
+                                      summoned: _isComposerSummoned,
+                                      busy: _busy,
+                                      mode: _mode,
+                                      incognito: _incognito,
+                                      onMode: (m) => setState(() => _mode = m),
+                                      onIncognito: (v) {
+                                        setState(() => _incognito = v);
+                                        _persistState();
+                                      },
+                                      onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
+                                      voice: _voiceChat ? _voicePhase : null,
+                                      onVoiceChat: _setVoiceChat,
+                                      onMic: _onMic,
+                                      continuingTitle: (_tickerItems.isNotEmpty && _currentJobId != null) ? _currentPrompt : null,
+                                      onNewConversation: _newConversation,
+                                      onSummon: () => setState(() {
+                                        _closeAllPanes();
+                                        _isComposerSummoned = true;
+                                      }),
+                                      onTuck: () => setState(() => _isComposerSummoned = false),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -1266,70 +1381,110 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                       ),
                     ),
                   ),
+                  ),
                 ),
               );
             }),
           ),
 
-          // ================= PLANE 2: APPS POPUP PANE =================
-          if (_activeDrawer == 'apps')
-            Positioned.fill(
-              child: AppsPopupPane(
-                onClose: () => setState(() => _activeDrawer = null),
-                themeArt: _currentTheme.assetPath,
-                onOpenSmartGen: () => _requestSwitchSurface('smartgen'),
-                onOpenDiscoverMarket: () => _requestSwitchSurface('market'),
-                onOpenThemeGallery: () => _requestSwitchSurface('themes'),
-                onOpenPremiumMarketplace: () => _requestSwitchSurface('premium'),
-                onOpenFiles: () => _openDrawer('files'),
-                onOpenDocuments: () => _openDocument(),
-                onOpenMusicPlayer: _openMusic,
-                onOpenBrowser: () => _openBrowserForTab('user_default'),
+          // ================= PLANE 2: DURABLE WORK SURFACES (Hide-and-Pause Lifecycle per R59 & R60) =================
+          if (!_browserOpen &&
+              (_activeDrawer == 'smartgen' || _activeDrawer == 'market' || _activeDrawer == 'files' || _activeDrawer == 'documents'))
+            const Positioned.fill(child: VScrim()),
+
+          if (_mountedSurfaces.contains('smartgen') || _activeDrawer == 'smartgen')
+            Positioned(
+              left: desktopSurfaceLeft,
+              right: 0,
+              top: 0,
+              bottom: 72,
+              child: Visibility(
+                visible: !_browserOpen && _activeDrawer == 'smartgen',
+                maintainState: true,
+                child: TickerMode(
+                  enabled: !_browserOpen && _activeDrawer == 'smartgen' && _activeOverlay == null,
+                  child: IgnorePointer(
+                    ignoring: _activeOverlay != null,
+                    child: SmartGenScreen(
+                      onClose: () => _requestSwitchSurface(null),
+                      viewMode: _smartGenView,
+                      onViewModeChanged: (v) => setState(() => _smartGenView = v),
+                      newCardTrigger: _smartGenNewCardTrigger,
+                    ),
+                  ),
+                ),
               ),
             ),
 
-          // ================= PLANE 3: LOCAL MODEL HISTORY PANE =================
-          if (_localHistoryModel != null)
-            Positioned.fill(
-              child: LocalHistoryPane(
-                modelDef: _localHistoryModel!,
-                sessions: _localHistorySessions[_localHistoryModel!.id] ?? const [],
-                onSelectSession: (sess) => _loadAndExpandSession(sess),
-                onClose: () => setState(() => _localHistoryModel = null),
+          if (_mountedSurfaces.contains('market') || _activeDrawer == 'market')
+            Positioned(
+              left: desktopSurfaceLeft,
+              right: 0,
+              top: 0,
+              bottom: 72,
+              child: Visibility(
+                visible: !_browserOpen && _activeDrawer == 'market',
+                maintainState: true,
+                child: TickerMode(
+                  enabled: !_browserOpen && _activeDrawer == 'market' && _activeOverlay == null,
+                  child: IgnorePointer(
+                    ignoring: _activeOverlay != null,
+                    child: MarketScreen(
+                      onClose: () => _requestSwitchSurface(null),
+                      view: _marketCategory,
+                      onCreate: (t) => _toImageChat(text: t),
+                      onRemix: (ref) => _toImageChat(reference: ref),
+                    ),
+                  ),
+                ),
               ),
             ),
 
-          // ================= PLANE 4: MESSAGE ZOOM OVERLAY =================
-          if (_zoomedMessage != null && _zoomedModelDef != null && _zoomedMessage!.sender == 'model' && _currentSources.isNotEmpty)
-            Positioned.fill(
-              child: ResearchDocument(
-                message: _zoomedMessage!,
-                modelName: _zoomedModelDef!.label,
-                sources: _currentSources,
-                onOpenSource: (i) => _openBrowserForTab('src_$i'),
-                onClose: () => setState(() => _zoomedMessage = null),
-              ),
-            )
-          else if (_zoomedMessage != null && _zoomedModelDef != null)
-            Positioned.fill(
-              child: MessageZoomOverlay(
-                message: _zoomedMessage!,
-                modelName: _zoomedModelDef!.label,
-                providerColor: _zoomedModelDef!.providerColor,
-                onClose: () => setState(() => _zoomedMessage = null),
-                onOpen: () => _openTextAsDocument(_zoomedModelDef!.label, _zoomedMessage!.text, _zoomedModelDef!.label),
+          if (_mountedSurfaces.contains('files') || _activeDrawer == 'files')
+            Positioned(
+              left: desktopSurfaceLeft,
+              right: 0,
+              top: 0,
+              bottom: 72,
+              child: Visibility(
+                visible: !_browserOpen && _activeDrawer == 'files',
+                maintainState: true,
+                child: TickerMode(
+                  enabled: !_browserOpen && _activeDrawer == 'files' && _activeOverlay == null,
+                  child: IgnorePointer(
+                    ignoring: _activeOverlay != null,
+                    child: FilesScreen(
+                      key: ValueKey('files-$_filesPlace'),
+                      initialPlace: _filesPlace,
+                      onClose: () => _requestSwitchSurface(null),
+                      onOpenDocument: (url, name) => _openDocument(url, name),
+                    ),
+                  ),
+                ),
               ),
             ),
 
-          // ================= PLANE 5: DRAWERS & DURABLE WORK SURFACES =================
-          if (_activeDrawer == 'history')
-            Positioned.fill(
-              child: HistoryPane(
-                sessions: _globalHistorySessions,
-                job: (id) => _jobsById[id],
-                onLoad: (sess) => _loadAndExpandSession(sess),
-                onClose: () => setState(() => _activeDrawer = null),
-                onUpdated: () => _reloadHistory(forceRefresh: true),
+          if (_mountedSurfaces.contains('documents') || _activeDrawer == 'documents')
+            Positioned(
+              left: desktopSurfaceLeft,
+              right: 0,
+              top: 0,
+              bottom: 72,
+              child: Visibility(
+                visible: !_browserOpen && _activeDrawer == 'documents',
+                maintainState: true,
+                child: TickerMode(
+                  enabled: !_browserOpen && _activeDrawer == 'documents' && _activeOverlay == null,
+                  child: IgnorePointer(
+                    ignoring: _activeOverlay != null,
+                    child: DocumentsScreen(
+                      key: ValueKey('documents-$_docUrl'),
+                      fileUrl: _docUrl,
+                      fileName: _docName,
+                      onClose: () => _requestSwitchSurface(null),
+                    ),
+                  ),
+                ),
               ),
             ),
 
@@ -1338,15 +1493,18 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               left: 0,
               right: 0,
               top: 0,
-              bottom: 84,
+              bottom: 72,
               child: WindowlessThemeScroller(
                 currentTheme: _currentTheme,
                 onLivePreview: (theme) => setState(() => _currentTheme = theme),
-                onConfirmTheme: (theme) => setState(() {
-                  _currentTheme = theme;
-                  _savedThemeBeforePreview = theme;
-                  _activeDrawer = null;
-                }),
+                onConfirmTheme: (theme) {
+                  setState(() {
+                    _currentTheme = theme;
+                    _savedThemeBeforePreview = theme;
+                    _activeDrawer = null;
+                  });
+                  _persistState();
+                },
                 onCancel: () => setState(() {
                   _currentTheme = _savedThemeBeforePreview;
                   _activeDrawer = null;
@@ -1369,11 +1527,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                 },
                 child: PremiumThemeMarketView(
                   currentTheme: _currentTheme,
-                  onApplyTheme: (theme) => setState(() {
-                    _currentTheme = theme;
-                    _savedThemeBeforePreview = theme;
-                    _activeDrawer = null;
-                  }),
+                  onApplyTheme: (theme) {
+                    setState(() {
+                      _currentTheme = theme;
+                      _savedThemeBeforePreview = theme;
+                      _activeDrawer = null;
+                    });
+                    _persistState();
+                  },
                   onPreviewTheme: (theme) => setState(() {
                     _currentTheme = theme;
                   }),
@@ -1387,95 +1548,6 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
 
-          if (_activeDrawer == 'settings')
-            Positioned.fill(
-              child: SettingsDrawer(
-                onClose: () => setState(() => _activeDrawer = null),
-                incognito: _incognito,
-                autosave: _autosave,
-                onIncognito: (v) => setState(() => _incognito = v),
-                onAutosave: (v) => setState(() => _autosave = v),
-                onOpenPurchased: () {
-                  _filesPlace = 'purchased';
-                  _requestSwitchSurface('files');
-                },
-                onOpenUpgrade: () => setState(() => _activeDrawer = 'upgrade'),
-              ),
-            ),
-
-          if (_activeDrawer == 'smartgen' || _activeDrawer == 'market' || _activeDrawer == 'files' || _activeDrawer == 'documents')
-            const Positioned.fill(child: VScrim()),
-
-          if (_activeDrawer == 'smartgen')
-            Positioned(
-              left: desktopSurfaceLeft,
-              right: 0,
-              top: 0,
-              bottom: 78,
-              child: SmartGenScreen(
-                onClose: () => _requestSwitchSurface(null),
-                viewMode: _smartGenView,
-                onViewModeChanged: (v) => setState(() => _smartGenView = v),
-                newCardTrigger: _smartGenNewCardTrigger,
-              ),
-            ),
-
-          if (_activeDrawer == 'market')
-            Positioned(
-              left: desktopSurfaceLeft,
-              right: 0,
-              top: 0,
-              bottom: 78,
-              child: MarketScreen(
-                onClose: () => _requestSwitchSurface(null),
-                view: _marketCategory,
-                onImagine: (t) => _toImageChat(text: t),
-                onRemix: (ref) => _toImageChat(reference: ref),
-              ),
-            ),
-
-          if (_activeDrawer == 'upgrade')
-            Positioned.fill(
-              child: UpgradeScreen(
-                onClose: () => setState(() => _activeDrawer = null),
-              ),
-            ),
-
-          if (_activeDrawer == 'skills')
-            Positioned.fill(
-              child: SkillsScreen(
-                onClose: () => setState(() => _activeDrawer = null),
-              ),
-            ),
-
-          if (_activeDrawer == 'files')
-            Positioned(
-              left: desktopSurfaceLeft,
-              right: 0,
-              top: 0,
-              bottom: 78,
-              child: FilesScreen(
-                key: ValueKey('files-$_filesPlace'),
-                initialPlace: _filesPlace,
-                onClose: () => _requestSwitchSurface(null),
-                onOpenDocument: (url, name) => _openDocument(url, name),
-              ),
-            ),
-
-          if (_activeDrawer == 'documents')
-            Positioned(
-              left: desktopSurfaceLeft,
-              right: 0,
-              top: 0,
-              bottom: 78,
-              child: DocumentsScreen(
-                key: ValueKey('documents-$_docUrl'),
-                fileUrl: _docUrl,
-                fileName: _docName,
-                onClose: () => _requestSwitchSurface(null),
-              ),
-            ),
-
           if (_activeDrawer == 'consensus')
             Positioned.fill(
               child: ConsensusWebView(
@@ -1484,34 +1556,166 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
               ),
             ),
 
-          if (_browserOpen)
+          // ================= SINGLETON IN-APP BROWSER (Kept alive per R34, R59, R60) =================
+          if (_browserEverOpened || _browserOpen)
             Positioned.fill(
-              child: IgnorePointer(
-                child: CachedThemeSurface(
-                  assetPath: _currentTheme.assetPath,
-                  preset: ThemeBlurPreset.scrim,
+              child: Visibility(
+                visible: _browserOpen,
+                maintainState: true,
+                child: TickerMode(
+                  enabled: _browserOpen && _activeOverlay == null,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _browserOpen = false),
+                        child: CachedThemeSurface(
+                          assetPath: _currentTheme.assetPath,
+                          preset: ThemeBlurPreset.scrim,
+                        ),
+                      ),
+                      InAppBrowserSheet(
+                        initialTabId: _browserInitialTabId,
+                        tabs: _browserTabs,
+                        incognito: _incognito,
+                        onClose: () => setState(() => _browserOpen = false),
+                        onTabUpdated: (updated) {
+                          setState(() {
+                            final idx = _browserTabs.indexWhere((t) => t.id == updated.id);
+                            if (idx != -1) _browserTabs[idx] = updated;
+                          });
+                        },
+                        onNewUserTab: (newTab) {
+                          setState(() {
+                            _browserTabs.add(newTab);
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
 
-          // ================= PLANE 3: CONTEXTUAL SIDE NAV =================
+          // ================= PLANE 3: LOCAL MODEL HISTORY & MESSAGE ZOOM =================
+          if (_localHistoryModel != null)
+            Positioned.fill(
+              child: LocalHistoryPane(
+                modelDef: _localHistoryModel!,
+                sessions: _localHistorySessions[_localHistoryModel!.id] ?? const [],
+                onSelectSession: (sess) => _loadAndExpandSession(sess),
+                onClose: () => setState(() => _localHistoryModel = null),
+              ),
+            ),
+
+          if (_zoomedMessage != null && _zoomedModelDef != null && _zoomedMessage!.sender == 'model' && _currentSources.isNotEmpty)
+            Positioned.fill(
+              child: ResearchDocument(
+                message: _zoomedMessage!,
+                modelName: _zoomedModelDef!.label,
+                sources: _currentSources,
+                onOpenSource: (i) => _openBrowserForTab('src_$i'),
+                onClose: () => setState(() => _zoomedMessage = null),
+              ),
+            )
+          else if (_zoomedMessage != null && _zoomedModelDef != null)
+            Positioned.fill(
+              child: MessageZoomOverlay(
+                message: _zoomedMessage!,
+                modelName: _zoomedModelDef!.label,
+                providerColor: _zoomedModelDef!.providerColor,
+                onClose: () => setState(() => _zoomedMessage = null),
+                onOpen: () => _openTextAsDocument(_zoomedModelDef!.label, _zoomedMessage!.text, _zoomedModelDef!.label),
+              ),
+            ),
+
+          // ================= PLANE 4: LIGHTWEIGHT NON-TAKEOVER OVERLAYS (Exempt from hiding active layer per R60) =================
+          if (_activeOverlay == 'history')
+            Positioned.fill(
+              child: HistoryPane(
+                sessions: _globalHistorySessions,
+                job: (id) => _jobsById[id],
+                onLoad: (sess) => _loadAndExpandSession(sess),
+                onClose: () => setState(() => _activeOverlay = null),
+                onUpdated: () => _reloadHistory(forceRefresh: true),
+              ),
+            ),
+
+          if (_activeOverlay == 'settings')
+            Positioned.fill(
+              child: SettingsDrawer(
+                onClose: () => setState(() => _activeOverlay = null),
+                incognito: _incognito,
+                autosave: _autosave,
+                onIncognito: (v) {
+                  setState(() => _incognito = v);
+                  _persistState();
+                },
+                onAutosave: (v) {
+                  setState(() => _autosave = v);
+                  _persistState();
+                },
+                onOpenPurchased: () {
+                  _filesPlace = 'purchased';
+                  _requestSwitchSurface('files');
+                },
+                onOpenUpgrade: () => setState(() => _activeOverlay = 'upgrade'),
+              ),
+            ),
+
+          if (_activeOverlay == 'upgrade')
+            Positioned.fill(
+              child: UpgradeScreen(
+                onClose: () => setState(() => _activeOverlay = null),
+              ),
+            ),
+
+          if (_activeOverlay == 'skills')
+            Positioned.fill(
+              child: SkillsScreen(
+                onClose: () => setState(() => _activeOverlay = null),
+              ),
+            ),
+
+          if (_activeOverlay == 'apps')
+            Positioned.fill(
+              child: AppsPopupPane(
+                onClose: () => setState(() => _activeOverlay = null),
+                themeArt: _currentTheme.assetPath,
+                onOpenSmartGen: () => _requestSwitchSurface('smartgen'),
+                onOpenDiscoverMarket: () => _requestSwitchSurface('market'),
+                onOpenThemeGallery: () => _requestSwitchSurface('themes'),
+                onOpenPremiumMarketplace: () => _requestSwitchSurface('premium'),
+                onOpenFiles: () => _openDrawer('files'),
+                onOpenDocuments: () => _openDocument(),
+                onOpenMusicPlayer: _openMusic,
+                onOpenBrowser: () => _openBrowserForTab('user_default'),
+              ),
+            ),
+
+          // ================= PLANE 3: CONTEXTUAL SIDE NAV (for durable work surfaces or open contextual drawer) =================
           if (isMobile) ...[
             if (_isMobileSideNavOpen && railVisible)
               Positioned.fill(
                 child: VScrim(soft: true, onTap: () => setState(() => _isMobileSideNavOpen = false)),
               ),
-            if (railVisible)
-              Positioned(
-                left: 2,
-                bottom: 84,
-                child: _buildSideNav(isMobile: true),
+            if (railVisible && (_activeDrawer != null || _isMobileSideNavOpen))
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: _buildSideNav(isMobile: true),
+                ),
               ),
           ] else ...[
-            if (railVisible)
-              Positioned(
-                left: 12,
-                bottom: 84,
-                child: _buildSideNav(isMobile: false),
+            if (railVisible && _activeDrawer != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: _buildSideNav(isMobile: false),
+                ),
               ),
           ],
 
@@ -1519,7 +1723,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
           if (_activeDrawer != 'premium')
             Builder(builder: (context) {
               final size = MediaQuery.of(context).size;
-              final pos = _musicPos ?? Offset((size.width - 308) / 2, 52);
+              final pos = _musicPos ?? Offset((size.width - 308) / 2, 16);
               return Positioned(
                 left: pos.dx,
                 top: pos.dy,
@@ -1545,7 +1749,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   isComposerSummoned: _isComposerSummoned,
                   onToggleComposer: _toggleComposer,
                   onHome: () {
-                    if (_activeDrawer != null) {
+                    if (_browserOpen || _activeOverlay != null || _activeDrawer != null) {
                       _requestSwitchSurface(null);
                     } else {
                       _openHomeComposer();
@@ -1553,7 +1757,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
                   },
                   onApps: () => _openDrawer('apps'),
                   onSettings: () => _openDrawer('settings'),
-                  activeDrawer: _activeDrawer,
+                  activeDrawer: _activeOverlay ?? _activeDrawer,
                 ),
               ),
             ),

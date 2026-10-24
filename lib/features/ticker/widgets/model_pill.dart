@@ -2,18 +2,18 @@ import 'package:material_ui/material_ui.dart';
 import '../../../models/ticker_item.dart';
 import '../../../core/vision/vision_kit.dart';
 
-/// One model's row in the ticker. Rewritten by Claude (2026-10-23) after David: "rectangles in rectangles spaced apart,
-/// looks like cardboard cut outs" and "something very off" about the colour.
-/// A row is a line in a list on the window's glass, not a card of its own: no box, border, glow or tint. The open row is
-/// lit by one capsule of light whose corners follow the window's (concentric). A selected model's name is bright; a
-/// model that is not selected is dim and shows its name only.
+/// One model's row in the ticker.
+/// Active models sit pinned at the top with emissive provider light bloom; unselected models remain in place
+/// below (dimmed) while retaining their 2-line 11pt summary. Tap an unselected model to activate it;
+/// swipe horizontally L/R on an active model to deactivate it (R08).
 class ModelPill extends StatefulWidget {
   final TickerItem item;
 
   /// This model's conversation is the one open beside the column.
   final bool isExpanded;
   final VoidCallback onToggleExpand;
-  final double elevation; // kept for callers; rows no longer differ by height
+  final VoidCallback? onDeactivate;
+  final double elevation;
   final bool compact;
 
   /// Selected: questions go to this model.
@@ -24,13 +24,14 @@ class ModelPill extends StatefulWidget {
     required this.item,
     required this.isExpanded,
     required this.onToggleExpand,
+    this.onDeactivate,
     this.elevation = 0,
     this.compact = false,
     this.isActive = true,
   });
 
-  /// The lit row's corners: the window's corner less the window's inner margin, so the two curves run together.
-  static const double radius = VRadius.card - VSpace.xs;
+  /// The lit row's corners: the window's corner (28) less the window's inner margin (12) = 16 (concentric).
+  static const double radius = VRadius.row;
 
   @override
   State<ModelPill> createState() => _ModelPillState();
@@ -42,65 +43,124 @@ class _ModelPillState extends State<ModelPill> {
     final item = widget.item;
     final active = widget.isActive;
     final waiting = active && item.isStreaming;
-    final name = VType.caption(color: active ? VColors.textPrimary : VColors.textTertiary, weight: FontWeight.w600)
-        .copyWith(fontSize: 11, height: 14 / 11);
-    final time = VType.caption(color: VColors.textTertiary, weight: FontWeight.w500).copyWith(fontSize: 11, height: 14 / 11);
-    final hasSummary = active && (item.summary.isNotEmpty || waiting);
+    final hue = item.modelDef.providerColor;
+    final name = VType.callout(
+      color: active ? VColors.textPrimary : VColors.textSecondary,
+      weight: active ? FontWeight.w600 : FontWeight.w500,
+    );
+    final time = VType.caption(color: VColors.textTertiary, weight: FontWeight.w500);
+    // Both active and unselected models retain their 2-line 11pt summary in place (R08).
+    final hasSummary = item.summary.isNotEmpty || waiting;
 
-    return VPress(
-      onTap: widget.onToggleExpand,
-      child: AnimatedContainer(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragEnd: active && widget.onDeactivate != null
+          ? (d) {
+              if ((d.primaryVelocity ?? 0).abs() > 140) {
+                widget.onDeactivate!();
+              }
+            }
+          : null,
+      child: AnimatedOpacity(
         duration: VMotion.base,
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: widget.isExpanded ? const Color(0x24FFFFFF) : const Color(0x00FFFFFF),
-          borderRadius: BorderRadius.circular(ModelPill.radius),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(children: [
-              Expanded(child: Text(item.modelDef.label, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: name)),
-              if (active && !waiting && !widget.compact && item.relativeTime.isNotEmpty) Text(item.relativeTime, style: time),
-            ]),
-            if (hasSummary) ...[
-              const SizedBox(height: 2),
-              // Two lines kept for the summary; the open row shows it whole.
-              AnimatedSize(
-                duration: VMotion.base,
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: SizedBox(
-                  height: widget.isExpanded && item.summary.isNotEmpty ? null : 30,
-                  width: double.infinity,
-                  child: waiting && item.summary.isEmpty
-                      ? const _SkeletonLines()
-                      : Text(item.summary,
-                          maxLines: widget.isExpanded ? null : 2,
-                          overflow: widget.isExpanded ? null : TextOverflow.fade,
-                          style: VOneLine.rowStyle.copyWith(color: VColors.textSecondary)),
-                ),
+        opacity: active ? 1.0 : 0.76,
+        child: VPress(
+          onTap: widget.onToggleExpand,
+          child: AnimatedContainer(
+            duration: VMotion.base,
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              // HIG-MC-09: Nested model cards inside glass window remain transparent with light stroke borders
+              color: widget.isExpanded
+                  ? hue.withValues(alpha: 0.16)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(ModelPill.radius),
+              border: Border.all(
+                color: widget.isExpanded
+                    ? hue.withValues(alpha: 0.65)
+                    : (active ? hue.withValues(alpha: 0.34) : const Color(0x24FFFFFF)),
+                width: widget.isExpanded ? 1.0 : 0.6,
               ),
-            ],
-            if (active && item.mediaUrls != null && item.mediaUrls!.isNotEmpty) ...[
-              const SizedBox(height: VSpace.xs),
-              SizedBox(
-                height: 58,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: item.mediaUrls!.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: VSpace.xs),
-                  itemBuilder: (_, i) => ClipRRect(
-                    borderRadius: BorderRadius.circular(VRadius.sm),
-                    child: Image.network(item.mediaUrls![i], width: 58, height: 58, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const SizedBox(width: 58, height: 58)),
+              boxShadow: widget.isExpanded
+                  ? VShadow.emissive(hue, intensity: 0.65)
+                  : null,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: active ? hue : hue.withValues(alpha: 0.45),
+                      boxShadow: active ? VShadow.emissive(hue, intensity: 0.9) : null,
+                    ),
                   ),
-                ),
-              ),
-            ],
-          ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item.modelDef.label,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: name,
+                    ),
+                  ),
+                  if (active && !waiting && !widget.compact && item.relativeTime.isNotEmpty)
+                    Text(item.relativeTime, style: time)
+                  else if (!active)
+                    Text('Tap to enable', style: VType.caption(color: VColors.textTertiary).copyWith(fontSize: 9.5)),
+                ]),
+                if (hasSummary) ...[
+                  const SizedBox(height: 3),
+                  // Standardized 11pt body/summary text, up to 2 lines; expanded row shows full summary.
+                  AnimatedSize(
+                    duration: VMotion.base,
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: waiting && item.summary.isEmpty
+                          ? const _SkeletonLines()
+                          : Text(
+                              item.summary,
+                              maxLines: widget.isExpanded ? null : 2,
+                              overflow: widget.isExpanded ? null : TextOverflow.ellipsis,
+                              style: VType.summary(
+                                color: active ? VColors.textSecondary : VColors.textTertiary,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+                if (active && item.mediaUrls != null && item.mediaUrls!.isNotEmpty) ...[
+                  const SizedBox(height: VSpace.xs),
+                  SizedBox(
+                    height: 54,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: item.mediaUrls!.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: VSpace.xs),
+                      itemBuilder: (_, i) => ClipRRect(
+                        borderRadius: BorderRadius.circular(VRadius.sm),
+                        child: Image.network(
+                          item.mediaUrls![i],
+                          width: 54,
+                          height: 54,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox(width: 54, height: 54),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );

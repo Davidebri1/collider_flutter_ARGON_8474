@@ -344,39 +344,33 @@ class _ConsensusWebViewState extends State<ConsensusWebView> {
           Positioned.fill(child: WebViewWidget(controller: _controller!))
         else if (!_isLoading)
           Center(child: Text('3D Agreement Cluster Topology', style: VType.headline())),
-        if (_isLoading)
-          const Center(child: CircularProgressIndicator(color: VColors.textSecondary, strokeWidth: 2)),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // David, 4 Oct 2026: "should be in a window like everything else". The scene is a window over the
-    // room, which goes out of focus behind it; the dock stays where it is. The scene carries its own
-    // header and its own way back, so the window adds none.
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 768;
-    final width = isMobile ? size.width - 48 : VOverlay.toolWidth(context);
-    final height = isMobile ? math.min(size.height - 56 - 108, 600.0) : VOverlay.toolMaxHeight(context);
+    final width = isMobile ? size.width - 32 : VOverlay.toolWidth(context);
+    final height = isMobile ? math.min(size.height - 140, 560.0) : VOverlay.toolMaxHeight(context);
     return Stack(
       fit: StackFit.expand,
       children: [
         VScrim(onTap: widget.onClose),
         SafeArea(
-          child: Align(
-            alignment: Alignment.topCenter,
+          child: Center(
             child: Padding(
-              padding: EdgeInsets.only(top: isMobile ? 44 : 40),
+              padding: const EdgeInsets.only(bottom: 64),
               child: SizedBox(
                 width: width,
                 height: height,
                 child: VGlass(
                   material: VMaterial.work,
-                  radius: VRadius.xl,
+                  radius: VRadius.card,
                   padding: EdgeInsets.zero,
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(VRadius.xl),
+                    borderRadius: BorderRadius.circular(VRadius.card),
                     child: ColoredBox(
                       color: const Color(0xFF07080B),
                       child: LayoutBuilder(builder: (context, c) => _scene(c)),
