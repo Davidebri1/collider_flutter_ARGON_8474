@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Collider — Fixed Mobile Viewport</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <style>
+    :root {
+      --bg: #0A0D14;
+      --frame-bg: #000000;
+      --accent: #0A84FF;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 50% 20%, #151A26 0%, #07090F 100%);
+      color: #FFFFFF;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .toolbar {
+      position: fixed;
+      top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(20, 24, 34, 0.86);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 5px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      z-index: 100;
+    }
+    .toolbar span {
+      font-size: 11.5px;
+      color: rgba(255, 255, 255, 0.68);
+      font-weight: 500;
+    }
+    .toolbar button {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #FFFFFF;
+      font-size: 11.5px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .toolbar button:hover { background: rgba(255, 255, 255, 0.18); }
+    .toolbar button.active {
+      background: var(--accent);
+      border-color: transparent;
+      color: #FFFFFF;
+    }
+    .stage {
+      width: 100%;
+      height: 100%;
+      padding-top: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .device-shell {
+      position: relative;
+      width: 402px;
+      height: 874px;
+      background: var(--frame-bg);
+      border-radius: 46px;
+      box-shadow:
+        0 0 0 1.5px rgba(255, 255, 255, 0.22),
+        0 0 0 5px rgba(0, 0, 0, 0.65),
+        0 28px 68px rgba(0, 0, 0, 0.8);
+      overflow: hidden;
+      transform-origin: center center;
+      flex-shrink: 0;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 46px;
+      background: #07080B;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <span>Mobile Frame:</span>
+    <button class="active" onclick="setSize(402, 874, this)">iPhone 16 Pro (402×874)</button>
+    <button onclick="setSize(393, 852, this)">iPhone 15 (393×852)</button>
+    <button onclick="setSize(360, 780, this)">Compact (360×780)</button>
+    <button onclick="window.open('/configurator.html', '_blank')">Configurator ⚙</button>
+    <button onclick="window.open('/', '_blank')">Full Window ↗</button>
+  </div>
+
+  <div class="stage">
+    <div class="device-shell" id="shell">
+      <iframe id="frame" src="/?music=1"></iframe>
+    </div>
+  </div>
+
+  <script>
+    let curW = 402, curH = 874;
+    function fitShell() {
+      const shell = document.getElementById('shell');
+      const availW = window.innerWidth - 28;
+      const availH = window.innerHeight - 62;
+      const scale = Math.min(1, availW / curW, availH / curH);
+      shell.style.width = curW + 'px';
+      shell.style.height = curH + 'px';
+      shell.style.transform = `scale(${scale.toFixed(4)})`;
+    }
+    function setSize(w, h, btn) {
+      curW = w;
+      curH = h;
+      document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      fitShell();
+    }
+    window.addEventListener('resize', fitShell);
+    fitShell();
+  </script>
+</body>
+</html>
