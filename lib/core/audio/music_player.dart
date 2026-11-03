@@ -7,7 +7,26 @@ class MusicTrack {
   final String title;
   final String art;
   final String file;
-  const MusicTrack(this.title, this.art, this.file);
+
+  /// The theme this song belongs to, cleaned of the "4K" suffix the catalog
+  /// carries. Ingest wrote the SOURCE FILENAME into tracks[].title for
+  /// single-clip themes ("0319bbf2-..._1080_hd"), so [title] is an id the user
+  /// never sees. This is the real name.
+  final String themeName;
+
+  const MusicTrack(this.title, this.art, this.file, {this.themeName = ''});
+
+  /// True when [title] is really an ingest artefact rather than a name: it
+  /// carries underscores, a uuid or a media extension. "0_Gold_Glitter_Sparkles"
+  /// and "0319bbf2-..._1080_hd" are ids; "Waves at Sunset" is a title.
+  static final _uuid = RegExp(r'[0-9a-f]{8}-[0-9a-f]{4}', caseSensitive: false);
+  static final _mediaExt = RegExp(r'\.(mp4|mov|webm|m4a|mp3|wav)$', caseSensitive: false);
+  static bool looksLikeFilename(String s) => s.contains('_') || _uuid.hasMatch(s) || _mediaExt.hasMatch(s);
+
+  /// The label a row should lead with: the theme's name when the track title
+  /// is only a filename, otherwise the track title.
+  String get displayTitle =>
+      (themeName.isNotEmpty && looksLikeFilename(title)) ? themeName : title;
 }
 
 class MusicPlayer extends ChangeNotifier {
@@ -29,7 +48,9 @@ class MusicPlayer extends ChangeNotifier {
   /// in the Cloudflare bucket; the app ships none.
   static List<MusicTrack> forTheme(WallpaperTheme t) => [
         for (final a in WallpaperCatalog.tracksFor(t))
-          if (a.audioUrl != null) MusicTrack(a.title, t.assetPath, a.audioUrl!),
+          if (a.audioUrl != null)
+            MusicTrack(a.title, t.assetPath, a.audioUrl!,
+                themeName: t.name.replaceAll(RegExp(r'\s*4K$'), '').trim()),
       ];
 
   final AudioEngine _engine = AudioEngine();

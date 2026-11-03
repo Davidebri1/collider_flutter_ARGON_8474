@@ -69,7 +69,7 @@ class MusicBar extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        track.title,
+                        track.displayTitle,
                         maxLines: 1,
                         softWrap: false,
                         overflow: TextOverflow.fade,
@@ -176,13 +176,13 @@ class MusicWidget extends StatelessWidget {
                     for (int i = 0; i < p.queue.length; i++)
                       VMenuItem(
                         p.isTrackEnabled(p.queue[i]) ? Icons.music_note_rounded : Icons.music_off_rounded,
-                        p.queue[i].title,
+                        p.queue[i].displayTitle,
                         () => p.play(i),
                         checked: i == p.index && p.isTrackEnabled(p.queue[i]),
                       ),
                     VMenuItem(
                       p.isTrackEnabled(t) ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                      p.isTrackEnabled(t) ? 'Turn Off "${t.title}"' : 'Turn On "${t.title}"',
+                      p.isTrackEnabled(t) ? 'Turn Off "${t.displayTitle}"' : 'Turn On "${t.displayTitle}"',
                       () => p.toggleTrack(t),
                       apart: true,
                     ),

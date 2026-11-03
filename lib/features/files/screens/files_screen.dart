@@ -964,7 +964,10 @@ class _SongRow extends StatelessWidget {
       animation: p,
       builder: (_, __) {
         final songs = MusicPlayer.forTheme(theme);
-        final track = index < songs.length ? songs[index] : MusicTrack(title, theme.assetPath, '');
+        final clean = theme.name.replaceAll(RegExp(r'\s*4K$'), '').trim();
+        final track = index < songs.length
+            ? songs[index]
+            : MusicTrack(title, theme.assetPath, '', themeName: clean);
         final enabled = p.isTrackEnabled(track);
         final on = enabled && p.queueId == theme.id && p.index == index && p.playing;
         return VPress(
@@ -1010,18 +1013,20 @@ class _SongRow extends StatelessWidget {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(
-                    title,
+                    track.displayTitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: _N.text(11.0, FontWeight.w600, !enabled ? _N.hint : (on ? const Color(0xFFFF7A95) : _N.title)),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    theme.name.replaceAll(RegExp(r'\s*4K$'), '').trim(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _N.text(9.5, FontWeight.w500, _N.hint),
-                  ),
+                  if (track.displayTitle != clean) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      clean,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _N.text(9.5, FontWeight.w500, _N.hint),
+                    ),
+                  ],
                 ]),
               ),
               Icon(

@@ -115,6 +115,12 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   String? _activeDrawer;
   String? _activeOverlay;
+
+  /// Overlays opened ON TOP of [_activeOverlay]. The top one is _activeOverlay;
+  /// these stay mounted and visible behind it. Settings -> Upgrade used to
+  /// replace Settings outright: it vanished and the only way back was to
+  /// reopen it from the rail.
+  final List<String> _overlayStack = [];
   final Set<String> _mountedSurfaces = {};
   ModelDef? _localHistoryModel;
   TickerMessage? _zoomedMessage;
@@ -478,6 +484,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void _closeAllPanes() {
     _activeDrawer = null;
     _activeOverlay = null;
+    _overlayStack.clear();
     _browserOpen = false;
     _localHistoryModel = null;
     _zoomedMessage = null;
@@ -485,15 +492,98 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
     _isMobileSideNavOpen = false;
   }
 
+  /// Opens overlay [name] ON TOP of the one already open, keeping it mounted
+  /// behind.
+  void _pushOverlay(String name) {
+    setState(() {
+      final cur = _activeOverlay;
+      if (cur != null && cur != name) _overlayStack.add(cur);
+      _activeOverlay = name;
+    });
+  }
+
+  /// Closes the top overlay and restores the one underneath it.
+  void _popOverlay() {
+    setState(() {
+      _activeOverlay = _overlayStack.isEmpty ? null : _overlayStack.removeLast();
+    });
+  }
+
+  /// A rail action REPLACES whatever overlay is open (it is a navigation, not
+  /// a step deeper), so it clears the stack. Opening one overlay from inside
+  /// another uses [_pushOverlay] instead.
+  void _toggleOverlayFromRail(String name) {
+    setState(() {
+      _activeOverlay = (_activeOverlay == name) ? null : name;
+      _overlayStack.clear();
+    });
+  }
+
+  /// Builds overlay [name]. Kept in one place so the overlay underneath the
+  /// top one is built exactly like the top one. Returns an empty box for a
+  /// name with no overlay, never null, so the Stack children stay
+  /// [Widget]-typed.
+  Widget _overlayPane(String name) => switch (name) {
+        'history' => Positioned.fill(
+            child: HistoryPane(
+              sessions: _globalHistorySessions,
+              job: (id) => _jobsById[id],
+              onLoad: (sess) => _loadAndExpandSession(sess),
+              onClose: _popOverlay,
+              onUpdated: () => _reloadHistory(forceRefresh: true),
+            ),
+          ),
+        'settings' => Positioned.fill(
+            child: SettingsDrawer(
+              onClose: _popOverlay,
+              incognito: _incognito,
+              autosave: _autosave,
+              onIncognito: (v) {
+                setState(() => _incognito = v);
+                _persistState();
+              },
+              onAutosave: (v) {
+                setState(() => _autosave = v);
+                _persistState();
+              },
+              onOpenPurchased: () {
+                _filesPlace = 'purchased';
+                _requestSwitchSurface('files');
+              },
+              // Opens ON TOP of Settings, which stays mounted behind it.
+              onOpenUpgrade: () => _pushOverlay('upgrade'),
+            ),
+          ),
+        'upgrade' => Positioned.fill(
+            child: UpgradeScreen(onClose: _popOverlay),
+          ),
+        'skills' => Positioned.fill(
+            child: SkillsScreen(onClose: _popOverlay),
+          ),
+        'apps' => Positioned.fill(
+            child: AppsPopupPane(
+              onClose: _popOverlay,
+              themeArt: _currentTheme.assetPath,
+              onOpenSmartGen: () => _requestSwitchSurface('smartgen'),
+              onOpenDiscoverMarket: () => _requestSwitchSurface('market'),
+              onOpenThemeGallery: () => _requestSwitchSurface('themes'),
+              onOpenPremiumMarketplace: () => _requestSwitchSurface('premium'),
+              onOpenFiles: () => _openDrawer('files'),
+              onOpenDocuments: () => _openDocument(),
+              onOpenMusicPlayer: _openMusic,
+              onOpenBrowser: () => _openBrowserForTab('user_default'),
+            ),
+          ),
+        _ => const SizedBox.shrink(),
+      };
+
   void _requestSwitchSurface(String? targetDrawer) {
     _proceedSwitchSurface(targetDrawer);
   }
 
   void _proceedSwitchSurface(String? targetDrawer) {
     if (targetDrawer != null && _kLightweightOverlays.contains(targetDrawer)) {
-      setState(() {
-        _activeOverlay = (_activeOverlay == targetDrawer) ? null : targetDrawer;
-      });
+      _toggleOverlayFromRail(targetDrawer);
       return;
     }
     setState(() {
@@ -517,9 +607,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
   void _openDrawer(String drawer) {
     if (_kLightweightOverlays.contains(drawer)) {
-      setState(() {
-        _activeOverlay = (_activeOverlay == drawer) ? null : drawer;
-      });
+      _toggleOverlayFromRail(drawer);
       return;
     }
     if (drawer == 'files') _filesPlace = 'home';
@@ -903,6 +991,7 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
   void _openBrowserForTab(String tabId) {
     setState(() {
       _activeOverlay = null;
+      _overlayStack.clear();
       _browserInitialTabId = tabId;
       _browserEverOpened = true;
       _browserOpen = true;
@@ -1631,68 +1720,10 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
             ),
 
           // ================= PLANE 4: LIGHTWEIGHT NON-TAKEOVER OVERLAYS (Exempt from hiding active layer per R60) =================
-          if (_activeOverlay == 'history')
-            Positioned.fill(
-              child: HistoryPane(
-                sessions: _globalHistorySessions,
-                job: (id) => _jobsById[id],
-                onLoad: (sess) => _loadAndExpandSession(sess),
-                onClose: () => setState(() => _activeOverlay = null),
-                onUpdated: () => _reloadHistory(forceRefresh: true),
-              ),
-            ),
-
-          if (_activeOverlay == 'settings')
-            Positioned.fill(
-              child: SettingsDrawer(
-                onClose: () => setState(() => _activeOverlay = null),
-                incognito: _incognito,
-                autosave: _autosave,
-                onIncognito: (v) {
-                  setState(() => _incognito = v);
-                  _persistState();
-                },
-                onAutosave: (v) {
-                  setState(() => _autosave = v);
-                  _persistState();
-                },
-                onOpenPurchased: () {
-                  _filesPlace = 'purchased';
-                  _requestSwitchSurface('files');
-                },
-                onOpenUpgrade: () => setState(() => _activeOverlay = 'upgrade'),
-              ),
-            ),
-
-          if (_activeOverlay == 'upgrade')
-            Positioned.fill(
-              child: UpgradeScreen(
-                onClose: () => setState(() => _activeOverlay = null),
-              ),
-            ),
-
-          if (_activeOverlay == 'skills')
-            Positioned.fill(
-              child: SkillsScreen(
-                onClose: () => setState(() => _activeOverlay = null),
-              ),
-            ),
-
-          if (_activeOverlay == 'apps')
-            Positioned.fill(
-              child: AppsPopupPane(
-                onClose: () => setState(() => _activeOverlay = null),
-                themeArt: _currentTheme.assetPath,
-                onOpenSmartGen: () => _requestSwitchSurface('smartgen'),
-                onOpenDiscoverMarket: () => _requestSwitchSurface('market'),
-                onOpenThemeGallery: () => _requestSwitchSurface('themes'),
-                onOpenPremiumMarketplace: () => _requestSwitchSurface('premium'),
-                onOpenFiles: () => _openDrawer('files'),
-                onOpenDocuments: () => _openDocument(),
-                onOpenMusicPlayer: _openMusic,
-                onOpenBrowser: () => _openBrowserForTab('user_default'),
-              ),
-            ),
+          // Overlays stack: the ones beneath stay mounted and visible behind
+          // the top one, and closing the top restores them.
+          for (final under in _overlayStack.reversed) _overlayPane(under),
+          if (_activeOverlay != null) _overlayPane(_activeOverlay!),
 
           // ================= PLANE 3: CONTEXTUAL SIDE NAV (for durable work surfaces or open contextual drawer) =================
           if (isMobile) ...[
