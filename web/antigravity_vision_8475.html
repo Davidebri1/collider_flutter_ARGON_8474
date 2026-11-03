@@ -1,0 +1,1625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Collider — Antigravity Director's Cut (Session 8475 · 9:16 Spatial OS)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Unified VisionOS Glass Material Tokens */
+      --glass-resting: rgba(14, 18, 28, 0.70);
+      --glass-elevated: rgba(18, 23, 36, 0.74);
+      --glass-modal: rgba(14, 19, 31, 0.82);
+      --glass-work: rgba(14, 18, 28, 0.74);
+      --fill-cell: rgba(255, 255, 255, 0.11);
+      --fill-active: rgba(255, 255, 255, 0.25);
+      --fill-recessed: rgba(0, 0, 0, 0.44);
+      --rim-top: rgba(255, 255, 255, 0.52);
+      --rim-mid: rgba(255, 255, 255, 0.18);
+      --rim-bot: rgba(255, 255, 255, 0.22);
+
+      /* Strict 6-Level Named Typography Hierarchy (11pt = 11px standardized body & summary) */
+      --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --size-hero: 19px;     /* Level 1: Hero Title */
+      --size-header: 15px;   /* Level 2: Window Header */
+      --size-section: 13px;  /* Level 3: Section / Model Header */
+      --size-pill: 12px;     /* Level 4: Control / Pill Label */
+      --size-body: 11px;     /* Level 5: Body & 2-Line Summary (Standardized 11pt) */
+      --size-micro: 10px;    /* Level 6: Micro Metadata / Badges */
+
+      --accent-blue: #38BDF8;
+      --accent-emerald: #34D399;
+      --accent-amber: #FBBF24;
+      --accent-rose: #FB7185;
+      --accent-violet: #A78BFA;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #05070B;
+      font-family: var(--font-sans);
+      color: rgba(255, 255, 255, 0.96);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 9:16 Mobile Frame (fills 405x720 viewport 100%, or centers on wider screens) */
+    .stage-916 {
+      position: relative;
+      width: 100%;
+      max-width: 405px;
+      height: 100%;
+      max-height: 720px;
+      overflow: hidden;
+      background: #070A12;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Plane 0: Living 4K Wallpaper + Dynamic Scene Light Emittance */
+    .wallpaper-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background-size: cover;
+      background-position: center;
+      transition: background-image 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+      background-image: url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=85');
+    }
+    .wallpaper-layer::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 52% 32%, rgba(56, 189, 248, 0.16), transparent 60%),
+        linear-gradient(180deg, rgba(6, 9, 16, 0.18) 0%, rgba(6, 9, 16, 0.08) 45%, rgba(6, 9, 16, 0.42) 100%);
+      pointer-events: none;
+    }
+
+    /* Unified Physical Optical Glass Surface (NO internal edge fades!) */
+    .v-glass {
+      position: relative;
+      background: var(--glass-resting);
+      backdrop-filter: blur(28px) saturate(165%);
+      -webkit-backdrop-filter: blur(28px) saturate(165%);
+      border: 1px solid var(--rim-mid);
+      box-shadow:
+        0 18px 42px rgba(0, 0, 0, 0.52),
+        0 4px 12px rgba(0, 0, 0, 0.32),
+        inset 0 1px 0 var(--rim-top),
+        inset 0 -1px 0 var(--rim-bot);
+    }
+    .v-glass-elevated {
+      background: var(--glass-elevated);
+      backdrop-filter: blur(28px) saturate(175%);
+      -webkit-backdrop-filter: blur(28px) saturate(175%);
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      box-shadow:
+        0 14px 32px rgba(0, 0, 0, 0.48),
+        0 2px 8px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.58),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+    }
+
+    /* Hologram Projection (Borderless, Edge-Faded into Air, Zero Glass Box) */
+    .v-hologram {
+      mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+    }
+
+    /* Top Director's Cut Mode Ribbon + Draggable Music Pill */
+    .top-bar {
+      position: relative;
+      z-index: 20;
+      padding: 8px 10px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .director-switcher {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 999px;
+    }
+    .dir-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.72);
+      font-family: var(--font-sans);
+      font-size: var(--size-micro);
+      font-weight: 600;
+      padding: 5px 6px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .dir-btn.active {
+      background: var(--fill-active);
+      color: #fff;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    }
+
+    .music-pill {
+      align-self: center;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px 4px 6px;
+      border-radius: 999px;
+      font-size: var(--size-micro);
+      cursor: pointer;
+    }
+    .music-disc {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #EC4899, #8B5CF6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 10px rgba(236, 72, 153, 0.65);
+      font-size: 9px;
+    }
+
+    /* Plane 1: Spatial Workspace Container */
+    .workspace-center {
+      position: relative;
+      z-index: 10;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      min-height: 0;
+    }
+    .paired-cluster {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 385px;
+    }
+    /* R08 & R11: Ticker + Composer stay pinned to the bottom of the screen, leaving upper ~55% of wallpaper open! */
+    #view-ticker {
+      align-self: flex-end;
+      margin-top: auto;
+      padding-bottom: 4px;
+    }
+
+    /* Context-Paired SideNavRail (Identical Glass & Elevation as Bottom Dock) */
+    .side-rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 5px;
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+    .rail-btn {
+      width: 38px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.78);
+      cursor: pointer;
+    }
+    .rail-orb {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--fill-cell);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    .rail-btn.active .rail-orb {
+      background: rgba(56, 189, 248, 0.24);
+      border-color: rgba(56, 189, 248, 0.72);
+      color: #fff;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.58), 0 0 4px rgba(56, 189, 248, 0.85);
+    }
+    .rail-label {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: -0.1px;
+    }
+
+    /* Main Column (Bottom-Pinned Ticker <= 40% height + Permanent Composer) */
+    .main-col {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Surface 1: Resting Ticker (<= 40% of 720px = 264px height, crisp physical glass, NO edge fades) */
+    .ticker-window {
+      width: 100%;
+      max-height: 264px; /* 36.6% of 720px viewport — leaves top ~55% of wallpaper open! */
+      border-radius: 24px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .cat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2px 3px;
+    }
+    .cat-arrow {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--fill-cell);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .cat-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--size-pill);
+      font-weight: 600;
+    }
+
+    /* Emissive Consensus Row */
+    .consensus-pill {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 14px;
+      background: rgba(52, 211, 153, 0.10);
+      border: 1px solid rgba(52, 211, 153, 0.38);
+      cursor: pointer;
+    }
+    .consensus-score {
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(52, 211, 153, 0.24);
+      border: 1px solid rgba(52, 211, 153, 0.72);
+      box-shadow: 0 0 12px rgba(52, 211, 153, 0.55);
+      font-size: var(--size-micro);
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .summary-11pt {
+      font-size: var(--size-body); /* Standardized 11pt */
+      line-height: 1.34;
+      color: rgba(255, 255, 255, 0.90);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .hairline {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+      margin: 1px 0;
+      flex-shrink: 0;
+    }
+
+    /* Scrollable Ticker List (Crisp inside glass — zero ShaderMask fade, HIG-MC-09 transparent nested cards!) */
+    .ticker-scroll {
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-right: 2px;
+    }
+    .ticker-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+    .model-row {
+      padding: 7px 10px;
+      border-radius: 14px;
+      background: transparent; /* HIG-MC-09: Nested model cards have transparent backgrounds with light stroke borders */
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .model-row.active-expanded {
+      background: rgba(56, 189, 248, 0.14);
+      border-color: rgba(56, 189, 248, 0.62);
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.24);
+    }
+    .model-row.inactive {
+      opacity: 0.72;
+      background: transparent;
+      border-color: rgba(255, 255, 255, 0.11);
+    }
+    .model-head {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 2px;
+    }
+    .orb {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .model-name {
+      font-size: var(--size-pill);
+      font-weight: 600;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .model-meta {
+      font-size: 9.5px;
+      color: rgba(255, 255, 255, 0.62);
+    }
+
+    /* Permanent Bottom Composer Capsule (R11) */
+    .prompt-capsule {
+      border-radius: 22px;
+      padding: 6px 8px 6px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .prompt-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: var(--size-body); /* 11pt */
+    }
+    .prompt-input::placeholder {
+      color: rgba(255, 255, 255, 0.58);
+    }
+    .mode-pill {
+      font-size: 9.5px;
+      font-weight: 600;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.22);
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      color: #fff;
+      cursor: pointer;
+    }
+    .send-orb {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent-blue);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.65);
+    }
+
+    /* Durable Work Window (Smart Gen, Discover Market, Themes) */
+    .work-window {
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+      height: 516px;
+      border-radius: 24px;
+      padding: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: hidden;
+    }
+    .work-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .work-title {
+      font-size: var(--size-header);
+      font-weight: 700;
+    }
+    .seg-pills {
+      display: flex;
+      gap: 3px;
+      background: var(--fill-recessed);
+      padding: 3px;
+      border-radius: 999px;
+    }
+    .seg-pill {
+      font-size: 9.5px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: none;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.72);
+      cursor: pointer;
+    }
+    .seg-pill.active {
+      background: var(--fill-active);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+    }
+
+    /* Surface 2: Smart Gen — True Vertical Portrait Cards (`3:4` ratio) & Counterpart Boards (R24, R26) */
+    .kanban-lanes {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      flex: 1;
+      min-height: 0;
+      padding-bottom: 2px;
+    }
+    .kanban-lanes::-webkit-scrollbar { height: 0; }
+    .kanban-lane {
+      width: 144px;
+      flex-shrink: 0;
+      background: rgba(0, 0, 0, 0.32);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 16px;
+      padding: 7px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .lane-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 4px;
+      font-size: var(--size-pill);
+      font-weight: 700;
+    }
+    .lane-scroll {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .lane-scroll::-webkit-scrollbar { width: 0; }
+    .lane-add-btn {
+      padding: 6px;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.10);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 10px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    /* Vertical Portrait Card (3:4 Aspect Ratio — Width < Height!) */
+    .v-portrait-card {
+      height: 178px;
+      border-radius: 13px;
+      background: rgba(20, 25, 36, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.42);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.18s ease;
+    }
+    .v-portrait-card:hover {
+      border-color: rgba(56, 189, 248, 0.65);
+    }
+    .vp-cover {
+      position: relative;
+      height: 64px;
+      width: 100%;
+      background-size: cover;
+      background-position: center;
+      flex-shrink: 0;
+    }
+    .vp-cover::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.18), rgba(14,18,28,0.75));
+    }
+    .vp-tag {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      z-index: 2;
+      font-size: 8.8px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #fff;
+    }
+    .vp-check {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      z-index: 2;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+    .vp-check.done {
+      background: var(--accent-emerald);
+      border-color: var(--accent-emerald);
+    }
+    .vp-body {
+      flex: 1;
+      padding: 7px 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .vp-title {
+      font-size: 11.2px;
+      font-weight: 600;
+      line-height: 1.22;
+      color: #fff;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .vp-sub {
+      font-size: 10.2px;
+      line-height: 1.24;
+      color: rgba(255, 255, 255, 0.72);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .vp-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 9.2px;
+      font-weight: 600;
+      padding-top: 2px;
+    }
+
+    /* 2-Column Portrait Grid for "Cards" mode */
+    .portrait-grid-2col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+      overflow-y: auto;
+      flex: 1;
+      padding-right: 2px;
+    }
+    .portrait-grid-2col::-webkit-scrollbar { width: 0; }
+
+    /* Monday.com Pulse Table Counterpart */
+    .pulse-group {
+      background: rgba(0, 0, 0, 0.32);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .pulse-head {
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .pulse-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.10);
+    }
+    .pulse-status {
+      width: 78px;
+      padding: 5px 0;
+      border-radius: 6px;
+      font-size: 9.5px;
+      font-weight: 700;
+      text-align: center;
+      color: #fff;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* Surface 3: Discover Market (Grok Imagine Studio) */
+    .featured-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      flex-shrink: 0;
+    }
+    .featured-strip::-webkit-scrollbar { height: 0; }
+    .feat-card {
+      position: relative;
+      width: 142px;
+      height: 88px;
+      border-radius: 12px;
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      cursor: pointer;
+    }
+    .feat-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .feat-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 35%, rgba(0, 0, 0, 0.78) 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 6px;
+    }
+    .looks-row {
+      display: flex;
+      gap: 5px;
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    .looks-row::-webkit-scrollbar { height: 0; }
+    .look-chip {
+      font-size: var(--size-micro);
+      font-weight: 600;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--fill-cell);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: rgba(255, 255, 255, 0.82);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .look-chip.active {
+      background: var(--fill-active);
+      border-color: rgba(56, 189, 248, 0.65);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+    }
+    .market-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-auto-rows: 146px;
+      gap: 7px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+      padding-right: 2px;
+    }
+    .market-grid::-webkit-scrollbar { width: 0; }
+    .imagine-tile {
+      position: relative;
+      height: 146px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+    }
+    .imagine-tile img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .tile-footer {
+      position: absolute;
+      inset: auto 0 0 0;
+      padding: 6px;
+      background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.82));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+    }
+    .remix-btn {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.28);
+      border: 1px solid rgba(56, 189, 248, 0.65);
+      color: #fff;
+      cursor: pointer;
+    }
+
+    /* Surface 4: Premium Portrait Theme Market (3D Portrait CoverFlow + Title-Cased Tags + 5-Track Playlist) */
+    .coverflow-stage {
+      position: relative;
+      height: 224px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      perspective: 900px;
+      margin: 4px 0;
+    }
+    .portrait-theme-card {
+      position: absolute;
+      width: 132px;
+      height: 206px; /* Vertical 9:16 Portrait Card — NEVER square! */
+      border-radius: 16px;
+      overflow: hidden;
+      background-size: cover;
+      background-position: center;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.65);
+      transition: all 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+      cursor: pointer;
+    }
+    .track-wheel {
+      background: rgba(0, 0, 0, 0.34);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 14px;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .track-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 6px;
+      border-radius: 8px;
+      font-size: 10.5px;
+      cursor: pointer;
+    }
+    .track-row.playing {
+      background: rgba(56, 189, 248, 0.18);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      font-weight: 600;
+    }
+
+    /* Plane 4: Permanent Bottom Dock (Unified with SideNavRail) */
+    .bottom-dock-wrap {
+      position: relative;
+      z-index: 20;
+      padding: 4px 0 12px;
+      display: flex;
+      justify-content: center;
+    }
+    .bottom-dock {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 6px 14px;
+      border-radius: 999px;
+    }
+    .dock-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: var(--fill-cell);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .dock-btn.center-home {
+      width: 38px;
+      height: 38px;
+      background: rgba(52, 211, 153, 0.22);
+      border-color: rgba(52, 211, 153, 0.68);
+      box-shadow: 0 0 14px rgba(52, 211, 153, 0.55);
+    }
+
+    /* Hologram Zoom Modal (Paired Action Capsule Directly Underneath) */
+    .hologram-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 50;
+      background: rgba(6, 9, 15, 0.68);
+      backdrop-filter: blur(18px);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      gap: 10px;
+    }
+    .hologram-overlay.open { display: flex; }
+    .hologram-body {
+      max-width: 330px;
+      max-height: 340px;
+      overflow-y: auto;
+      padding: 18px 10px;
+      text-align: left;
+    }
+    .paired-action-capsule {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 7px 14px;
+      border-radius: 999px;
+    }
+    .act-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      font-size: 9.5px;
+      color: #fff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage-916">
+    <!-- Plane 0: Living 4K Wallpaper -->
+    <div class="wallpaper-layer" id="wallpaper"></div>
+
+    <!-- Top Switcher (Director's Cut Surface Selector + Music Pill) -->
+    <div class="top-bar">
+      <div class="v-glass-elevated director-switcher">
+        <button class="dir-btn active" onclick="setView('ticker', this)">1. Spatial Ticker</button>
+        <button class="dir-btn" onclick="setView('smartgen', this)">2. Smart Gen</button>
+        <button class="dir-btn" onclick="setView('market', this)">3. Discover</button>
+        <button class="dir-btn" onclick="setView('themes', this)">4. Themes</button>
+      </div>
+      <div class="v-glass-elevated music-pill" onclick="toggleMusic(this)">
+        <div class="music-disc">♫</div>
+        <span id="music-label" style="font-weight:600;">Lyria Spatial · Orbital Prelude</span>
+        <span style="color:var(--accent-emerald);font-weight:700;" id="music-state">PLAYING</span>
+      </div>
+    </div>
+
+    <!-- Plane 1: Spatial Workspace -->
+    <div class="workspace-center">
+      <!-- VIEW 1: BOTTOM-PINNED SPATIAL TICKER + PAIRED SIDE NAV (R08, R11) -->
+      <div class="paired-cluster" id="view-ticker">
+        <nav class="v-glass-elevated side-rail" aria-label="Context Side Nav">
+          <button class="rail-btn active" onclick="toast('New Multi-Model Thread Ready')">
+            <div class="rail-orb">＋</div>
+            <span class="rail-label">New</span>
+          </button>
+          <button class="rail-btn" onclick="openHologram('Global & Local History', 'All 9 model threads and consensus snapshots are persisted locally and synced to your Pro account (david@collider.ai).')">
+            <div class="rail-orb">↺</div>
+            <span class="rail-label">History</span>
+          </button>
+        </nav>
+
+        <div class="main-col">
+          <!-- Physical Glass Ticker (Bottom-pinned, <= 37% height = 264px, ZERO internal edge fades, clean Category Header!) -->
+          <section class="v-glass ticker-window">
+            <div class="cat-header">
+              <button class="cat-arrow" onclick="cycleCat(-1)">‹</button>
+              <div class="cat-title-wrap">
+                <span id="cat-name">General</span>
+              </div>
+              <button class="cat-arrow" onclick="cycleCat(1)">›</button>
+            </div>
+
+            <!-- Emissive Consensus Row -->
+            <div class="consensus-pill" onclick="openHologram('Consensus Synthesis', 'All active frontier models converge: Spatial glass containers maintain crisp physical boundaries with radial light emittance, while edge fades belong exclusively to borderless hologram projections.')">
+              <span class="consensus-score">6/6</span>
+              <p class="summary-11pt">All active models converge: physical glass containers keep crisp edges with live light emittance; only borderless holograms fade into air.</p>
+            </div>
+
+            <div class="hairline"></div>
+
+            <!-- Crisp Scrollable Model Rows (Transparent nested rows per HIG-MC-09, Active Lit at Top, Unselected Dimmed Below) -->
+            <div class="ticker-scroll" id="ticker-list"></div>
+          </section>
+
+          <!-- Permanent Bottom Composer Capsule (R11) -->
+          <div class="v-glass-elevated prompt-capsule">
+            <span class="mode-pill" onclick="cycleMode(this)">Deep Research</span>
+            <input class="prompt-input" id="prompt-in" placeholder="Enter message..." onkeydown="if(event.key==='Enter')sendPrompt()" />
+            <button class="send-orb" onclick="sendPrompt()">↑</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 2: SMART GEN (VERTICAL PORTRAIT CARDS + TRELLO KANBAN / MONDAY PULSE / NOTEBOOK COUNTERPARTS) -->
+      <div class="paired-cluster" id="view-smartgen" style="display:none;">
+        <nav class="v-glass-elevated side-rail">
+          <button class="rail-btn active" id="rail-sg-boards" onclick="setSgMode('boards')">
+            <div class="rail-orb" style="color:var(--accent-blue);">▦</div>
+            <span class="rail-label">Kanban</span>
+          </button>
+          <button class="rail-btn" id="rail-sg-cards" onclick="setSgMode('cards')">
+            <div class="rail-orb" style="color:var(--accent-rose);">❖</div>
+            <span class="rail-label">Cards</span>
+          </button>
+          <button class="rail-btn" id="rail-sg-monday" onclick="setSgMode('monday')">
+            <div class="rail-orb" style="color:var(--accent-emerald);">☰</div>
+            <span class="rail-label">Pulse</span>
+          </button>
+          <button class="rail-btn" id="rail-sg-notebook" onclick="setSgMode('notebook')">
+            <div class="rail-orb" style="color:var(--accent-violet);">✎</div>
+            <span class="rail-label">Notes</span>
+          </button>
+          <button class="rail-btn" onclick="addSmartGenCard()">
+            <div class="rail-orb" style="color:var(--accent-amber);">＋</div>
+            <span class="rail-label">Add</span>
+          </button>
+        </nav>
+
+        <section class="v-glass work-window">
+          <div class="work-header">
+            <span class="work-title">Smart Gen</span>
+            <div class="seg-pills">
+              <button class="seg-pill active" id="sg-btn-boards" onclick="setSgMode('boards')">Kanban</button>
+              <button class="seg-pill" id="sg-btn-cards" onclick="setSgMode('cards')">Cards</button>
+              <button class="seg-pill" id="sg-btn-monday" onclick="setSgMode('monday')">Pulse</button>
+              <button class="seg-pill" id="sg-btn-notebook" onclick="setSgMode('notebook')">Notebook</button>
+            </div>
+          </div>
+          <div id="sg-body" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
+        </section>
+      </div>
+
+      <!-- VIEW 3: DISCOVER MARKET (GROK IMAGINE STUDIO) -->
+      <div class="paired-cluster" id="view-market" style="display:none;">
+        <nav class="v-glass-elevated side-rail">
+          <button class="rail-btn active" onclick="filterMarket('All Looks')">
+            <div class="rail-orb" style="color:var(--accent-rose);">✦</div>
+            <span class="rail-label">Discover</span>
+          </button>
+          <button class="rail-btn" onclick="filterMarket('Saved')">
+            <div class="rail-orb" style="color:var(--accent-amber);">♥</div>
+            <span class="rail-label">Gallery</span>
+          </button>
+        </nav>
+
+        <section class="v-glass work-window">
+          <div class="work-header">
+            <span class="work-title">Discover Market</span>
+            <span class="look-chip active" style="padding:2px 8px;">Imagine Studio</span>
+          </div>
+
+          <!-- Top Row: Featured Pictures & Cinema Reels -->
+          <div class="featured-strip">
+            <div class="feat-card" onclick="openHologram('Featured · FLUX.2 Pro', 'Architectural Glass Pavilion at Dusk — 9:16 Spatial Render. Click Remix to send directly into your active Image composer.')">
+              <img src="https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80" alt="Featured 1" />
+              <div class="feat-overlay">
+                <span style="font-size:9px;color:var(--accent-blue);font-weight:700;">FLUX.2 PRO</span>
+                <span style="font-size:11px;font-weight:600;">Glass Pavilion Dusk</span>
+              </div>
+            </div>
+            <div class="feat-card" onclick="openHologram('Featured · Grok Imagine', 'Iridescent Fluid Refraction Study — High-contrast optical dispersion.')">
+              <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80" alt="Featured 2" />
+              <div class="feat-overlay">
+                <span style="font-size:9px;color:var(--accent-rose);font-weight:700;">GROK IMAGINE</span>
+                <span style="font-size:11px;font-weight:600;">Iridescent Refraction</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 2: Title-Cased Labeled Looks -->
+          <div class="looks-row" id="looks-bar"></div>
+
+          <!-- Row 3: 2-Column Imagine Feed -->
+          <div class="market-grid" id="market-grid"></div>
+        </section>
+      </div>
+
+      <!-- VIEW 4: PREMIUM PORTRAIT THEME MARKET & LIVING WALLPAPER GALLERY (R29–R32, R43, R44) -->
+      <div class="paired-cluster" id="view-themes" style="display:none;">
+        <nav class="v-glass-elevated side-rail">
+          <button class="rail-btn active" onclick="toast('Premium 4K Live Wallpapers')">
+            <div class="rail-orb" style="color:var(--accent-amber);">★</div>
+            <span class="rail-label">Premium</span>
+          </button>
+          <button class="rail-btn" onclick="toast('Purchased & Free Themes')">
+            <div class="rail-orb" style="color:var(--accent-blue);">▣</div>
+            <span class="rail-label">Themes</span>
+          </button>
+        </nav>
+
+        <section class="v-glass work-window" style="justify-content:space-between;">
+          <div class="work-header">
+            <span class="work-title">Theme Market</span>
+            <span style="font-size:10px;color:var(--accent-emerald);font-weight:700;">9:16 Portrait 4K</span>
+          </div>
+
+          <!-- R44: Title-Cased Tag Category Filter Bar -->
+          <div class="looks-row" id="theme-tags-bar"></div>
+
+          <!-- R32 & Settled Decisions: 3D Vertical Portrait Wallpaper CoverFlow (Never Square!) -->
+          <div class="coverflow-stage" id="theme-coverflow"></div>
+
+          <div style="text-align:center;">
+            <div id="theme-title" style="font-size:14px;font-weight:700;">Crystalline Nebula 4K</div>
+            <div id="theme-cat-sub" style="font-size:10px;color:rgba(255,255,255,0.68);">Sci-Fi & Cosmos · 5 Bundled Ambient Tracks</div>
+          </div>
+
+          <!-- R30, R31, HIG-MC-18: 5-Track Bundled Playlist with Individual Track Enable/Disable Toggles -->
+          <div class="track-wheel" id="theme-tracks"></div>
+
+          <!-- Unlock / Apply CTA -->
+          <button id="theme-cta" onclick="applyOrUnlockTheme()" style="width:100%;padding:9px;border-radius:999px;border:1px solid rgba(56,189,248,0.65);background:linear-gradient(90deg, rgba(10,132,255,0.85), rgba(56,189,248,0.85));color:#fff;font-family:var(--font-sans);font-size:11.5px;font-weight:700;cursor:pointer;box-shadow:0 0 16px rgba(56,189,248,0.45);">
+            Apply Theme · Unlocked
+          </button>
+        </section>
+      </div>
+    </div>
+
+    <!-- Plane 4: Unified Permanent Bottom Dock -->
+    <div class="bottom-dock-wrap">
+      <div class="v-glass-elevated bottom-dock">
+        <button class="dock-btn" title="Apps" onclick="cycleViews()">⊞</button>
+        <button class="dock-btn center-home" title="Home & Prompt" onclick="setView('ticker', document.querySelector('.dir-btn'))">✦</button>
+        <button class="dock-btn" title="Account & Settings (David Ebri · Pro)" onclick="openHologram('Account & Settings (Hologram Popup)', 'Signed in as David Ebri (david@collider.ai · Google) · Pro Tier Active (462 / 500 Daily Queries Left). Zero full-screen dimming scrim; settings float as a borderless projection.')">⚙</button>
+      </div>
+    </div>
+
+    <!-- Hologram Zoom Overlay with Context-Paired Action Capsule Underneath -->
+    <div class="hologram-overlay" id="holo-modal" onclick="if(event.target===this)closeHologram()">
+      <div class="v-hologram hologram-body">
+        <div id="holo-title" style="font-size:var(--size-header);font-weight:700;color:var(--accent-blue);margin-bottom:8px;"></div>
+        <div id="holo-text" style="font-size:var(--size-body);line-height:1.5;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,0.8);"></div>
+      </div>
+      <!-- Paired Action Capsule Centered 10px Below Content -->
+      <div class="v-glass-elevated paired-action-capsule">
+        <div class="act-item" onclick="toast('Copied to Clipboard');closeHologram()"><span>⧉</span><span>Copy</span></div>
+        <div class="act-item" onclick="toast('Saved to Files > Artifacts');closeHologram()"><span>★</span><span>Save</span></div>
+        <div class="act-item" onclick="toast('Queued in Smart Gen');closeHologram()"><span>✦</span><span>Smart Gen</span></div>
+        <div class="act-item" onclick="closeHologram()"><span>✕</span><span>Close</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const categories = [
+      {
+        name: 'General',
+        models: [
+          { id: 'glm5', name: 'GLM 5.3', color: '#60A5FA', active: true, time: 'just now', summary: 'Bottom-pinned Ticker leaves the upper 55% of the 9:16 living wallpaper room open and unobstructed.' },
+          { id: 'nem35', name: 'Nemotron 3.5 Lightning', color: '#4ADE80', active: true, time: 'just now', summary: 'Nested model rows use transparent backgrounds with crisp 1px borders per HIG-MC-09.' },
+          { id: 'ds41', name: 'DeepSeek V4.1 Flash', color: '#38BDF8', active: true, time: '1m ago', summary: 'Zero internal ShaderMask edge fades inside physical VGlass; top row stays sharp below Consensus.' },
+          { id: 'gemma4', name: 'Gemma 4 31B', color: '#7FD8C4', active: false, time: 'Tap to enable', summary: 'Unselected models stay in place dimmed below active models while retaining their 2-line 11pt summary.' },
+          { id: 'gpt20', name: 'GPT OSS 20B', color: '#10B981', active: false, time: 'Tap to enable', summary: 'OpenAI compact general reasoning engine standing by in the General roster.' }
+        ]
+      },
+      {
+        name: 'Image',
+        models: [
+          { id: 'flux2', name: 'FLUX.2 Pro', color: '#22D3EE', active: true, time: 'Ready', summary: 'Black Forest Labs studio-grade 9:16 photorealistic spatial synthesis engine.' },
+          { id: 'grok', name: 'Grok Imagine', color: '#F43F5E', active: true, time: 'Ready', summary: 'xAI high-contrast cinematic image & remix studio.' },
+          { id: 'seed5', name: 'Seedream 5.0 Lite', color: '#EC4899', active: false, time: 'Tap to enable', summary: 'ByteDance editorial art & typography-coherent image generator.' }
+        ]
+      },
+      {
+        name: 'Video',
+        models: [
+          { id: 'veo3', name: 'Veo 3.1 Cinema', color: '#7FD8C4', active: true, time: '4K Ready', summary: 'Google DeepMind temporal video & physics engine with bottom-bar ornament playback.' },
+          { id: 'kling2', name: 'Kling 2.0 Master', color: '#FB7185', active: false, time: 'Tap to enable', summary: 'Temporal cinematic text-to-video & camera motion studio.' }
+        ]
+      },
+      {
+        name: 'Music',
+        models: [
+          { id: 'lyria3', name: 'Lyria 3 Pro', color: '#7FD8C4', active: true, time: 'Playing', summary: 'Google DeepMind spatial soundtrack & instrumental composer.' },
+          { id: 'suno45', name: 'Suno v4.5 Studio', color: '#F472B6', active: true, time: 'Ready', summary: 'Full-track studio song, lyrics, and vocal production engine.' }
+        ]
+      },
+      {
+        name: 'Coding',
+        models: [
+          { id: 'ds_code', name: 'DeepSeek V4.1 Flash', color: '#38BDF8', active: true, time: 'just now', summary: 'All CupertinoIcons replaced with Material Icons across lib/; zero missing glyph boxes.' },
+          { id: 'glm_code', name: 'GLM 5.3 Code', color: '#60A5FA', active: true, time: 'just now', summary: 'Full SharedPreferences persistence wired for account, tier, models, and themes.' }
+        ]
+      }
+    ];
+    let catIdx = 0;
+
+    function renderTicker() {
+      const cat = categories[catIdx];
+      document.getElementById('cat-name').textContent = cat.name;
+      const active = cat.models.filter(m => m.active);
+      const idle = cat.models.filter(m => !m.active);
+      const list = document.getElementById('ticker-list');
+      list.innerHTML = '';
+      [...active, ...idle].forEach((m, idx) => {
+        if (idx === active.length && idle.length > 0) {
+          const hr = document.createElement('div');
+          hr.className = 'hairline';
+          list.appendChild(hr);
+        }
+        const row = document.createElement('div');
+        row.className = 'model-row ' + (m.active ? (idx === 0 ? 'active-expanded' : '') : 'inactive');
+        row.innerHTML = `
+          <div class="model-head">
+            <span class="orb" style="background:${m.color};box-shadow:${m.active ? '0 0 10px '+m.color : 'none'};"></span>
+            <span class="model-name">${m.name}</span>
+            <span class="model-meta">${m.active ? m.time : 'Tap to enable'}</span>
+          </div>
+          <p class="summary-11pt">${m.summary}</p>
+        `;
+        row.onclick = () => {
+          if (!m.active) {
+            m.active = true;
+            renderTicker();
+          } else {
+            openHologram(`${m.name} · Full Thread`, m.summary + '\n\n[Tip: Use the paired action capsule below to Copy, Save to Files, or send to Smart Gen.]');
+          }
+        };
+        row.oncontextmenu = (e) => {
+          e.preventDefault();
+          if (m.active && active.length > 1) { m.active = false; renderTicker(); }
+        };
+        list.appendChild(row);
+      });
+    }
+
+    function cycleCat(d) {
+      catIdx = (catIdx + d + categories.length) % categories.length;
+      renderTicker();
+    }
+
+    /* Smart Gen Data: Clean Vertical Portrait Cards with Visual Cover Headers (Zero random 5/6 or DE badges!) */
+    const sgCards = [
+      { id: 'c1', lane: 'To Do', tag: 'Theme Studio', tagColor: '#A78BFA', title: 'Spatial Audio & 5-Track Playlist', sub: 'Verify per-track toggles and ambient crossfade across rooms.', due: 'Today', done: false, img: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=400&q=80' },
+      { id: 'c2', lane: 'To Do', tag: 'AI Engine', tagColor: '#38BDF8', title: 'Multi-Model Consensus Synthesis', sub: 'Compare GLM 5.3, Nemotron Ultra & Gemma 4 agreement.', due: 'Oct 25', done: false, img: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=400&q=80' },
+      { id: 'c3', lane: 'Doing', tag: 'Spatial UI', tagColor: '#2DD4BF', title: 'Bottom-Pinned 9:16 Ticker', sub: 'Keep upper 55% of the living wallpaper room open.', due: 'In Review', done: false, img: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=400&q=80' },
+      { id: 'c4', lane: 'Doing', tag: 'Discover', tagColor: '#FB923C', title: 'Imagine Discover Remix Flow', sub: 'One-tap remix attaches style reference into Image mode.', due: 'Oct 26', done: false, img: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=400&q=80' },
+      { id: 'c5', lane: 'Done', tag: 'Workspace', tagColor: '#34D399', title: 'Hologram Account Persistence', sub: 'Sync active models, theme, and boards across launches.', due: 'Done', done: true, img: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=400&q=80' }
+    ];
+    let sgMode = 'boards';
+
+    function buildPortraitCardHTML(c) {
+      const laneColor = c.done ? '#34D399' : (c.lane === 'Doing' ? '#FBBF24' : '#38BDF8');
+      return `
+        <div class="v-portrait-card" onclick="toggleSgDone('${c.id}')">
+          <div class="vp-cover" style="background-image:url('${c.img}')">
+            <span class="vp-tag" style="background:${c.tagColor}">${c.tag}</span>
+            <span class="vp-check ${c.done ? 'done' : ''}">${c.done ? '✓' : ''}</span>
+          </div>
+          <div class="vp-body">
+            <div>
+              <div class="vp-title" style="${c.done ? 'text-decoration:line-through;opacity:0.65;' : ''}">${c.title}</div>
+              <div class="vp-sub" style="margin-top:3px;">${c.sub}</div>
+            </div>
+            <div class="vp-foot">
+              <span style="color:${laneColor};">● ${c.done ? 'Done' : c.lane}</span>
+              <span style="color:rgba(255,255,255,0.58);" onclick="event.stopPropagation();advanceSgLane('${c.id}')">${c.due} →</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSmartGen() {
+      const body = document.getElementById('sg-body');
+      body.innerHTML = '';
+      ['boards', 'cards', 'monday', 'notebook'].forEach(k => {
+        const b = document.getElementById('sg-btn-' + k);
+        if (b) b.className = 'seg-pill' + (sgMode === k ? ' active' : '');
+        const r = document.getElementById('rail-sg-' + k);
+        if (r) r.className = 'rail-btn' + (sgMode === k ? ' active' : '');
+      });
+
+      if (sgMode === 'boards') {
+        // Counterpart 1: Trello Kanban Vertical Swimlanes with Vertical Portrait Cards
+        const wrap = document.createElement('div');
+        wrap.className = 'kanban-lanes';
+        ['To Do', 'Doing', 'Done'].forEach(laneName => {
+          const laneColor = laneName === 'Done' ? '#34D399' : (laneName === 'Doing' ? '#FBBF24' : '#38BDF8');
+          const cardsInLane = sgCards.filter(c => c.lane === laneName);
+          const col = document.createElement('div');
+          col.className = 'kanban-lane';
+          col.innerHTML = `
+            <div class="lane-head">
+              <span style="color:${laneColor}">● ${laneName}</span>
+              <span style="font-size:10px;opacity:0.65;cursor:pointer;" onclick="addSmartGenCard('${laneName}')">＋</span>
+            </div>
+            <div class="lane-scroll">
+              ${cardsInLane.map(c => buildPortraitCardHTML(c)).join('')}
+            </div>
+            <div class="lane-add-btn" onclick="addSmartGenCard('${laneName}')">+ Add a card</div>
+          `;
+          wrap.appendChild(col);
+        });
+        body.appendChild(wrap);
+      } else if (sgMode === 'cards') {
+        // 2-Column Vertical Portrait Card Grid
+        const grid = document.createElement('div');
+        grid.className = 'portrait-grid-2col';
+        grid.innerHTML = sgCards.map(c => buildPortraitCardHTML(c)).join('');
+        body.appendChild(grid);
+      } else if (sgMode === 'monday') {
+        // Counterpart 2: Monday.com Pulse Group Tables
+        const scroll = document.createElement('div');
+        scroll.className = 'ticker-scroll';
+        scroll.style.flex = '1';
+        [
+          { name: 'Active Sprint · Working On It', filter: c => !c.done, color: '#FBBF24' },
+          { name: 'Completed Items', filter: c => c.done, color: '#34D399' }
+        ].forEach(grp => {
+          const box = document.createElement('div');
+          box.className = 'pulse-group';
+          const rows = sgCards.filter(grp.filter).map(c => `
+            <div class="pulse-row">
+              <img src="${c.img}" style="width:28px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0;" />
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.title}</div>
+                <div style="font-size:9.5px;color:rgba(255,255,255,0.62);">${c.tag} · ${c.due}</div>
+              </div>
+              <div class="pulse-status" style="background:${c.done ? '#10B981' : (c.lane === 'Doing' ? '#F59E0B' : '#0EA5E9')}" onclick="advanceSgLane('${c.id}')">
+                ${c.done ? 'Done' : (c.lane === 'Doing' ? 'Working on it' : 'Ready')}
+              </div>
+            </div>
+          `).join('');
+          box.innerHTML = `
+            <div class="pulse-head" style="background:${grp.color}28;border-left:3px solid ${grp.color}">
+              <span>${grp.name}</span>
+              <span style="cursor:pointer;" onclick="addSmartGenCard('To Do')">＋</span>
+            </div>
+            ${rows}
+          `;
+          scroll.appendChild(box);
+        });
+        body.appendChild(scroll);
+      } else {
+        // Counterpart 3: Ruled Field Notebook (R24)
+        const note = document.createElement('div');
+        note.style.cssText = 'flex:1;background:rgba(16,21,32,0.86);border:1px solid rgba(255,255,255,0.2);border-radius:14px;position:relative;overflow-y:auto;padding:8px 10px 8px 36px;';
+        note.innerHTML = `
+          <div style="position:absolute;left:26px;top:0;bottom:0;width:1.5px;background:rgba(251,113,133,0.5);"></div>
+          <div style="font-size:11px;font-weight:700;color:#FBBF24;margin-bottom:6px;">Field Notebook · Spatial Synthesis</div>
+          ${sgCards.map(c => `
+            <div onclick="toggleSgDone('${c.id}')" style="padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.12);cursor:pointer;">
+              <div style="font-size:11px;font-weight:600;${c.done ? 'text-decoration:line-through;opacity:0.6;' : ''}">${c.done ? '☑' : '☐'} ${c.title}</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.68);margin-top:2px;">${c.sub}</div>
+            </div>
+          `).join('')}
+        `;
+        body.appendChild(note);
+      }
+    }
+
+    function toggleSgDone(id) {
+      const c = sgCards.find(x => x.id === id);
+      if (c) {
+        c.done = !c.done;
+        c.lane = c.done ? 'Done' : 'Doing';
+        renderSmartGen();
+      }
+    }
+    function advanceSgLane(id) {
+      const order = ['To Do', 'Doing', 'Done'];
+      const c = sgCards.find(x => x.id === id);
+      if (c) {
+        c.lane = order[(order.indexOf(c.lane) + 1) % order.length];
+        c.done = (c.lane === 'Done');
+        renderSmartGen();
+      }
+    }
+    function setSgMode(m) { sgMode = m; renderSmartGen(); }
+    function addSmartGenCard(targetLane) {
+      const lane = targetLane || 'To Do';
+      sgCards.unshift({
+        id: 'c_' + Date.now(),
+        lane: lane,
+        tag: 'Spatial UI',
+        tagColor: '#38BDF8',
+        title: 'New Spatial Portrait Card',
+        sub: 'Tap to check off or advance across Kanban swimlanes.',
+        due: 'Today',
+        done: lane === 'Done',
+        img: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=400&q=80'
+      });
+      renderSmartGen();
+    }
+
+    /* Discover Market Data */
+    const looks = ['All Looks', 'Cinematic', 'Architectural', 'Iridescent Glass', 'Bioluminescent', 'Saved'];
+    let activeLook = 'All Looks';
+    const marketData = [
+      { id: 'm1', title: 'Glass Pavilion Dusk', look: 'Architectural', saved: true, url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80' },
+      { id: 'm2', title: 'Iridescent Caustics', look: 'Iridescent Glass', saved: true, url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80' },
+      { id: 'm3', title: 'Abyssal Biolume', look: 'Bioluminescent', saved: false, url: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=80' },
+      { id: 'm4', title: 'Obsidian Dispersion', look: 'Iridescent Glass', saved: false, url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=600&q=80' },
+      { id: 'm5', title: 'Kinetic Light Studio', look: 'Cinematic', saved: false, url: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=600&q=80' },
+      { id: 'm6', title: 'Glacial River Delta', look: 'Cinematic', saved: false, url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80' }
+    ];
+
+    function renderMarket() {
+      const lb = document.getElementById('looks-bar');
+      lb.innerHTML = '';
+      looks.forEach(l => {
+        const c = document.createElement('button');
+        c.className = 'look-chip' + (activeLook === l ? ' active' : '');
+        c.textContent = l;
+        c.onclick = () => filterMarket(l);
+        lb.appendChild(c);
+      });
+      const grid = document.getElementById('market-grid');
+      grid.innerHTML = '';
+      const filtered = marketData.filter(it => activeLook === 'All Looks' ? true : (activeLook === 'Saved' ? it.saved : it.look === activeLook));
+      filtered.forEach(it => {
+        const tile = document.createElement('div');
+        tile.className = 'imagine-tile';
+        tile.innerHTML = `
+          <img src="${it.url}" alt="${it.title}" />
+          <button onclick="toggleSave('${it.id}')" style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:none;background:rgba(0,0,0,0.5);color:${it.saved ? '#FF375F' : '#fff'};cursor:pointer;">♥</button>
+          <div class="tile-footer">
+            <div style="min-width:0;">
+              <div style="font-size:9px;color:var(--accent-blue);font-weight:600;">${it.look}</div>
+              <div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.title}</div>
+            </div>
+            <button class="remix-btn" onclick="remixItem('${it.title}')">Remix</button>
+          </div>
+        `;
+        grid.appendChild(tile);
+      });
+    }
+    function filterMarket(l) { activeLook = l; renderMarket(); }
+    function toggleSave(id) {
+      const item = marketData.find(x => x.id === id);
+      if (item) item.saved = !item.saved;
+      renderMarket();
+    }
+    function remixItem(title) {
+      setView('ticker', document.querySelector('.dir-btn'));
+      catIdx = 1;
+      renderTicker();
+      document.getElementById('prompt-in').value = `Remix [${title}] in 9:16 spatial glass style`;
+    }
+
+    /* Premium Portrait Theme Market (R29–R32, R43, R44) */
+    const themeTags = ['All Themes', 'Spatial Rooms', 'Nature & Sea', 'Sci-Fi & Cosmos', 'Architecture'];
+    let activeThemeTag = 'All Themes';
+    const themes = [
+      {
+        name: 'Crystalline Nebula 4K',
+        tag: 'Sci-Fi & Cosmos',
+        unlocked: true,
+        price: '$4.99',
+        url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=85',
+        tracks: [
+          { title: '1. Orbital Prelude', enabled: true },
+          { title: '2. Horizon Drift', enabled: true },
+          { title: '3. Deep Ion Resonance', enabled: true },
+          { title: '4. Starlight Echoes', enabled: true },
+          { title: '5. Zero-G Sanctuary', enabled: true }
+        ]
+      },
+      {
+        name: 'Bioluminescent Abyss 4K',
+        tag: 'Nature & Sea',
+        unlocked: false,
+        price: '$4.99',
+        url: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=900&q=85',
+        tracks: [
+          { title: '1. Abyssal Currents', enabled: true },
+          { title: '2. Biolume Bloom', enabled: true },
+          { title: '3. Pelagic Calm', enabled: true },
+          { title: '4. Coral Refraction', enabled: true },
+          { title: '5. Midnight Tide', enabled: true }
+        ]
+      },
+      {
+        name: 'Glass Pavilion Sanctuary',
+        tag: 'Architecture',
+        unlocked: false,
+        price: '$5.99',
+        url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=900&q=85',
+        tracks: [
+          { title: '1. Rain on Skylight', enabled: true },
+          { title: '2. Kyoto Courtyard', enabled: true },
+          { title: '3. Warm Cedar Atrium', enabled: true },
+          { title: '4. Dusk Reflections', enabled: true },
+          { title: '5. Still Water Terrace', enabled: true }
+        ]
+      }
+    ];
+    let themeIdx = 0;
+    let activeTrackIdx = 0;
+
+    function renderThemes() {
+      const tb = document.getElementById('theme-tags-bar');
+      tb.innerHTML = '';
+      themeTags.forEach(tag => {
+        const b = document.createElement('button');
+        b.className = 'look-chip' + (activeThemeTag === tag ? ' active' : '');
+        b.textContent = tag;
+        b.onclick = () => {
+          activeThemeTag = tag;
+          const matchIdx = themes.findIndex(t => tag === 'All Themes' || tag === 'Spatial Rooms' || t.tag === tag);
+          if (matchIdx >= 0) selectTheme(matchIdx);
+          else renderThemes();
+        };
+        tb.appendChild(b);
+      });
+
+      const stage = document.getElementById('theme-coverflow');
+      stage.innerHTML = '';
+      themes.forEach((t, i) => {
+        const diff = i - themeIdx;
+        const card = document.createElement('div');
+        card.className = 'portrait-theme-card';
+        card.style.backgroundImage = `url('${t.url}')`;
+        if (diff === 0) {
+          card.style.transform = 'translateX(0) translateZ(20px) scale(1.04)';
+          card.style.zIndex = '5';
+          card.style.borderColor = '#38BDF8';
+        } else {
+          const x = diff * 78;
+          const rot = diff < 0 ? 38 : -38;
+          card.style.transform = `translateX(${x}px) scale(0.84) rotateY(${rot}deg)`;
+          card.style.zIndex = String(4 - Math.abs(diff));
+          card.style.opacity = '0.78';
+        }
+        card.innerHTML = `
+          <div style="position:absolute;top:7px;left:7px;padding:2px 6px;border-radius:6px;background:rgba(0,0,0,0.6);font-size:8.5px;font-weight:700;color:#fff;">
+            ${t.unlocked ? 'UNLOCKED' : t.price}
+          </div>
+          <div style="position:absolute;inset:auto 0 0 0;padding:7px;background:linear-gradient(180deg,transparent,rgba(0,0,0,0.85));font-size:10px;font-weight:600;color:#fff;">
+            ${t.name}
+          </div>
+        `;
+        card.onclick = () => selectTheme(i);
+        stage.appendChild(card);
+      });
+
+      const cur = themes[themeIdx];
+      document.getElementById('theme-title').textContent = cur.name;
+      document.getElementById('theme-cat-sub').textContent = `${cur.tag} · 5 Bundled Ambient Tracks`;
+      document.getElementById('wallpaper').style.backgroundImage = `url('${cur.url}')`;
+
+      const tw = document.getElementById('theme-tracks');
+      tw.innerHTML = '';
+      cur.tracks.forEach((tr, ti) => {
+        const r = document.createElement('div');
+        r.className = 'track-row' + (ti === activeTrackIdx ? ' playing' : '');
+        r.innerHTML = `
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span onclick="event.stopPropagation();toggleTrackEnabled(${ti})" style="color:${tr.enabled ? '#38BDF8' : 'rgba(255,255,255,0.35)'};font-weight:700;">
+              ${tr.enabled ? '✓' : '○'}
+            </span>
+            <span style="${tr.enabled ? '' : 'text-decoration:line-through;opacity:0.5;'}">${tr.title}</span>
+          </div>
+          <span style="font-size:9.5px;color:${ti === activeTrackIdx ? '#34D399' : 'rgba(255,255,255,0.5)'};">
+            ${ti === activeTrackIdx ? '♫ Previewing' : 'Play'}
+          </span>
+        `;
+        r.onclick = () => {
+          activeTrackIdx = ti;
+          document.getElementById('music-label').textContent = `${cur.name.split(' ')[0]} · ${tr.title.replace(/^\d+\.\s*/, '')}`;
+          renderThemes();
+        };
+        tw.appendChild(r);
+      });
+
+      const cta = document.getElementById('theme-cta');
+      cta.textContent = cur.unlocked ? `Apply Theme · ${cur.name}` : `Unlock ${cur.price} · 4K Live + 5 Tracks`;
+    }
+
+    function selectTheme(i) {
+      themeIdx = i;
+      activeTrackIdx = 0;
+      renderThemes();
+    }
+    function toggleTrackEnabled(ti) {
+      const tr = themes[themeIdx].tracks[ti];
+      tr.enabled = !tr.enabled;
+      renderThemes();
+    }
+    function applyOrUnlockTheme() {
+      const cur = themes[themeIdx];
+      cur.unlocked = true;
+      toast(`Applied ${cur.name}`);
+      renderThemes();
+    }
+
+    const viewOrder = ['ticker', 'smartgen', 'market', 'themes'];
+    let curView = 'ticker';
+    function setView(v, btn) {
+      curView = v;
+      viewOrder.forEach(id => {
+        document.getElementById('view-' + id).style.display = (id === v) ? 'flex' : 'none';
+      });
+      document.querySelectorAll('.dir-btn').forEach((b, idx) => {
+        b.classList.toggle('active', viewOrder[idx] === v);
+      });
+    }
+    function cycleViews() {
+      const next = viewOrder[(viewOrder.indexOf(curView) + 1) % viewOrder.length];
+      setView(next);
+    }
+
+    function sendPrompt() {
+      const inp = document.getElementById('prompt-in');
+      const val = inp.value.trim();
+      if (!val) return;
+      const cat = categories[catIdx];
+      cat.models.filter(m => m.active).forEach(m => {
+        m.time = 'just now';
+        m.summary = `[Synthesized for "${val}"]: Spatial 9:16 response rendered at 11pt with emissive provider glow.`;
+      });
+      inp.value = '';
+      renderTicker();
+    }
+
+    function cycleMode(el) {
+      const modes = ['Chat', 'Deep Research', 'Thinking'];
+      el.textContent = modes[(modes.indexOf(el.textContent) + 1) % modes.length];
+    }
+
+    function toggleMusic(el) {
+      const st = document.getElementById('music-state');
+      const on = st.textContent === 'PLAYING';
+      st.textContent = on ? 'MUTED' : 'PLAYING';
+      st.style.color = on ? 'rgba(255,255,255,0.45)' : 'var(--accent-emerald)';
+    }
+
+    function openHologram(title, text) {
+      document.getElementById('holo-title').textContent = title;
+      document.getElementById('holo-text').innerText = text;
+      document.getElementById('holo-modal').classList.add('open');
+    }
+    function closeHologram() {
+      document.getElementById('holo-modal').classList.remove('open');
+    }
+    function toast(msg) {
+      document.getElementById('music-label').textContent = msg;
+      setTimeout(() => {
+        document.getElementById('music-label').textContent = 'Lyria Spatial · Orbital Prelude';
+      }, 2200);
+    }
+
+    renderTicker();
+    renderSmartGen();
+    renderMarket();
+    renderThemes();
+  </script>
+</body>
+</html>
