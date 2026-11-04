@@ -1,0 +1,454 @@
+import '../../core/drafts.dart';
+import 'package:material_ui/material_ui.dart';
+
+import '../../core/api/collider_api.dart';
+import '../../core/vision/vision_kit.dart';
+import '../../models/model_def.dart';
+import '../../models/ticker_item.dart';
+import 'history_drawer.dart' show VHistoryRowsGrouped;
+
+/// History overlay pane with Windows 11-style side-by-side preview pane and centered report header.
+class HistoryPane extends StatefulWidget {
+  final List<ConversationHistorySession> sessions;
+  final JobState? Function(String id) job;
+  final ValueChanged<ConversationHistorySession> onLoad;
+  final VoidCallback onClose;
+  final VoidCallback? onUpdated;
+  final bool autoFocusSearch;
+
+  const HistoryPane({
+    super.key,
+    required this.sessions,
+    required this.job,
+    required this.onLoad,
+    required this.onClose,
+    this.onUpdated,
+    this.autoFocusSearch = false,
+  });
+
+  @override
+  State<HistoryPane> createState() => _HistoryPaneState();
+}
+
+class _HistoryPaneState extends State<HistoryPane> {
+  final TextEditingController _search = Drafts.text('history.pane.search');
+  final FocusNode _searchFocus = FocusNode();
+  String _q = '';
+  ConversationHistorySession? _open;
+  bool _previewInitDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoFocusSearch) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocus.requestFocus();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant HistoryPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.autoFocusSearch && !oldWidget.autoFocusSearch) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocus.requestFocus();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  void _syncPreviewParam(List<ConversationHistorySession> sessions) {
+    if (_previewInitDone || sessions.isEmpty) return;
+    final p = Uri.base.queryParameters['preview'];
+    if (p != null) {
+      _previewInitDone = true;
+      final idx = int.tryParse(p) ?? 0;
+      _open = sessions[idx.clamp(0, sessions.length - 1)];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final wide = size.width >= 768;
+    final listW = wide ? (size.width * 0.28).clamp(260.0, 340.0) : (size.width - 88).clamp(240.0, 300.0);
+    final previewW = wide ? (size.width * 0.30).clamp(280.0, 380.0) : listW;
+    final h = (size.height * (wide ? 0.42 : 0.46)).clamp(260.0, 410.0);
+    final q = _q.toLowerCase();
+    final sessions = widget.sessions
+        .where((s) => q.isEmpty || s.title.toLowerCase().contains(q) || s.summary.toLowerCase().contains(q))
+        .toList();
+    _syncPreviewParam(sessions);
+    final open = _open;
+
+    final list = SizedBox(
+      width: listW,
+      height: h,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.sm, VSpace.xs, VSpace.xs),
+            child: SizedBox(
+              height: 32,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Positioned.fill(
+                    left: 36,
+                    right: 36,
+                    child: Center(
+                      child: Text(
+                        'History',
+                        textAlign: TextAlign.center,
+                        style: VType.headline(),
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: VCircleButton(icon: Icons.close_rounded, size: 30, tooltip: 'Close', onTap: widget.onClose),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(VSpace.sm, 0, VSpace.sm, VSpace.xs),
+            child: Focus(
+              focusNode: _searchFocus,
+              child: VSearchField(
+                controller: _search,
+                hint: 'Search conversations...',
+                onChanged: (v) => setState(() => _q = v.trim()),
+              ),
+            ),
+          ),
+          Expanded(
+            child: VHistoryRowsGrouped(
+              sessions: sessions,
+              selectedId: open?.id,
+              onSelect: (s) => setState(() => _open = identical(_open, s) && wide ? null : s),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Widget pane;
+    if (wide) {
+      pane = Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        list,
+        AnimatedSize(
+          duration: VMotion.base,
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.centerLeft,
+          child: open == null
+              ? const SizedBox(height: 0)
+              : Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(width: 0.5, height: h, color: VColors.borderLight),
+                  SizedBox(
+                    width: previewW,
+                    height: h,
+                    child: _Preview(
+                      key: ValueKey(open.id),
+                      session: open,
+                      job: widget.job(open.id),
+                      onLoad: () => widget.onLoad(open),
+                      onUpdated: widget.onUpdated,
+                    ),
+                  ),
+                ]),
+        ),
+      ]);
+    } else {
+      pane = AnimatedSwitcher(
+        duration: VMotion.base,
+        child: open == null
+            ? KeyedSubtree(key: const ValueKey('list'), child: list)
+            : SizedBox(
+                key: ValueKey(open.id),
+                width: listW,
+                height: h,
+                child: _Preview(
+                  session: open,
+                  job: widget.job(open.id),
+                  onLoad: () => widget.onLoad(open),
+                  onBack: () => setState(() => _open = null),
+                  onUpdated: widget.onUpdated,
+                ),
+              ),
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: widget.onClose,
+          child: const SizedBox.expand(),
+        ),
+        Positioned(
+          left: wide ? 92 : 68,
+          bottom: wide ? 88 : 92,
+          child: GestureDetector(
+            onTap: () {},
+            child: VGlass(material: VMaterial.modal, radius: VRadius.card, child: pane),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Preview extends StatefulWidget {
+  final ConversationHistorySession session;
+  final JobState? job;
+  final VoidCallback onLoad;
+  final VoidCallback? onBack;
+  final VoidCallback? onUpdated;
+  const _Preview({super.key, required this.session, required this.job, required this.onLoad, this.onBack, this.onUpdated});
+
+  @override
+  State<_Preview> createState() => _PreviewState();
+}
+
+class _Turn {
+  final String question;
+  final Map<String, String?> answers = {};
+  _Turn(this.question);
+}
+
+class _PreviewState extends State<_Preview> {
+  final TextEditingController _ctrl = Drafts.text('history.pane.reply');
+  final List<_Turn> _turns = [];
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  void _send() {
+    final text = _ctrl.text.trim();
+    final job = widget.job;
+    if (text.isEmpty || job == null) return;
+    _ctrl.clear();
+    final turn = _Turn(text);
+    setState(() => _turns.add(turn));
+    final mode = AskMode.values.firstWhere((m) => m.wire == job.mode, orElse: () => AskMode.chat);
+    for (final e in job.results.entries) {
+      if (e.value.status != 'done') continue;
+      final mid = e.key;
+      turn.answers[mid] = null;
+      final baseHistory = e.value.messages.isNotEmpty
+          ? [for (final m in e.value.messages) {'role': m['role'] ?? 'user', 'content': m['content'] ?? ''}]
+          : <Map<String, String>>[
+              {'role': 'user', 'content': job.prompt},
+              {'role': 'assistant', 'content': e.value.text},
+            ];
+      final messages = <Map<String, String>>[
+        ...baseHistory,
+        for (final t in _turns.where((t) => t != turn)) ...[
+          {'role': 'user', 'content': t.question},
+          if (t.answers[mid] != null) {'role': 'assistant', 'content': t.answers[mid]!},
+        ],
+        {'role': 'user', 'content': text},
+      ];
+      ColliderApi.instance.replyStream(model: mid, messages: messages, mode: mode, jobId: job.id).listen((d) {
+        if (mounted && d.text.isNotEmpty) setState(() => turn.answers[mid] = d.text);
+        if (d.done) {
+          ColliderApi.instance.cachedHistory = null;
+          widget.onUpdated?.call();
+        }
+      }, onError: (Object _) {
+        if (mounted) setState(() => turn.answers.remove(mid));
+      }, cancelOnError: true);
+    }
+  }
+
+  Widget _answer(String mid, String? text) {
+    final def = ModelRoster.byId(mid);
+    final c = def?.providerColor ?? VColors.textSecondary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [
+          Color.alphaBlend(c.withValues(alpha: 0.18), VColors.fillRow),
+          Color.alphaBlend(c.withValues(alpha: 0.06), VColors.fillRow),
+        ]),
+        borderRadius: BorderRadius.circular(VRadius.row),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(def?.label ?? mid, style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        text == null
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: CupertinoActivityIndicator(radius: 7, color: VColors.textSecondary),
+              )
+            : MdText(text, style: VType.callout(weight: FontWeight.w500).copyWith(fontSize: 11.5, height: 1.4)),
+      ]),
+    );
+  }
+
+  Widget _question(String q) => Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8, left: 32),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: VColors.fillActive, borderRadius: BorderRadius.circular(VRadius.row)),
+          child: Text(q, style: VType.body(weight: FontWeight.w500)),
+        ),
+      );
+
+  List<_Turn> _persistedFollowUps(JobState? job) {
+    if (job == null) return const [];
+    final out = <_Turn>[];
+    for (final e in job.results.entries) {
+      final msgs = e.value.messages;
+      if (msgs.length <= 2) continue;
+      var turnIdx = 0;
+      for (var i = 2; i < msgs.length; i++) {
+        final role = msgs[i]['role'] ?? 'user';
+        final content = msgs[i]['content'] ?? '';
+        if (role == 'user') {
+          if (turnIdx >= out.length) out.add(_Turn(content));
+          turnIdx++;
+        } else if (role == 'assistant' && turnIdx > 0 && turnIdx <= out.length) {
+          out[turnIdx - 1].answers[e.key] = content;
+        }
+      }
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final job = widget.job;
+    final s = widget.session;
+    final consensus = job?.consensus.summary ?? '';
+    final persistedTurns = _persistedFollowUps(job);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(VSpace.xs, VSpace.sm, VSpace.sm, VSpace.xs),
+          child: Row(children: [
+            if (widget.onBack != null) ...[
+              VCircleButton(icon: Icons.chevron_left_rounded, size: 30, onTap: widget.onBack),
+              const SizedBox(width: 6),
+            ] else
+              const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                s.title,
+                maxLines: 1,
+                softWrap: false,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.fade,
+                style: VType.callout(weight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(width: 8),
+            VPress(
+              onTap: widget.onLoad,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(color: VColors.accentBlue, borderRadius: BorderRadius.circular(VRadius.full)),
+                child: Text('Load Conversation', style: VType.caption(color: Colors.white, weight: FontWeight.w600)),
+              ),
+            ),
+          ]),
+        ),
+        Expanded(
+          child: VFadeScroll(
+            padding: const EdgeInsets.fromLTRB(VSpace.sm, VSpace.xxs, VSpace.sm, VSpace.sm),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              _question(job?.prompt ?? s.title),
+              if (consensus.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                  decoration: BoxDecoration(
+                    color: VColors.fillRow,
+                    borderRadius: BorderRadius.circular(VRadius.row),
+                    border: Border.all(color: VColors.borderLight, width: 0.5),
+                  ),
+                  child: MdText(consensus, style: VType.body(weight: FontWeight.w500)),
+                ),
+              if (job != null)
+                for (final e in job.results.entries)
+                  if (e.value.status == 'done' && e.value.text.isNotEmpty)
+                    _answer(
+                      e.key,
+                      e.value.messages.length >= 2 && (e.value.messages[1]['role'] == 'assistant')
+                          ? e.value.messages[1]['content']
+                          : e.value.text,
+                    ),
+              for (final t in persistedTurns) ...[
+                _question(t.question),
+                for (final e in t.answers.entries) _answer(e.key, e.value),
+              ],
+              for (final t in _turns) ...[
+                _question(t.question),
+                for (final e in t.answers.entries) _answer(e.key, e.value),
+              ],
+            ]),
+          ),
+        ),
+        if (job != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(VSpace.sm, 0, VSpace.sm, VSpace.sm),
+            child: VRecessed(
+              radius: 17,
+              padding: const EdgeInsets.fromLTRB(14, 0, 4, 0),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.5),
+                    child: TextField(
+                      controller: _ctrl,
+                      minLines: 1,
+                      maxLines: 4,
+                      cursorColor: VColors.textPrimary,
+                      textInputAction: TextInputAction.send,
+                      style: VType.body(weight: FontWeight.w500),
+                      decoration: InputDecoration(
+                        hintText: 'Enter message',
+                        hintStyle: VType.body(color: const Color(0x99FFFFFF), weight: FontWeight.w400),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      onSubmitted: (_) => _send(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: VPress(
+                    onTap: _send,
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      decoration: const BoxDecoration(shape: BoxShape.circle, color: VColors.fillActive),
+                      child: const Icon(Icons.arrow_upward_rounded, size: 15, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+      ],
+    );
+  }
+}
