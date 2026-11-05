@@ -1,0 +1,974 @@
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../core/audio/music_player.dart';
+import '../../core/media/live_frames.dart';
+import '../../core/media/theme_blur_cache.dart';
+import '../../core/media/theme_cloud.dart';
+import '../../core/vision/vision_kit.dart';
+import '../../models/theme_def.dart';
+import 'theme_living_media.dart';
+import 'theme_pack_store.dart';
+
+/// Premium Theme Market. Ported by Claude (2026-10-17) from David's Premium Theme Market source
+/// (Figma Make bundle "Premium Theme Market", src/app): App.tsx, CoverFlow.tsx, SearchBar.tsx, Player.tsx and
+/// SimpleBackgroundVideo.tsx, line by line, with the music swapped for his live wallpapers:
+///  - the songs are his live wallpapers, read from his Cloudflare bucket (ThemeCloud; tools/collider_server.py themes());
+///  - an album cover is the wallpaper's poster, and the wallpaper itself plays in the covers nearest the centre;
+///  - the YouTube background video is the wallpaper's loop (ThemeLivingBackdrop with builderAmbient, in main.dart);
+///  - the YouTube audio is the wallpaper's own song, when it has one.
+/// Left out of the source because nothing called it, or it only served the music: AlbumCoverAdmin, BackgroundVideo,
+/// the iTunes and AudioDB services, three of the four cover hooks, the 50-song list, the artist and album lines, the
+/// "Loading..." / "Now Playing" / "Tap to play" line, the count line that was computed and never shown, and the empty
+/// header bar. Changed for speed: only the covers on screen are built (the source built all fifty), covers load from
+/// the bucket as they come into view, and only the centre cover and its neighbours play.
+/// Kept from David's earlier notes: the row goes round ("a looping carousel, like all carousels"), the theme's songs
+/// are listed under its name, and the theme is applied with the round check.
+/// Added 2026-10-17 on David's request: each pack's five preview tracks under the player, the chosen one in focus at
+/// the centre and the rest blurring away toward the edges, so a buyer hears what the pack holds; and the pack's price,
+/// bought through the App Store or Google Play (ThemePackStore), with the platform's own notices (PurchaseNotice).
+class PremiumThemeMarketView extends StatefulWidget {
+  final WallpaperTheme currentTheme;
+  final ValueChanged<WallpaperTheme> onApplyTheme;
+  final ValueChanged<WallpaperTheme> onPreviewTheme;
+  final VoidCallback onClose;
+
+  const PremiumThemeMarketView({
+    super.key,
+    required this.currentTheme,
+    required this.onApplyTheme,
+    required this.onPreviewTheme,
+    required this.onClose,
+  });
+
+  @override
+  State<PremiumThemeMarketView> createState() => _PremiumThemeMarketViewState();
+}
+
+class _PremiumThemeMarketViewState extends State<PremiumThemeMarketView> with SingleTickerProviderStateMixin {
+  // App.tsx state
+  String _query = '';
+  List<WallpaperTheme> _shown = const [];
+  int _index = 0; // unbounded: the row goes round, so the theme is _shown[_index mod length]
+
+  // CoverFlow.tsx state
+  bool _dragging = false;
+  double _dragStart = 0, _dragOffset = 0, _velocity = 0;
+  int _lastDragTime = 0;
+  late final AnimationController _move = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+  double _from = 0, _to = 0;
+  final FocusNode _keys = FocusNode();
+  final Map<int, LiveFrames> _live = {};
+  int _track = 0; // the preview track in focus
+  bool _buying = false;
+
+  static const _ease = Cubic(0.23, 1, 0.32, 1); // cubic-bezier(0.23, 1, 0.32, 1)
+
+  WallpaperTheme? get _selected => _shown.isEmpty ? null : _at(_index);
+  WallpaperTheme _at(int i) => _shown[((i % _shown.length) + _shown.length) % _shown.length];
+  double get _pos => _from + (_to - _from) * _ease.transform(_move.value);
+
+  @override
+  void initState() {
+    super.initState();
+    PremiumAmbient.playing.value = true; // the source starts playing the middle song
+    ThemeCloud.instance.addListener(_reload);
+    ThemeCloud.instance.init();
+    ThemePackStore.instance.addListener(_storeChanged);
+    ThemePackStore.instance.init();
+    _move.addListener(() => setState(() {}));
+    _reload();
+    _keys.requestFocus();
+  }
+
+  @override
+  void dispose() {
+    ThemeCloud.instance.removeListener(_reload);
+    ThemePackStore.instance.removeListener(_storeChanged);
+    _search?.cancel();
+    _move.dispose();
+    _keys.dispose();
+    for (final f in _live.values) {
+      f.dispose();
+    }
+    super.dispose();
+  }
+
+  void _storeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  // ---------------------------------------------------------------- App.tsx: loading and search
+
+  /// Three states, and each one says what it is: still reading, the list could not be read, or
+  /// there is nothing to show. A spinner that runs for ever says none of them.
+  Widget _empty() {
+    final cloud = ThemeCloud.instance;
+    if (!cloud.ready) {
+      return const Center(
+        child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF9CA3AF))),
+      );
+    }
+    final failed = cloud.failed;
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(
+          failed ? 'The wallpapers could not be loaded.' : 'There are no wallpapers to show.',
+          textAlign: TextAlign.center,
+          style: VType.callout(color: VColors.textSecondary),
+        ),
+        const SizedBox(height: 14),
+        VPress(
+          onTap: () => ThemeCloud.instance.reload(),
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
+            child: Center(child: Text('Try again', style: VType.callout(color: Colors.white, weight: FontWeight.w600))),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  void _reload() {
+    final all = WallpaperCatalog.premiumThemes;
+    ThemePackStore.instance.loadPrices(all);
+    final q = _query.trim().toLowerCase();
+    var found = q.isEmpty ? all : all.where((t) => t.name.toLowerCase().contains(q) || t.id.contains(q)).toList();
+    if (found.isEmpty) found = all; // localAlbumService: nothing found shows the whole list again
+    final keep = _selected?.id;
+    setState(() {
+      _shown = found;
+      // App.tsx starts on the middle song; after a refresh the theme on show stays on show
+      final i = keep == null ? -1 : found.indexWhere((t) => t.id == keep);
+      _index = i >= 0 ? i : found.length ~/ 2;
+      _from = _to = _index.toDouble();
+      _dropFrames();
+    });
+    final s = _selected;
+    if (s != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => widget.onPreviewTheme(s));
+    }
+  }
+
+  Timer? _search;
+
+  /// SearchBar.tsx: searches 500 ms after typing stops; clearing shows everything.
+  void _onSearch(String v) {
+    _search?.cancel();
+    if (v.trim().isEmpty) return;
+    _search = Timer(const Duration(milliseconds: 500), () {
+      _query = v;
+      _reload();
+    });
+  }
+
+  void _clearSearch() {
+    _search?.cancel();
+    _query = '';
+    _reload();
+  }
+
+  // ---------------------------------------------------------------- CoverFlow.tsx: moving
+
+  void _select(int i) {
+    if (_shown.isEmpty || (i == _index && !_dragging)) return;
+    _from = _pos + (_dragging ? -_dragOffset / 100 : 0);
+    _to = i.toDouble();
+    final moved = i != _index;
+    _index = i;
+    _move.forward(from: 0);
+    if (!moved) return;
+    _track = 0;
+    _dropFrames();
+    final t = _selected!;
+    ThemeBlurCache.instance.setActiveTheme(t);
+    ThemeBlurCache.instance.prewarmThemes([_at(i - 2), _at(i - 1), t, _at(i + 1), _at(i + 2)]);
+    widget.onPreviewTheme(t);
+    if (PremiumAmbient.playing.value) _playSong(t);
+  }
+
+  void _dragStartAt(double x) {
+    _dragging = true;
+    _dragStart = x;
+    _dragOffset = 0;
+    _velocity = 0;
+    _lastDragTime = DateTime.now().millisecondsSinceEpoch;
+  }
+
+  void _dragMoveTo(double x) {
+    if (!_dragging) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final dt = math.max(now - _lastDragTime, 1);
+    final offset = x - _dragStart;
+    setState(() {
+      _velocity = (offset - _dragOffset) / dt;
+      _dragOffset = offset;
+    });
+    _lastDragTime = now;
+  }
+
+  void _dragEnd() {
+    if (!_dragging) return;
+    // the source's momentum: 50 px or 0.5 px/ms moves one; fast or long drags move more
+    const threshold = 50.0, velocityThreshold = 0.5, highVelocityThreshold = 2.0;
+    var target = _index;
+    final distance = _dragOffset.abs(), speed = _velocity.abs();
+    if (distance > threshold || speed > velocityThreshold) {
+      var jump = 1;
+      if (speed > highVelocityThreshold) jump = math.min(2, (speed / 1.5).ceil());
+      if (distance > threshold * 2) jump = math.max(jump, (distance / (threshold * 1.5)).floor());
+      if (_dragOffset < 0 || _velocity < -velocityThreshold) {
+        target = _index + jump;
+      } else if (_dragOffset > 0 || _velocity > velocityThreshold) {
+        target = _index - jump;
+      }
+    }
+    _select(target);
+    _dragging = false;
+    setState(() {
+      _dragOffset = 0;
+      _velocity = 0;
+    });
+  }
+
+  KeyEventResult _onKey(FocusNode _, KeyEvent e) {
+    if (e is! KeyDownEvent) return KeyEventResult.ignored;
+    if (e.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _select(_index - 1);
+    } else if (e.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _select(_index + 1);
+    } else if (e.logicalKey == LogicalKeyboardKey.escape) {
+      widget.onClose();
+    } else {
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
+
+  // ---------------------------------------------------------------- Player.tsx
+
+  void _togglePlay() {
+    final t = _selected;
+    if (t == null) return;
+    final on = !PremiumAmbient.playing.value;
+    PremiumAmbient.playing.value = on;
+    final p = MusicPlayer.instance;
+    if (on) {
+      _playSong(t);
+    } else if (p.queueId == t.id && p.playing) {
+      p.toggle();
+    }
+    setState(() {});
+  }
+
+  /// The preview track in focus plays with the wallpaper, as the source's song played with its video.
+  void _playSong(WallpaperTheme t) {
+    final p = MusicPlayer.instance;
+    if (t.tracks.isEmpty) {
+      if (p.playing) p.toggle();
+      return;
+    }
+    final i = _track.clamp(0, t.tracks.length - 1);
+    if (p.queueId == t.id && p.index == i && p.playing) return;
+    p.play(i, list: MusicPlayer.forTheme(t), id: t.id);
+  }
+
+  void _focusTrack(WallpaperTheme t, int i) {
+    setState(() => _track = i);
+    PremiumAmbient.playing.value = true;
+    _playSong(t);
+  }
+
+  // ---------------------------------------------------------------- live covers
+
+  /// The centre cover and its two neighbours play; the rest show their posters.
+  ValueNotifier<ui.Image?>? _framesFor(int i, WallpaperTheme t) {
+    if ((i - _index).abs() > 1 || t.videoPath == null) return null;
+    return (_live[i] ??= LiveFrames(themeMediaUrl(t.videoPath!), fps: 20)).frame;
+  }
+
+  void _dropFrames() {
+    final gone = _live.keys.where((k) => (k - _index).abs() > 1).toList();
+    for (final k in gone) {
+      _live.remove(k)?.dispose();
+    }
+  }
+
+  // ---------------------------------------------------------------- layout (App.tsx)
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final isMobile = size.width < 768; // useResponsive
+    final t = _selected;
+    return Focus(
+      focusNode: _keys,
+      onKeyEvent: _onKey,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Tapping the room closes the market.
+          Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: widget.onClose)),
+          // The source's floor: a faint light laid back in perspective along the lower half.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: size.height / 2,
+            child: IgnorePointer(
+              child: Transform(
+                alignment: Alignment.bottomCenter,
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.001)
+                  ..rotateX(60 * math.pi / 180),
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Color(0x05FFFFFF), Color(0x00FFFFFF)]),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Center(child: _SearchBar(onSearch: _onSearch, onClear: _clearSearch)),
+                ),
+                Expanded(
+                  child: _shown.isEmpty
+                      ? _empty()
+                      : LayoutBuilder(
+                          builder: (context, box) {
+                            final availH = box.maxHeight;
+                            final compactH = availH < 780;
+                            final coverH = (availH * 0.42).clamp(220.0, 340.0);
+                            final gapTitle = (availH * 0.025).clamp(10.0, 24.0);
+                            final gapPlayer = (availH * 0.018).clamp(8.0, 16.0);
+                            final gapTracks = (availH * 0.02).clamp(10.0, 18.0);
+                            return SingleChildScrollView(
+                              physics: const BouncingScrollPhysics(),
+                              padding: EdgeInsets.fromLTRB(isMobile ? 16 : 32, 0, isMobile ? 16 : 32, 20),
+                              child: Column(
+                                children: [
+                                  _coverFlow(isMobile, size.width, coverH: coverH, compactH: compactH),
+                                  if (t != null) ...[
+                                    SizedBox(height: gapTitle),
+                                    Text(t.name,
+                                        textAlign: TextAlign.center,
+                                        style: VType.title2(color: Colors.white).copyWith(
+                                          fontWeight: FontWeight.w300,
+                                          shadows: const [Shadow(color: Color(0x80000000), blurRadius: 8, offset: Offset(0, 2))],
+                                        )),
+                                    SizedBox(height: gapPlayer),
+                                    _player(t, compactH: compactH),
+                                    if (t.tracks.isNotEmpty) ...[SizedBox(height: gapTracks), _tracks(t, compactH: compactH)],
+                                  ],
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                // The price is the only way to buy the pack, so it stands at the bottom of the screen
+                // and is never left below the fold by the covers and the tracks.
+                if (t != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Center(child: _apply(t)),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------- CoverFlow.tsx: drawing
+
+  Widget _coverFlow(bool isMobile, double width, {double coverH = 340, bool compactH = false}) {
+    final albumSize = isMobile ? 160.0 : (compactH ? 180.0 : 200.0);
+    final spacing = isMobile ? 120.0 : 160.0;
+    final drag = _dragging ? _dragOffset / 100 : 0.0;
+    final pos = _pos - drag;
+    // Only the covers that can be on screen are built (the source built every song).
+    final reach = math.min(math.min(4, (width / spacing / 2).ceil() + 1), (_shown.length - 1) ~/ 2);
+    final order = [for (int k = -reach; k <= reach; k++) _index + k]..sort((a, b) => (b - pos).abs().compareTo((a - pos).abs()));
+    return SizedBox(
+      height: coverH,
+      width: double.infinity,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (d) => _dragStartAt(d.globalPosition.dx),
+        onHorizontalDragUpdate: (d) => _dragMoveTo(d.globalPosition.dx),
+        onHorizontalDragEnd: (_) => _dragEnd(),
+        onHorizontalDragCancel: _dragEnd,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            for (final i in order) _cover(i, i - pos, albumSize, spacing),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _cover(int i, double offset, double size, double spacing) {
+    final t = _at(i);
+    final center = offset.abs() < 0.1;
+    final d = offset.abs();
+    // perspective 1500px. Flutter's z runs the other way to CSS's, so the source's translateZ values are negated.
+    final m = Matrix4.identity()..setEntry(3, 2, 1 / 1500);
+    if (center) {
+      m
+        ..translate(0.0, 0.0, -300.0)
+        ..scale(1.3, 1.3, 1.3);
+    } else {
+      final k = math.max(0.8, 1.15 - d * 0.04);
+      m
+        ..translate(offset * spacing, 0.0, 80.0 * d)
+        ..rotateY((offset < 0 ? 55 : -55) * math.pi / 180)
+        ..scale(k, k, 1.0);
+    }
+    final opacity = d <= 2 ? 1.0 : d <= 3 ? 0.95 : d <= 4 ? 0.9 : math.max(0.8, 0.9 - (d - 4) * 0.05);
+    final isCurrent = i == _index;
+    final frames = _framesFor(i, t);
+    Widget picture() => frames == null
+        ? _Poster(theme: t)
+        : ValueListenableBuilder<ui.Image?>(
+            valueListenable: frames,
+            builder: (_, img, __) => img == null ? _Poster(theme: t) : RawImage(image: img, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+          );
+    return Transform(
+      alignment: Alignment.center,
+      transform: m,
+      child: Opacity(
+        opacity: opacity,
+        child: GestureDetector(
+          onTap: () => _select(i),
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // the cover
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0xE6000000), blurRadius: 50, spreadRadius: -12, offset: Offset(0, 25)),
+                        BoxShadow(color: Color(0x99000000), blurRadius: 32, offset: Offset(0, 8)),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Stack(fit: StackFit.expand, children: [
+                        picture(),
+                        // glass reflection across the face
+                        const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0x1FFFFFFF), Color(0x0AFFFFFF), Color(0x00FFFFFF), Color(0x05000000), Color(0x14000000)],
+                              stops: [0, 0.25, 0.5, 0.75, 1],
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white.withValues(alpha: isCurrent ? 0.30 : 0.10), width: 1),
+                      ),
+                    ),
+                  ),
+                ),
+                // the reflection under it (the same picture, so a playing cover's reflection plays too)
+                Positioned(
+                  top: size,
+                  left: 0,
+                  width: size,
+                  height: size,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: isCurrent ? 0.9 : 0.75,
+                      child: Transform(
+                        alignment: Alignment.center,
+                        transform: Matrix4.diagonal3Values(1, -1, 1),
+                        child: ShaderMask(
+                          blendMode: BlendMode.dstIn,
+                          shaderCallback: (r) => const LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [Color(0xBFFFFFFF), Color(0x66FFFFFF), Color(0x26FFFFFF), Color(0x00FFFFFF)],
+                            stops: [0, 0.2, 0.4, 0.6],
+                          ).createShader(r),
+                          child: ColorFiltered(
+                            // brightness(0.6) contrast(1.3)
+                            colorFilter: const ColorFilter.matrix(<double>[
+                              0.78, 0, 0, 0, -38.25,
+                              0, 0.78, 0, 0, -38.25,
+                              0, 0, 0.78, 0, -38.25,
+                              0, 0, 0, 1, 0,
+                            ]),
+                            child: ClipRRect(borderRadius: BorderRadius.circular(8), child: picture()),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // floor highlight
+                Positioned(
+                  top: size + 6,
+                  left: 0,
+                  width: size,
+                  height: 12,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: isCurrent ? 0.6 : 0.35,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          gradient: const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0x0FFFFFFF), Color(0x1FFFFFFF), Color(0x00FFFFFF)],
+                            stops: [0, 0.4, 1],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (isCurrent) ...[
+                  const Positioned(top: 12, right: 12, child: _Pulse()),
+                  Positioned(
+                    top: 0,
+                    left: size / 4,
+                    right: size / 4,
+                    height: 4,
+                    child: IgnorePointer(
+                      child: ImageFiltered(
+                        imageFilter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------- Player.tsx: drawing
+
+  Widget _player(WallpaperTheme t, {bool compactH = false}) {
+    final playing = PremiumAmbient.playing.value;
+    final btnSize = compactH ? 64.0 : 80.0;
+    Widget side(IconData icon, VoidCallback onTap) => VPress(
+          onTap: onTap,
+          child: SizedBox(width: 48, height: 48, child: Icon(icon, size: compactH ? 28 : 32, color: const Color(0xCCFFFFFF))),
+        );
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        side(Icons.skip_previous_rounded, () => _select(_index - 1)),
+        SizedBox(width: compactH ? 24 : 32),
+        VPress(
+          onTap: _togglePlay,
+          child: Container(
+            width: btnSize,
+            height: btnSize,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: Color(0x4DFFFFFF), blurRadius: 40, offset: Offset(0, 12)),
+                BoxShadow(color: Color(0x1A000000), blurRadius: 16, offset: Offset(0, 4)),
+              ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.only(left: playing ? 0 : 4),
+              child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: compactH ? 28 : 32, color: Colors.black),
+            ),
+          ),
+        ),
+        SizedBox(width: compactH ? 24 : 32),
+        side(Icons.skip_next_rounded, () => _select(_index + 1)),
+      ],
+    );
+  }
+
+  /// The pack's preview tracks. The one playing (or chosen) sits in focus; changing pack fades one set into the next.
+  Widget _tracks(WallpaperTheme t, {bool compactH = false}) {
+    final p = MusicPlayer.instance;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 450),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: AnimatedBuilder(
+        key: ValueKey(t.id),
+        animation: p,
+        builder: (_, __) {
+          final mine = p.queueId == t.id && p.index != null;
+          return _TrackWheel(
+            tracks: t.tracks,
+            selected: (mine ? p.index! : _track).clamp(0, t.tracks.length - 1),
+            onSelect: (i) => _focusTrack(t, i),
+            compactH: compactH,
+          );
+        },
+      ),
+    );
+  }
+
+  /// A pack not yet owned shows its price; a tap buys it through the store, and once owned it is applied.
+  /// An owned pack (or one without a price) shows the round check that applies it.
+  Widget _apply(WallpaperTheme t) {
+    final store = ThemePackStore.instance;
+    final price = store.priceFor(t);
+    if (price != null && !store.isUnlocked(t.id)) {
+      return VPress(
+        onTap: () async {
+          if (_buying) return;
+          setState(() => _buying = true);
+          final outcome = await store.buy(t);
+          if (!mounted) return;
+          setState(() => _buying = false);
+          await PurchaseNotice.show(context, outcome, bypassed: store.bypass);
+          if (outcome == PurchaseOutcome.purchased && mounted) widget.onApplyTheme(t);
+        },
+        child: AnimatedContainer(
+          duration: VMotion.fast,
+          height: 36,
+          constraints: const BoxConstraints(minWidth: 84),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
+          child: Center(
+            widthFactor: 1,
+            child: _buying
+                ? const CupertinoActivityIndicator(color: Colors.white, radius: 8)
+                : Text(price, style: VType.callout(color: Colors.white, weight: FontWeight.w600)),
+          ),
+        ),
+      );
+    }
+    return VPress(
+      onTap: () => widget.onApplyTheme(t),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: const BoxDecoration(color: Color(0x33FFFFFF), shape: BoxShape.circle),
+        child: const Icon(Icons.check_rounded, size: 20, color: Colors.white),
+      ),
+    );
+  }
+}
+
+/// Five rows on a wheel that goes round, so every track of the pack is always in view. The row in focus is sharp and
+/// full size at the centre; each step away is smaller, fainter and more blurred, and the top and bottom edges dissolve.
+/// A tap or a vertical drag brings a row to the centre.
+class _TrackWheel extends StatefulWidget {
+  final List<AmbientTrack> tracks;
+  final int selected;
+  final ValueChanged<int> onSelect;
+  final bool compactH;
+  const _TrackWheel({required this.tracks, required this.selected, required this.onSelect, this.compactH = false});
+
+  @override
+  State<_TrackWheel> createState() => _TrackWheelState();
+}
+
+class _TrackWheelState extends State<_TrackWheel> with SingleTickerProviderStateMixin {
+  double get _rowH => widget.compactH ? 28.0 : 36.0;
+  int get _rows => widget.compactH ? 3 : 5;
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 560));
+  double _from = 0, _to = 0, _drag = 0;
+  bool _dragging = false;
+
+  int get _n => widget.tracks.length;
+  double get _pos => _dragging ? _to - _drag / _rowH : _from + (_to - _from) * Curves.easeOutCubic.transform(_c.value);
+  int _wrap(int i) => ((i % _n) + _n) % _n;
+
+  @override
+  void initState() {
+    super.initState();
+    _from = _to = widget.selected.toDouble();
+    _c.addListener(() => setState(() {}));
+  }
+
+  @override
+  void didUpdateWidget(_TrackWheel old) {
+    super.didUpdateWidget(old);
+    final at = _to.round();
+    if (_wrap(at) != widget.selected && !_dragging) {
+      // the nearest turn of the wheel that puts that track in the centre
+      final k = ((at - widget.selected) / _n).round();
+      _glide(widget.selected + k * _n);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  void _glide(int i) {
+    _from = _pos;
+    _to = i.toDouble();
+    _c.forward(from: 0);
+  }
+
+  void _choose(int i) {
+    _glide(i);
+    if (_wrap(i) != widget.selected) widget.onSelect(_wrap(i));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pos = _pos;
+    final base = VType.callout(color: Colors.white, weight: FontWeight.w400).copyWith(fontSize: widget.compactH ? 15 : 17, height: 1.2);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragStart: (_) => setState(() {
+        _to = pos;
+        _drag = 0;
+        _dragging = true;
+        _c.stop();
+      }),
+      onVerticalDragUpdate: (d) => setState(() => _drag += d.delta.dy),
+      onVerticalDragEnd: (d) {
+        final flung = pos - (d.primaryVelocity ?? 0) / 1800;
+        setState(() => _dragging = false);
+        _from = _to = pos;
+        _choose(flung.round());
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 340),
+        child: SizedBox(
+          height: _rowH * _rows,
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (r) => const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x00FFFFFF), Color(0xFFFFFFFF), Color(0xFFFFFFFF), Color(0x00FFFFFF)],
+              stops: [0, 0.3, 0.7, 1],
+            ).createShader(r),
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: [
+                for (int i = 0; i < _n; i++) _row(i, _offset(i, pos), pos, base),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Where track i sits from the centre, going round: within half a turn either way.
+  double _offset(int i, double pos) {
+    final half = _n / 2;
+    return ((i - pos + half) % _n + _n) % _n - half;
+  }
+
+  Widget _row(int i, double offset, double pos, TextStyle base) {
+    final d = offset.abs().clamp(0.0, 2.5);
+    final focus = (1 - d).clamp(0.0, 1.0);
+    Widget text = Text(
+      widget.tracks[i].title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+      style: base.copyWith(
+        fontWeight: FontWeight.lerp(FontWeight.w300, FontWeight.w600, focus),
+        shadows: const [Shadow(color: Color(0x80000000), blurRadius: 8, offset: Offset(0, 2))],
+      ),
+    );
+    if (d > 0.04) {
+      final sigma = 1.6 * d;
+      text = ImageFiltered(imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.decal), child: text);
+    }
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: (_rows - 1) / 2 * _rowH + offset * _rowH,
+      height: _rowH,
+      child: GestureDetector(
+        onTap: () => _choose((pos + offset).round()),
+        child: Center(
+          child: Opacity(
+            opacity: (1 - 0.34 * d).clamp(0.15, 1.0),
+            child: Transform.scale(scale: 1 - 0.1 * d, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: text)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A theme's poster from the bucket or pre-decoded cache; until it arrives, the source's dark placeholder.
+class _Poster extends StatelessWidget {
+  final WallpaperTheme theme;
+  const _Poster({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    const empty = DecoratedBox(
+      decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF030712), Colors.black])),
+    );
+    if (theme.assetPath.isEmpty) return empty;
+    return ListenableBuilder(
+      listenable: ThemeBlurCache.instance,
+      builder: (context, _) {
+        final cached = ThemeBlurCache.instance.posterOf(theme.assetPath);
+        if (cached != null) {
+          return RawImage(
+            image: cached,
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.medium,
+          );
+        }
+        ThemeBlurCache.instance.ensureAllPresets(theme.assetPath);
+        return Image.asset(
+          theme.assetPath,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+          frameBuilder: (_, child, frame, sync) => frame == null && !sync ? empty : child,
+          errorBuilder: (_, __, ___) => empty,
+        );
+      },
+    );
+  }
+}
+
+/// The source's small white indicator on the centre cover (animate-pulse).
+class _Pulse extends StatefulWidget {
+  const _Pulse();
+  @override
+  State<_Pulse> createState() => _PulseState();
+}
+
+class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+        opacity: Tween(begin: 0.9, end: 0.45).animate(CurvedAnimation(parent: _c, curve: const Cubic(0.4, 0, 0.6, 1))),
+        child: Container(
+          width: 10,
+          height: 10,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))],
+          ),
+        ),
+      );
+}
+
+/// SearchBar.tsx: a rounded field, the search mark at the left, a clear cross once something is typed.
+class _SearchBar extends StatefulWidget {
+  final ValueChanged<String> onSearch;
+  final VoidCallback onClear;
+  const _SearchBar({required this.onSearch, required this.onClear});
+
+  @override
+  State<_SearchBar> createState() => _SearchBarState();
+}
+
+class _SearchBarState extends State<_SearchBar> {
+  final _c = TextEditingController();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 448), // max-w-md
+      child: Container(
+        height: 46,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFF374151)),
+          gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0x66000000), Color(0x05FFFFFF)]),
+          boxShadow: const [BoxShadow(color: Color(0x0DFFFFFF), blurRadius: 2, offset: Offset(0, 1))],
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            const Icon(Icons.search_rounded, size: 16, color: Color(0xFF9CA3AF)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _c,
+                cursorColor: Colors.white70,
+                style: VType.callout(color: Colors.white, weight: FontWeight.w300).copyWith(fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: 'Search...',
+                  hintStyle: VType.callout(color: const Color(0xFF6B7280), weight: FontWeight.w300).copyWith(fontSize: 15),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                onChanged: (v) {
+                  setState(() {});
+                  widget.onSearch(v);
+                },
+                onSubmitted: (v) => widget.onSearch(v),
+              ),
+            ),
+            if (_c.text.isNotEmpty)
+              VPress(
+                onTap: () {
+                  _c.clear();
+                  setState(() {});
+                  widget.onClear();
+                },
+                child: const Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Icon(Icons.close_rounded, size: 16, color: Color(0xFF9CA3AF))),
+              )
+            else
+              const SizedBox(width: 12),
+          ],
+        ),
+      ),
+    );
+  }
+}

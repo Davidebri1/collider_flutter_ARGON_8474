@@ -1,0 +1,1539 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'core/vision/vision_kit.dart';
+import 'core/api/collider_api.dart';
+import 'features/music/music_widget.dart';
+import 'core/audio/music_player.dart';
+import 'models/model_def.dart';
+import 'models/theme_def.dart';
+import 'models/ticker_item.dart';
+import 'features/ticker/widgets/model_pill.dart';
+import 'features/ticker/widgets/consensus_row.dart';
+import 'features/ticker/widgets/conversation_view.dart';
+import 'features/ticker/widgets/message_zoom_overlay.dart';
+import 'features/ticker/widgets/research_document.dart';
+import 'features/ticker/widgets/local_history_pane.dart';
+import 'features/prompt/floating_prompt.dart';
+import 'features/nav/permanent_nav_bar.dart';
+import 'features/nav/side_nav_rail.dart';
+import 'features/nav/contextual_side_nav.dart';
+import 'features/apps/apps_popup_pane.dart';
+import 'features/wallpaper/widgets/windowless_theme_scroller.dart';
+import 'features/drawers/settings_drawer.dart';
+import 'features/consensus/consensus_webview.dart';
+import 'features/smartgen/screens/smartgen_screen.dart';
+import 'features/smartgen/smartgen_store.dart';
+import 'features/market/screens/market_screen.dart';
+import 'features/upgrade/screens/upgrade_screen.dart';
+import 'features/skills/screens/skills_screen.dart';
+import 'features/files/screens/files_screen.dart';
+import 'features/browser/models/browser_tab.dart';
+import 'features/browser/screens/in_app_browser_sheet.dart';
+import 'features/theme/premium_theme_market_view.dart';
+import 'features/theme/theme_living_media.dart';
+import 'core/media/theme_blur_cache.dart';
+import 'core/media/theme_cloud.dart';
+import 'features/drawers/history_pane.dart';
+import 'core/media/theme_media_bundle.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ),
+  );
+  ThemeCloud.instance.init(); // the live wallpapers from the Cloudflare bucket, read while the app starts
+  ThemeBlurCache.instance.prewarmThemes(WallpaperCatalog.freeThemes);
+  ConsensusWebView.preload();
+  SmartGenStore.instance.load();
+  runApp(const ColliderApp());
+}
+
+class ColliderApp extends StatelessWidget {
+  const ColliderApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Collider',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(useMaterial3: true).copyWith(
+        scaffoldBackgroundColor: const Color(0xFF07080B),
+        textTheme: GoogleFonts.instrumentSansTextTheme(ThemeData.dark().textTheme),
+      ),
+      // Theme pictures from the bucket load through Image.asset like the built-in ones.
+      builder: (context, child) => DefaultAssetBundle(bundle: ThemeMediaAssetBundle.instance, child: child!),
+      home: const ColliderHomeScreen(),
+    );
+  }
+}
+
+class ColliderHomeScreen extends StatefulWidget {
+  const ColliderHomeScreen({super.key});
+
+  @override
+  State<ColliderHomeScreen> createState() => _ColliderHomeScreenState();
+}
+
+class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
+  // Wallpaper state: Uninterrupted, star of the product
+  WallpaperTheme _currentTheme = WallpaperCatalog.defaultTheme;
+  WallpaperTheme _savedThemeBeforePreview = WallpaperCatalog.defaultTheme;
+
+  // Selected Models (Max 9 active model rows)
+  final List<String> _selectedModelIds = [
+    'free/gpt-5-nano',
+    'free/gemini-3-6-flash-lite',
+    'free/mistral-small',
+    'pro/claude-3-7-sonnet',
+    'image/flux-1-1-pro',
+    'free/qwen-3-6-27b',
+    'free/minimax-m3',
+    'free/laguna-s-2-1',
+    'pro/mistral-large',
+  ];
+
+  // Active Model Category
+  ModelCategory _activeCategory = ModelCategory.general;
+
+  // Active temporary pane / drawer: 'themes', 'settings', 'consensus', 'apps', 'history', 'market', 'smartgen', 'upgrade', 'skills', 'files', 'model_ladder'
+  String? _activeDrawer;
+
+  // Local Model History modal state
+  ModelDef? _localHistoryModel;
+
+  // Zoomed message overlay state
+  TickerMessage? _zoomedMessage;
+  ModelDef? _zoomedModelDef;
+
+  // Expanded accordion model IDs
+  final Set<String> _expandedModelIds = {};
+
+  // Swipe/tap-summoned global broadcast composer
+  bool _isComposerSummoned = false;
+
+  // Mobile slide-out contextual side nav state
+  bool _isMobileSideNavOpen = false;
+
+  // Current floating user prompt (floats un-framed on wallpaper)
+  String _currentPrompt = '';
+
+  // Consensus state: ratio of agreeing models (e.g. "7/7")
+  String _consensusRatio = 'Consensus';
+  String _consensusSummary = '';
+  bool _isConsensusGenerating = false;
+
+  // Live session state (Collider server)
+  AskMode _mode = AskMode.chat;
+  bool _incognito = false;
+  bool _autosave = true;
+  bool _busy = false;
+  DateTime? _promptTime;
+  final Map<String, JobState> _jobsById = {};
+  String? _currentJobId;
+  Offset? _musicPos; // where the user last put the music widget
+
+  // Ticker items
+  late List<TickerItem> _tickerItems;
+
+  // Global History Sessions
+  late List<ConversationHistorySession> _globalHistorySessions;
+
+  // Local Model History Sessions map
+  late Map<String, List<ConversationHistorySession>> _localHistorySessions;
+
+  // Browser Tabs (only 1 active at a time)
+  late List<BrowserTab> _browserTabs;
+
+  // Contextual work surface state
+  String _smartGenView = 'boards';
+  int _smartGenNewCardTrigger = 0;
+  String _smartGenBoardType = 'kanban';
+  String _marketCategory = 'discover';
+  String _themeSection = 'gallery';
+  String _filesCategory = 'all';
+  String _filesPlace = 'home'; // where Files opens: Home, or Music when the Music Player is asked for
+  String _chatSection = 'history';
+
+  /// The rail ornament shows on the resting canvas and durable work surfaces only.
+  bool get _railVisible {
+    if (_localHistoryModel != null || _zoomedMessage != null || _browserOpen) return false;
+    const surfaces = {null, 'history', 'smartgen', 'market', 'themes'}; // Files draws its own side menu; History pops up beside the rail
+    return surfaces.contains(_activeDrawer);
+  }
+
+  ActiveWorkSurface get _currentActiveSurface {
+    if (_activeDrawer == 'smartgen') return ActiveWorkSurface.smartgen;
+    if (_activeDrawer == 'market') return ActiveWorkSurface.market;
+    if (_activeDrawer == 'themes' || _activeDrawer == 'premium') return ActiveWorkSurface.themes;
+    if (_activeDrawer == 'files') return ActiveWorkSurface.files;
+    return ActiveWorkSurface.chat;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    ThemeBlurCache.instance.setActiveTheme(_currentTheme);
+    if (Uri.base.queryParameters['drawer'] == 'premium' ||
+        (Uri.base.queryParameters['drawer'] == 'market' && Uri.base.queryParameters['sub'] == 'themes')) {
+      _activeDrawer = 'premium'; // the market shows its middle theme as soon as the list is in
+    } else if (Uri.base.queryParameters['drawer'] == 'music') {
+      // The Music Player is the music bar and the music in Files.
+      _activeDrawer = 'files';
+      _filesPlace = 'music';
+    } else if (Uri.base.queryParameters['drawer'] != null) {
+      _activeDrawer = Uri.base.queryParameters['drawer'];
+    }
+    if (Uri.base.queryParameters['composer'] == '1') _isComposerSummoned = true;
+    if (Uri.base.queryParameters['rail'] == '1') _isMobileSideNavOpen = true;
+    if (Uri.base.queryParameters['view'] != null) _smartGenView = Uri.base.queryParameters['view']!;
+    _initializeTickerItems();
+    _initializeHistorySessions();
+    _initializeBrowserTabs();
+    _boot();
+    final qp = Uri.base.queryParameters;
+    if (qp['zoom'] == '1' && _tickerItems.isNotEmpty) {
+      _zoomedMessage = _tickerItems.first.conversation.last;
+      _zoomedModelDef = _tickerItems.first.modelDef;
+    }
+    if (qp['local'] == '1' && _tickerItems.isNotEmpty) {
+      _localHistoryModel = _tickerItems.first.modelDef;
+    }
+    if (qp['expand'] == '1') {
+      if (_tickerItems.isNotEmpty) _expandedModelIds.add(_tickerItems.first.modelDef.id);
+    }
+    if (qp['browser'] == '1') {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openBrowserForTab('user_default'));
+    }
+  }
+
+  void _initializeTickerItems() {
+    _tickerItems = [];
+  }
+
+  String _ago(DateTime t) {
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 1) return 'just now';
+    if (d.inHours < 1) return '${d.inMinutes}m ago';
+    if (d.inDays < 1) return '${d.inHours}h ago';
+    if (d.inDays == 1) return 'Yesterday';
+    return '${d.inDays}d ago';
+  }
+
+  Future<void> _boot() async {
+    final ok = await ColliderApi.instance.loadRoster();
+    if (!mounted || !ok) return;
+    ColliderApi.instance.files();
+    SmartGenStore.instance.syncAutonomousCards();
+    // Default selection: one model per provider, so every card carries a distinct colour.
+    final seen = <String>{};
+    final live = <String>[
+      for (final m in ModelRoster.allModels.where((m) => !m.isMedia))
+        if (seen.add(m.desc)) m.id,
+    ];
+    setState(() {
+      _selectedModelIds
+        ..clear()
+        ..addAll(live.take(6));
+    });
+    await _reloadHistory(restoreLatest: true);
+    // Deep links used by the launcher and the screenshot tour: ?ask=...&mode=research
+    final qp = Uri.base.queryParameters;
+    if (qp['mode'] != null) {
+      _mode = AskMode.values.firstWhere((m) => m.wire == qp['mode'], orElse: () => AskMode.chat);
+    }
+    if (qp['ask'] != null && qp['ask']!.trim().isNotEmpty) _onSendPrompt(qp['ask']!);
+    if (qp['music'] == '1') {
+      setState(() {
+        MusicPlayer.instance
+          ..queue = MusicPlayer.forTheme(_currentTheme)
+          ..queueId = _currentTheme.id
+          ..index = 0;
+      });
+    }
+    if (_tickerItems.isNotEmpty) {
+      setState(() {
+        if (qp['expand'] == '1') _expandedModelIds.add(_tickerItems.first.modelDef.id);
+        if (qp['local'] == '1') _localHistoryModel = _tickerItems.first.modelDef;
+        if (qp['zoom'] == '1') {
+          _zoomedMessage = _tickerItems.first.conversation.last;
+          _zoomedModelDef = _tickerItems.first.modelDef;
+        }
+      });
+    }
+  }
+
+  List<TickerMessage> _messagesFromResult(JobState j, String mid, ModelResult r) {
+    if (r.messages.isNotEmpty) {
+      final msgs = [
+        for (var i = 0; i < r.messages.length; i++)
+          TickerMessage(
+            id: '${j.id}_${mid}_$i',
+            sender: (r.messages[i]['role'] ?? 'user') == 'user' ? 'user' : 'model',
+            text: r.messages[i]['content'] ?? '',
+            timestamp: j.created.add(Duration(seconds: i)),
+          ),
+      ];
+      // The server stores the question as soon as it is asked and the answer only once it is finished.
+      // While the model is still writing, its words so far are the answer: show them, as they arrive.
+      if (r.text.isNotEmpty && msgs.last.sender == 'user') {
+        msgs.add(TickerMessage(id: '${j.id}_${mid}_live', sender: 'model', text: r.text, timestamp: DateTime.now()));
+      }
+      return msgs;
+    }
+    return [
+      TickerMessage(id: '${j.id}_u', sender: 'user', text: j.prompt, timestamp: j.created),
+      if (r.text.isNotEmpty) TickerMessage(id: '${j.id}_$mid', sender: 'model', text: r.text, timestamp: j.created),
+    ];
+  }
+
+  Future<void> _reloadHistory({bool restoreLatest = false, bool forceRefresh = false}) async {
+    final hist = await ColliderApi.instance.history(forceRefresh: forceRefresh);
+    if (!mounted) return;
+    setState(() {
+      for (final j in hist) {
+        _jobsById[j.id] = j;
+      }
+      _globalHistorySessions = [for (final j in hist) _sessionFromJob(j)];
+      final local = <String, List<ConversationHistorySession>>{};
+      for (final j in hist) {
+        j.results.forEach((mid, r) {
+          if (r.status != 'done') return;
+          (local[mid] ??= []).add(ConversationHistorySession(
+            id: '${j.id}_$mid',
+            title: j.prompt,
+            targetModelId: mid,
+            relativeTime: _ago(j.created),
+            timestamp: j.created,
+            summary: r.line.isNotEmpty ? r.line : r.essence,
+            messages: _messagesFromResult(j, mid, r),
+          ));
+        });
+      }
+      _localHistorySessions = local;
+      if (restoreLatest && hist.isNotEmpty && _tickerItems.isEmpty) _applyJob(hist.first, restored: true);
+    });
+  }
+
+  ConversationHistorySession _sessionFromJob(JobState j) {
+    final firstEssence = j.results.values.map((r) => r.essence).firstWhere((e) => e.isNotEmpty, orElse: () => '');
+    final firstWithMsgs = j.results.entries.where((e) => e.value.messages.isNotEmpty).firstOrNull;
+    return ConversationHistorySession(
+      id: j.id,
+      title: j.prompt,
+      relativeTime: _ago(j.created),
+      timestamp: j.created,
+      summary: j.consensus.line.isNotEmpty ? j.consensus.line : (j.consensus.summary.isNotEmpty ? j.consensus.summary : firstEssence),
+      modelIds: j.results.keys.toList(),
+      messages: firstWithMsgs != null
+          ? _messagesFromResult(j, firstWithMsgs.key, firstWithMsgs.value)
+          : [
+              TickerMessage(id: '${j.id}_u', sender: 'user', text: j.prompt, timestamp: j.created),
+              if (j.consensus.summary.isNotEmpty) TickerMessage(id: '${j.id}_c', sender: 'model', text: j.consensus.summary, timestamp: j.created),
+            ],
+    );
+  }
+
+  /// Maps a server job onto the ticker: one colour-coded card per model, consensus pinned on top.
+  void _applyJob(JobState j, {bool restored = false}) {
+    _jobsById[j.id] = j;
+    _currentJobId = j.id;
+    _currentPrompt = j.prompt;
+    _promptTime = j.created;
+    final items = <TickerItem>[];
+    j.results.forEach((mid, r) {
+      final def = ModelRoster.byId(mid);
+      if (def == null) return;
+      final prev = _tickerItems.where((t) => t.modelDef.id == mid).toList();
+      // A card shows its one line. A saved answer whose line is still being written keeps waiting
+      // rather than showing a cut sentence.
+      final noLine = r.status == 'done' && r.line.isEmpty && !_lineFailed.contains(j.id);
+      final waiting = r.status == 'pending' || noLine;
+      final serverConv = _messagesFromResult(j, mid, r);
+      final usePrevConv = !restored && prev.isNotEmpty && prev.first.conversation.length > serverConv.length;
+      final conv = usePrevConv
+          ? [
+              ...prev.first.conversation.where((m) => !m.id.startsWith('${j.id}_draft_')),
+              if (r.text.isNotEmpty && (prev.first.conversation.isEmpty || prev.first.conversation.last.sender == 'user'))
+                TickerMessage(id: '${j.id}_draft_$mid', sender: 'model', text: r.text, timestamp: j.created),
+            ]
+          : serverConv;
+      items.add(TickerItem(
+        modelDef: def,
+        relativeTime: restored ? _ago(j.created) : 'just now',
+        summary: r.status == 'error' ? 'No answer' : (r.line.isNotEmpty ? r.line : _plain(r.essence)),
+        isStreaming: waiting,
+        isIsolated: prev.isNotEmpty && prev.first.isIsolated && !restored,
+        conversation: conv,
+      ));
+    });
+    _tickerItems = items;
+    if (j.sources.isNotEmpty) {
+      _browserTabs = [
+        _browserTabs.first,
+        for (var i = 0; i < j.sources.length; i++)
+          BrowserTab(
+            id: 'src_$i',
+            title: '${j.sources[i]['title'] ?? ''}',
+            url: '${j.sources[i]['url'] ?? ''}',
+            isModelAssigned: true,
+            modelName: 'Source ${i + 1}',
+          ),
+      ];
+    }
+    if (restored) {
+      _selectedModelIds
+        ..clear()
+        ..addAll(j.results.keys.where((k) => ModelRoster.byId(k) != null));
+    }
+    final c = j.consensus;
+    _isConsensusGenerating = !j.done;
+    _consensusRatio = c.status == 'done' && c.score.isNotEmpty ? c.score : 'Consensus';
+    _consensusSummary = c.line.isNotEmpty || !_lineFailed.contains(j.id) ? c.line : c.summary;
+    if (j.done && _needsLines(j)) _ensureLines(j);
+  }
+
+  /// Characters one ticker row holds: the resting ticker is as wide as the dock, and the summary line
+  /// has the row's full width inside the pane's and the row's padding.
+  int get _lineChars => VOneLine.charsFor((MediaQuery.of(context).size.width < 768 ? 262.0 : 440.0) - 42);
+
+  final Set<String> _lineAsked = {};
+  final Set<String> _lineFailed = {};
+
+  bool _needsLines(JobState j) {
+    final n = _lineChars;
+    return j.results.values.any((r) => r.status == 'done' && r.text.isNotEmpty && (r.line.isEmpty || r.line.length > n + 2)) ||
+        (j.consensus.status == 'done' && (j.consensus.line.isEmpty || j.consensus.line.length > n + 2));
+  }
+
+  /// Conversations saved before rows were one line get their lines written once, then keep them.
+  Future<void> _ensureLines(JobState j) async {
+    if (!_lineAsked.add(j.id)) return;
+    final fresh = await ColliderApi.instance.lines(j.id, _lineChars);
+    if (!mounted) return;
+    setState(() {
+      if (fresh == null) {
+        _lineFailed.add(j.id);
+      } else {
+        _jobsById[j.id] = fresh;
+      }
+      if (_currentJobId == j.id) _applyJob(fresh ?? j, restored: true);
+    });
+  }
+
+  void _initializeHistorySessions() {
+    _globalHistorySessions = [];
+    _localHistorySessions = {};
+  }
+
+  void _initializeBrowserTabs() {
+    // One user tab; research sources are added as tabs when a question uses the web.
+    _browserTabs = [
+      BrowserTab(id: 'user_default', title: 'Search', url: 'https://www.bing.com/', isUserControlling: true),
+    ];
+  }
+
+  /// A summary line without markdown marks.
+  static String _plain(String s) => s.replaceAll(RegExp(r'\*\*|__|`'), '').replaceFirst(RegExp(r'^\s*(#+|[-*>])\s+'), '').trim();
+
+  void _closeAllPanes() {
+    _activeDrawer = null;
+    _localHistoryModel = null;
+    _zoomedMessage = null;
+    _zoomedModelDef = null;
+    _isMobileSideNavOpen = false;
+  }
+
+  void _requestSwitchSurface(String? targetDrawer) {
+    // No "Unsaved Changes" prompt (removed 2026-09-27): switching surfaces just proceeds.
+    // Drafts and inputs are kept in memory as before.
+    _proceedSwitchSurface(targetDrawer);
+  }
+
+  void _proceedSwitchSurface(String? targetDrawer) {
+    setState(() {
+      _closeAllPanes();
+      _activeDrawer = targetDrawer;
+      _isComposerSummoned = (targetDrawer == null);
+      if (targetDrawer == 'themes') {
+        _savedThemeBeforePreview = _currentTheme;
+      }
+    });
+  }
+
+  void _openDrawer(String drawer) {
+    if (drawer == 'files') _filesPlace = 'home';
+    _requestSwitchSurface(drawer);
+  }
+
+  /// The Music Player: the music in Files, played by the music bar.
+  void _openMusic() {
+    _filesPlace = 'music';
+    _requestSwitchSurface('files');
+  }
+
+  void _openHomeComposer() {
+    setState(() {
+      _closeAllPanes();
+      _expandedModelIds.clear();
+      _isComposerSummoned = true;
+    });
+  }
+
+  void _toggleComposer() {
+    setState(() {
+      _closeAllPanes();
+      _expandedModelIds.clear();
+      _isComposerSummoned = !_isComposerSummoned;
+    });
+  }
+
+  void _newConversation() {
+    setState(() {
+      _closeAllPanes();
+      _expandedModelIds.clear();
+      _currentJobId = null;
+      _currentPrompt = '';
+      _tickerItems = [];
+      _consensusRatio = 'Consensus';
+      _consensusSummary = '';
+      _isConsensusGenerating = false;
+      _isComposerSummoned = true;
+    });
+  }
+
+  void _onTogglePill(String id) {
+    setState(() {
+      if (_expandedModelIds.contains(id)) {
+        _expandedModelIds.remove(id);
+      } else {
+        // One conversation open at a time, and one place to type: the open row's own reply box.
+        // The composer below the ticker steps away while a row is open (David, 2026-10-24, items 13 and 14).
+        _expandedModelIds
+          ..clear()
+          ..add(id);
+        _isComposerSummoned = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future.delayed(const Duration(milliseconds: 330), () {
+            final ctx = _pillKeys[id]?.currentContext;
+            if (ctx != null && mounted) {
+              Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd);
+            }
+          });
+        });
+      }
+    });
+  }
+
+  final Map<String, GlobalKey> _pillKeys = {};
+  GlobalKey _pillKey(String id) => _pillKeys.putIfAbsent(id, () => GlobalKey());
+
+  /// The categories the ticker can show; swiping across the ticker moves between them.
+  List<ModelCategory> get _tickerCategories => [
+        for (final c in ModelCategory.values)
+          if (ModelRoster.forCategory(c).isNotEmpty) c,
+      ];
+
+  void _swipeCategory(int dir) {
+    final cats = _tickerCategories;
+    if (cats.length < 2) return;
+    final i = cats.indexOf(_activeCategory);
+    final next = ((i < 0 ? 0 : i) + dir).clamp(0, cats.length - 1);
+    if (cats[next] == _activeCategory) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _categorySlideDir = dir;
+      _activeCategory = cats[next];
+      _expandedModelIds.clear();
+    });
+  }
+
+  int _categorySlideDir = 1;
+
+  static String _categoryName(ModelCategory c) => switch (c) {
+        ModelCategory.general => 'General',
+        ModelCategory.image => 'Image',
+        ModelCategory.video => 'Video',
+        ModelCategory.audio => 'Music',
+        ModelCategory.writing => 'Writing',
+      };
+
+  Future<void> _onSendInlineReply(String modelId, String text, [List<String> files = const []]) async {
+    final idx = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
+    if (idx == -1 || text.trim().isEmpty) return;
+    final now = DateTime.now();
+    final activeJobId = _currentJobId;
+    setState(() {
+      final cur = _tickerItems[idx];
+      _tickerItems[idx] = cur.copyWith(
+        isIsolated: true,
+        isStreaming: true,
+        conversation: [...cur.conversation, TickerMessage(id: 'u${now.microsecondsSinceEpoch}', sender: 'user', text: text, timestamp: now)],
+      );
+    });
+    // The answer drafts into the conversation as the model writes it and persists to the session (Claude, 2026-10-19).
+    final draftId = 'm${now.microsecondsSinceEpoch}';
+    try {
+      await for (final d in ColliderApi.instance.replyStream(
+        model: modelId,
+        prompt: text,
+        mode: _mode,
+        attachments: files,
+        line: _lineChars,
+        jobId: activeJobId,
+      )) {
+        if (!mounted) return;
+        setState(() {
+          final i = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
+          if (i == -1) return;
+          final cur = _tickerItems[i];
+          _tickerItems[i] = cur.copyWith(
+            isStreaming: !d.done,
+            relativeTime: d.done ? 'just now' : cur.relativeTime,
+            summary: d.done && d.line.isNotEmpty ? d.line : cur.summary,
+            conversation: [
+              for (final m in cur.conversation)
+                if (m.id != draftId) m,
+              if (d.text.isNotEmpty) TickerMessage(id: draftId, sender: 'model', text: d.text, timestamp: DateTime.now()),
+            ],
+          );
+          if (d.done && activeJobId != null && _jobsById.containsKey(activeJobId)) {
+            final oldJob = _jobsById[activeJobId]!;
+            final oldRes = oldJob.results[modelId];
+            if (oldRes != null) {
+              final updatedResults = Map<String, ModelResult>.from(oldJob.results);
+              updatedResults[modelId] = ModelResult(
+                'done',
+                d.text,
+                d.line.isNotEmpty ? d.line : oldRes.essence,
+                null,
+                d.line.isNotEmpty ? d.line : oldRes.line,
+                d.messages.isNotEmpty
+                    ? d.messages
+                    : [for (final m in _tickerItems[i].conversation) {'role': m.sender == 'user' ? 'user' : 'assistant', 'content': m.text}],
+              );
+              _jobsById[activeJobId] = JobState(
+                oldJob.id,
+                oldJob.prompt,
+                oldJob.mode,
+                oldJob.stage,
+                oldJob.done,
+                updatedResults,
+                oldJob.consensus,
+                oldJob.sources,
+                oldJob.created,
+              );
+            }
+          }
+        });
+        if (d.done) {
+          ColliderApi.instance.cachedHistory = null;
+          await _reloadHistory(forceRefresh: true);
+        }
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        final i = _tickerItems.indexWhere((it) => it.modelDef.id == modelId);
+        if (i != -1) _tickerItems[i] = _tickerItems[i].copyWith(isStreaming: false, summary: 'No answer from this model.');
+      });
+    }
+  }
+
+  Future<void> _onSendPrompt(String prompt, [List<String> files = const []]) async {
+    final models = _selectedModelIds.where((id) {
+      final d = ModelRoster.byId(id);
+      return d != null && !d.isMedia;
+    }).toList();
+    if (models.isEmpty) return;
+    final now = DateTime.now();
+    // If a conversation is already active on screen, continue that multi-turn session across all models!
+    final continuingSessionId = (_tickerItems.isNotEmpty && _currentJobId != null) ? _currentJobId : null;
+    final prevConvByModel = <String, List<TickerMessage>>{
+      for (final t in _tickerItems) t.modelDef.id: List<TickerMessage>.from(t.conversation),
+    };
+    setState(() {
+      _busy = true;
+      _isComposerSummoned = false;
+      _closeAllPanes();
+      _currentPrompt = prompt;
+      _promptTime = now;
+      _isConsensusGenerating = true;
+      _consensusRatio = 'Consensus';
+      _consensusSummary = '';
+      _tickerItems = [
+        for (final id in models)
+          TickerItem(
+            modelDef: ModelRoster.byId(id)!,
+            relativeTime: '',
+            summary: '',
+            isStreaming: true,
+            conversation: [
+              if (continuingSessionId != null && prevConvByModel.containsKey(id)) ...prevConvByModel[id]!,
+              TickerMessage(id: 'u_${now.microsecondsSinceEpoch}_$id', sender: 'user', text: prompt, timestamp: now),
+            ],
+          ),
+      ];
+    });
+    try {
+      final id = await ColliderApi.instance.ask(
+        prompt: prompt,
+        models: models,
+        mode: _mode,
+        autosave: _autosave,
+        incognito: _incognito,
+        attachments: files,
+        line: _lineChars,
+        sessionId: continuingSessionId,
+      );
+      await for (final j in ColliderApi.instance.watch(id)) {
+        if (!mounted) return;
+        setState(() => _applyJob(j));
+      }
+      ColliderApi.instance.cachedHistory = null;
+      await _reloadHistory(forceRefresh: true);
+      SmartGenStore.instance.syncAutonomousCards();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isConsensusGenerating = false;
+        // The same words the model rows use when a model does not answer. No technical reason on screen.
+        _consensusSummary = 'No answer';
+        _tickerItems = [for (final t in _tickerItems) t.copyWith(isStreaming: false, summary: 'No answer')];
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  // Load conversation and immediately send user there in expanded view
+  void _loadAndExpandSession(ConversationHistorySession session) {
+    final jobId = session.id.split('_').first;
+    if (_jobsById.containsKey(jobId)) {
+      setState(() {
+        _closeAllPanes();
+        _tickerItems = [];
+        _applyJob(_jobsById[jobId]!, restored: true);
+        _expandedModelIds.clear();
+        final targetId = session.targetModelId ?? (_tickerItems.isNotEmpty ? _tickerItems.first.modelDef.id : null);
+        if (targetId != null) {
+          final targetDef = ModelRoster.byId(targetId);
+          if (targetDef != null && !targetDef.categories.contains(_activeCategory) && targetDef.categories.isNotEmpty) {
+            _activeCategory = targetDef.categories.first;
+          }
+          _expandedModelIds.add(targetId);
+        }
+      });
+      return;
+    }
+    setState(() {
+      _activeDrawer = null;
+      _localHistoryModel = null;
+      _zoomedMessage = null;
+      _isMobileSideNavOpen = false;
+
+      final targetId = session.targetModelId ?? (session.modelIds.isNotEmpty ? session.modelIds.first : _selectedModelIds.first);
+      
+      // Ensure target model is in selected list so it appears in the active rows
+      if (!_selectedModelIds.contains(targetId)) {
+        _selectedModelIds.insert(0, targetId);
+      }
+
+      // Ensure active category matches target model's category
+      final targetDef = ModelRoster.byId(targetId);
+      if (targetDef != null && !targetDef.categories.contains(_activeCategory) && targetDef.categories.isNotEmpty) {
+        _activeCategory = targetDef.categories.first;
+      }
+
+      final idx = _tickerItems.indexWhere((it) => it.modelDef.id == targetId);
+      if (idx != -1) {
+        _tickerItems[idx] = _tickerItems[idx].copyWith(
+          conversation: session.messages,
+          summary: session.summary,
+          relativeTime: session.relativeTime,
+        );
+      }
+
+      _expandedModelIds.clear();
+      _expandedModelIds.add(targetId);
+    });
+  }
+
+  bool _browserOpen = false;
+
+  /// The web sources of the conversation on screen, numbered as its answers cite them.
+  List<Map<String, dynamic>> get _currentSources => _jobsById[_currentJobId]?.sources ?? const [];
+
+  void _openBrowserForTab(String tabId) {
+    setState(() {
+      _activeDrawer = null;
+      _browserOpen = true;
+    });
+    showDialog(
+      context: context,
+      barrierDismissible: true, // Two-Escape Law: clickaway backdrop dismisses
+      barrierColor: VOverlay.scrim,
+      builder: (ctx) {
+        return InAppBrowserSheet(
+          initialTabId: tabId,
+          tabs: _browserTabs,
+          onTabUpdated: (updated) {
+            setState(() {
+              final idx = _browserTabs.indexWhere((t) => t.id == updated.id);
+              if (idx != -1) _browserTabs[idx] = updated;
+            });
+          },
+          onNewUserTab: (newTab) {
+            setState(() {
+              _browserTabs.add(newTab);
+            });
+          },
+        );
+      },
+    ).then((_) {
+      if (mounted) setState(() => _browserOpen = false);
+    });
+  }
+
+  Widget _buildSideNav({required bool isMobile}) {
+    // REQ-21 visual language: a slim detached rail of circular glass buttons sits at
+    // the screen edge; the contextual panel content opens beside it when summoned.
+    final surface = _currentActiveSurface;
+    final String? railKey = switch (surface) {
+      ActiveWorkSurface.chat => _activeDrawer == 'history' ? 'history' : (_isMobileSideNavOpen ? _chatSection : null),
+      ActiveWorkSurface.smartgen => _smartGenView,
+      ActiveWorkSurface.market => _marketCategory,
+      ActiveWorkSurface.themes => _activeDrawer == 'premium' ? 'premium' : 'gallery',
+      ActiveWorkSurface.browser => null,
+      ActiveWorkSurface.files => _filesCategory,
+    };
+
+    void togglePanel(void Function() apply, bool same) {
+      setState(() {
+        apply();
+        _isMobileSideNavOpen = same ? !_isMobileSideNavOpen : true;
+      });
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        SideNavRail(
+          surface: surface,
+          activeKey: railKey,
+          compact: isMobile,
+          onSelect: (key) {
+            switch (surface) {
+              case ActiveWorkSurface.chat:
+                if (key == 'new') {
+                  _newConversation();
+                } else if (key == 'history') {
+                  _openDrawer('history');
+                } else {
+                  togglePanel(() => _chatSection = key, key == _chatSection);
+                }
+              case ActiveWorkSurface.smartgen:
+                setState(() {
+                  _isMobileSideNavOpen = false;
+                  if (key == 'new') {
+                    _smartGenNewCardTrigger++;
+                  } else {
+                    _smartGenView = key;
+                  }
+                });
+              case ActiveWorkSurface.market:
+                setState(() {
+                  _isMobileSideNavOpen = false;
+                  _marketCategory = key;
+                });
+              case ActiveWorkSurface.themes:
+                setState(() {
+                  _isMobileSideNavOpen = false;
+                  _themeSection = key;
+                  _activeDrawer = key == 'gallery' ? 'themes' : key;
+                });
+              case ActiveWorkSurface.browser:
+                break;
+              case ActiveWorkSurface.files:
+                setState(() {
+                  _isMobileSideNavOpen = false;
+                  _filesCategory = key;
+                });
+            }
+          },
+        ),
+        if (_isMobileSideNavOpen && (surface == ActiveWorkSurface.chat || surface == ActiveWorkSurface.market)) ...[
+          const SizedBox(width: 10),
+          ContextualSideNav(
+            activeSurface: _currentActiveSurface,
+            activeCategory: _activeCategory,
+            selectedModelIds: _selectedModelIds,
+            localHistory: _localHistorySessions,
+            globalHistory: _globalHistorySessions,
+            consensusRatio: _consensusRatio,
+            consensusSummary: _consensusSummary,
+            expandedModelId: _expandedModelIds.isNotEmpty ? _expandedModelIds.first : null,
+            chatSection: _chatSection,
+            onClose: () => setState(() => _isMobileSideNavOpen = false),
+      onSelectCategory: (cat) => setState(() => _activeCategory = cat),
+      onToggleModel: (modelId) {
+        setState(() {
+          if (_selectedModelIds.contains(modelId)) {
+            if (_selectedModelIds.length > 1) {
+              _selectedModelIds.remove(modelId);
+            }
+          } else {
+            if (_selectedModelIds.length < 9) {
+              _selectedModelIds.add(modelId);
+            }
+          }
+        });
+      },
+      onSelectSession: (sess) => _loadAndExpandSession(sess),
+      onOpenConsensus: () => _requestSwitchSurface('consensus'),
+      onNewConversation: _newConversation,
+      activeSmartGenView: _smartGenView,
+      activeSmartGenBoardType: _smartGenBoardType,
+      onSelectSmartGenView: (v) => setState(() => _smartGenView = v),
+      onSelectSmartGenBoardType: (b) => setState(() => _smartGenBoardType = b),
+      activeMarketCategory: _marketCategory,
+      onSelectMarketCategory: (c) => setState(() => _marketCategory = c),
+      activeThemeSection: _themeSection,
+      onSelectThemeSection: (s) {
+        setState(() {
+          _themeSection = s;
+          if (s == 'gallery') _activeDrawer = 'themes';
+          else if (s == 'premium') _activeDrawer = 'premium';
+        });
+      },
+      browserTabs: _browserTabs,
+      activeBrowserTabId: 'user_default',
+      onCloseBrowserTab: (id) => setState(() => _browserTabs.removeWhere((t) => t.id == id)),
+      
+      activeFilesCategory: _filesCategory,
+      onSelectFilesCategory: (c) => setState(() => _filesCategory = c),
+      onRequestSwitchSurface: (surface) {
+        final target = switch (surface) {
+          ActiveWorkSurface.chat => null,
+          ActiveWorkSurface.smartgen => 'smartgen',
+          ActiveWorkSurface.market => 'market',
+          ActiveWorkSurface.themes => 'themes',
+          ActiveWorkSurface.browser => null,
+          ActiveWorkSurface.files => 'files',
+        };
+        _requestSwitchSurface(target);
+      },
+      onPaneInteraction: () {},
+          ),
+        ],
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Max 9 active model rows filtered by active category with fallback
+    var categoryPills = _tickerItems
+        .where((it) => it.modelDef.categories.contains(_activeCategory) && _selectedModelIds.contains(it.modelDef.id))
+        .take(9)
+        .toList();
+
+    if (categoryPills.isEmpty) {
+      categoryPills = _tickerItems
+          .where((it) => it.modelDef.categories.contains(_activeCategory))
+          .take(9)
+          .toList();
+    }
+
+    final activePills = categoryPills;
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
+    // The opened conversation, if any.
+    final openId = _expandedModelIds.isEmpty ? null : _expandedModelIds.first;
+    final TickerItem? openItem = activePills.where((p) => p.modelDef.id == openId).firstOrNull;
+    // The side navigation is an ornament at the left edge. It never moves the ticker and never
+    // disappears because a row was opened (David, 2026-10-24, items 9 and 12).
+    final railVisible = _railVisible;
+    final tickerWidth = isMobile ? 262.0 : 440.0; // on a phone it stands beside the side navigation, never under it
+
+    // That model's conversation, shown inside its own row when the row is opened.
+    Widget conversationFor(TickerItem it) => ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: (MediaQuery.of(context).size.height * 0.36).clamp(220.0, 320.0)),
+          child: ConversationView(
+            key: ValueKey('conv-${it.modelDef.id}'),
+            item: it,
+            onClose: () => setState(() => _expandedModelIds.clear()),
+            onSendReply: (reply, files) => _onSendInlineReply(it.modelDef.id, reply, files),
+            onOpenBrowser: () => _openBrowserForTab(_browserTabs.length > 1 ? _browserTabs[1].id : 'user_default'),
+            onTapMessage: (msg) => setState(() {
+              _zoomedMessage = msg;
+              _zoomedModelDef = it.modelDef;
+            }),
+            onOpenLocalHistory: () => setState(() => _localHistoryModel = it.modelDef),
+          ),
+        );
+
+    // A category with no answers yet (Image, Video, Music before anything is generated) still shows its
+    // models, each with a plain word on where it stands, instead of an empty window.
+    final rosterForCategory = ModelRoster.forCategory(_activeCategory);
+    final Widget emptyCategory = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final m in rosterForCategory.take(6))
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(m.providerColor.withValues(alpha: 0.10), VColors.fillRow),
+              borderRadius: BorderRadius.circular(VRadius.row),
+            ),
+            child: Row(children: [
+              Expanded(child: Text(m.label, maxLines: 1, softWrap: false, overflow: TextOverflow.fade, style: VType.callout(weight: FontWeight.w600))),
+              Text(m.isMedia ? 'Not connected yet' : 'Ask to compare', style: VType.caption(color: VColors.textTertiary)),
+            ]),
+          ),
+        if (rosterForCategory.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(VSpace.md),
+            child: Text('No models here yet', textAlign: TextAlign.center, style: VType.footnote(color: VColors.textTertiary)),
+          ),
+      ],
+    );
+
+    // Collapsed: the consensus row pinned on top, then one row per model. An opened row grows in place.
+    final Widget rows = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_tickerItems.isNotEmpty && activePills.isNotEmpty) ...[
+          ConsensusRow(
+            agreementRatio: _consensusRatio,
+            summary: _consensusSummary,
+            isGenerating: _isConsensusGenerating,
+            onTap: () => setState(() => _activeDrawer = 'consensus'),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (activePills.isNotEmpty)
+          Flexible(
+            child: EdgeFade(
+              fadeHeight: 28,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (int i = 0; i < activePills.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 10),
+                      ModelPill(
+                        key: _pillKey(activePills[i].modelDef.id),
+                        item: activePills[i],
+                        elevation: activePills.length <= 1 ? 1.0 : 1.0 - i / (activePills.length - 1),
+                        isExpanded: activePills[i].modelDef.id == openId,
+                        onToggleExpand: () => _onTogglePill(activePills[i].modelDef.id),
+                        expandedChild: activePills[i].modelDef.id == openId ? conversationFor(activePills[i]) : null,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          )
+        else if (_tickerItems.isNotEmpty || _activeCategory != ModelCategory.general)
+          Flexible(child: SingleChildScrollView(child: emptyCategory)),
+      ],
+    );
+
+    // Where you are among the categories: their names, the current one lit, and a hint of the swipe.
+    // Words, not buttons; the ticker itself is what you swipe (David, 2026-10-24, item 7).
+    final cats = _tickerCategories;
+    final ci = cats.indexOf(_activeCategory);
+    final Widget categoryIndicator = cats.length < 2
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.chevron_left_rounded, size: 14, color: ci > 0 ? const Color(0x80FFFFFF) : const Color(0x00FFFFFF)),
+                const SizedBox(width: 2),
+                AnimatedSwitcher(
+                  duration: VMotion.base,
+                  transitionBuilder: (child, a) => FadeTransition(opacity: a, child: child),
+                  child: Text(_categoryName(_activeCategory),
+                      key: ValueKey(_activeCategory), style: VType.caption(color: VColors.textSecondary, weight: FontWeight.w600).copyWith(fontSize: 10.5, letterSpacing: 0.3)),
+                ),
+                const SizedBox(width: 6),
+                for (var k = 0; k < cats.length; k++)
+                  AnimatedContainer(
+                    duration: VMotion.base,
+                    curve: Curves.easeOutCubic,
+                    width: k == ci ? 10 : 4,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                    decoration: BoxDecoration(
+                      color: k == ci ? const Color(0xCCFFFFFF) : const Color(0x4DFFFFFF),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                const SizedBox(width: 2),
+                Icon(Icons.chevron_right_rounded, size: 14, color: ci < cats.length - 1 ? const Color(0x80FFFFFF) : const Color(0x00FFFFFF)),
+              ],
+            ),
+          );
+
+    // The question you asked: the reference point for every answer below it. It floats above the ticker
+    // without a frame (Ticker Spec 3.1); tapping it brings the composer up to ask again or follow up.
+    final Widget pinnedPrompt = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      transitionBuilder: (child, a) => FadeTransition(
+        opacity: a,
+        child: SlideTransition(position: Tween(begin: const Offset(0, 0.25), end: Offset.zero).animate(a), child: child),
+      ),
+      child: _currentPrompt.isEmpty
+          ? const SizedBox(key: ValueKey('no-prompt'), width: 0, height: 0)
+          : Padding(
+              key: ValueKey('prompt-$_currentPrompt'),
+              padding: const EdgeInsets.only(bottom: 12),
+              child: VPress(
+                onTap: () => setState(() {
+                  _closeAllPanes();
+                  _expandedModelIds.clear();
+                  _isComposerSummoned = true;
+                }),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: tickerWidth - 16),
+                  child: Text(
+                    _currentPrompt,
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.fade,
+                    style: VType.headline().copyWith(
+                      fontSize: 15,
+                      height: 21 / 15,
+                      shadows: const [Shadow(color: Color(0x8C000000), blurRadius: 14), Shadow(color: Color(0x59000000), blurRadius: 3)],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    );
+
+    if (ThemeBlurCache.instance.activeAssetPath != _currentTheme.assetPath) {
+      ThemeBlurCache.instance.setActiveTheme(_currentTheme);
+    }
+    final desktopSurfaceLeft = isMobile ? 0.0 : (_isMobileSideNavOpen ? 340.0 : 0.0);
+
+    return Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // ================= PLANE 0: BACKGROUND WALLPAPER =================
+          Positioned.fill(
+            child: ThemeLivingBackdrop(
+              theme: _currentTheme,
+              // Asset-swap: live loop + cached ambient frame when Premium Market
+              preferVideo: true,
+              builderAmbient: _activeDrawer == 'premium',
+            ),
+          ),
+
+          // Theme Gallery (69:1926): the room behind the picture uses pre-rendered cached blur (0 shader regeneration).
+          if (_activeDrawer == 'themes')
+            Positioned.fill(
+              child: CachedThemeSurface(
+                assetPath: _currentTheme.assetPath,
+                preset: ThemeBlurPreset.galleryRoom,
+              ),
+            ),
+          // ================= PLANE 1: RESTING WORKSPACE =================
+          // Hidden during Premium Theme Market (Body) so ticker chrome doesn't bleed through
+          if (!_browserOpen && !(isMobile && _isMobileSideNavOpen) && !const {'premium', 'themes', 'apps', 'settings', 'smartgen', 'market', 'files', 'consensus'}.contains(_activeDrawer))
+          Positioned.fill(
+            bottom: 78,
+            child: SafeArea(
+              bottom: false,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ================= THE TICKER WINDOW =================
+                    // One width, always centred. Opening a row grows the window upward in place; swiping
+                    // across it moves between categories. Nothing teleports and nothing flashes.
+                    pinnedPrompt,
+                    Center(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onHorizontalDragEnd: openItem != null
+                            ? null
+                            : (d) {
+                                final v = d.primaryVelocity ?? 0;
+                                if (v.abs() < 220) return;
+                                _swipeCategory(v < 0 ? 1 : -1);
+                              },
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(end: openItem != null ? 0.56 : 0.40),
+                          duration: const Duration(milliseconds: 320),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, f, child) => Container(
+                            width: tickerWidth,
+                            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * f),
+                            margin: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 24),
+                            child: child,
+                          ),
+                          child: VGlass(
+                            radius: VRadius.card,
+                            material: VMaterial.resting,
+                            padding: const EdgeInsets.all(VSpace.xs),
+                            child: AnimatedSize(
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutCubic,
+                              alignment: Alignment.bottomCenter,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_tickerItems.isNotEmpty || _activeCategory != ModelCategory.general) categoryIndicator,
+                                  Flexible(
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 280),
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      layoutBuilder: (cur, prev) => Stack(alignment: Alignment.bottomCenter, children: [...prev, if (cur != null) cur]),
+                                      transitionBuilder: (child, a) => FadeTransition(
+                                        opacity: a,
+                                        child: SlideTransition(
+                                          position: Tween(begin: Offset(0.08 * _categorySlideDir, 0), end: Offset.zero).animate(a),
+                                          child: child,
+                                        ),
+                                      ),
+                                      child: KeyedSubtree(key: ValueKey(_activeCategory), child: rows),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // The composer is its own element, never a row of the ticker. Tucked, it is an arrow.
+                    // While a row is open its own reply box is the one place to type, so the composer steps away.
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topCenter,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 200),
+                        opacity: openItem == null ? 1 : 0,
+                        child: openItem != null
+                            ? const SizedBox(width: 0, height: 0)
+                            : ConstrainedBox(
+                                constraints: BoxConstraints(maxWidth: tickerWidth),
+                                child: FloatingPrompt(
+                                  summoned: _isComposerSummoned,
+                                  busy: _busy,
+                                  mode: _mode,
+                                  incognito: _incognito,
+                                  onMode: (m) => setState(() => _mode = m),
+                                  onIncognito: (v) => setState(() => _incognito = v),
+                                  onSubmitPrompt: (text, files) => _onSendPrompt(text, files),
+                                  onSummon: () => setState(() {
+                                    _closeAllPanes();
+                                    _isComposerSummoned = true;
+                                  }),
+                                  onTuck: () => setState(() => _isComposerSummoned = false),
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ================= PLANE 2: APPS POPUP PANE =================
+          // Middle neutral area, no visible canvas, blurred background, clickaway + close icon
+          if (_activeDrawer == 'apps')
+            Positioned.fill(
+              child: AppsPopupPane(
+                onClose: () => setState(() => _activeDrawer = null),
+                themeArt: _currentTheme.assetPath,
+                onOpenSmartGen: () => _requestSwitchSurface('smartgen'),
+                onOpenDiscoverMarket: () => _requestSwitchSurface('market'),
+                onOpenThemeGallery: () => _requestSwitchSurface('themes'),
+                onOpenPremiumMarketplace: () => _requestSwitchSurface('premium'),
+                onOpenFiles: () => _openDrawer('files'),
+                onOpenMusicPlayer: _openMusic,
+                onOpenBrowser: () => _openBrowserForTab('user_default'),
+              ),
+            ),
+
+          // ================= PLANE 3: LOCAL MODEL HISTORY PANE =================
+          // Centered popup pane, searches body & title, relative timestamps
+          if (_localHistoryModel != null)
+            Positioned.fill(
+              child: LocalHistoryPane(
+                modelDef: _localHistoryModel!,
+                sessions: _localHistorySessions[_localHistoryModel!.id] ?? const [],
+                onSelectSession: (sess) => _loadAndExpandSession(sess),
+                onClose: () => setState(() => _localHistoryModel = null),
+              ),
+            ),
+
+          // ================= PLANE 4: MESSAGE ZOOM OVERLAY =================
+          // Dimmed/blurred backdrop, no visible window, faded edges, bottom actions
+          // An answer that drew on the web opens as a document with its sources (Claude, 2026-10-20).
+          if (_zoomedMessage != null && _zoomedModelDef != null && _zoomedMessage!.sender == 'model' && _currentSources.isNotEmpty)
+            Positioned.fill(
+              child: ResearchDocument(
+                message: _zoomedMessage!,
+                modelName: _zoomedModelDef!.label,
+                sources: _currentSources,
+                onOpenSource: (i) => _openBrowserForTab('src_$i'),
+                onClose: () => setState(() => _zoomedMessage = null),
+              ),
+            )
+          else if (_zoomedMessage != null && _zoomedModelDef != null)
+            Positioned.fill(
+              child: MessageZoomOverlay(
+                message: _zoomedMessage!,
+                modelName: _zoomedModelDef!.label,
+                providerColor: _zoomedModelDef!.providerColor,
+                onClose: () => setState(() => _zoomedMessage = null),
+              ),
+            ),
+
+          // ================= PLANE 5: DRAWERS & DURABLE WORK SURFACES =================
+          if (_activeDrawer == 'history')
+            Positioned.fill(
+              child: HistoryPane(
+                sessions: _globalHistorySessions,
+                job: (id) => _jobsById[id],
+                onLoad: (sess) => _loadAndExpandSession(sess),
+                onClose: () => setState(() => _activeDrawer = null),
+                onUpdated: () => _reloadHistory(forceRefresh: true),
+              ),
+            ),
+
+          if (_activeDrawer == 'themes')
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0, // the whole screen takes the pull up toward the live wallpapers
+              bottom: 84,
+              child: WindowlessThemeScroller(
+                currentTheme: _currentTheme,
+                onLivePreview: (theme) => setState(() => _currentTheme = theme),
+                onConfirmTheme: (theme) => setState(() {
+                  _currentTheme = theme;
+                  _savedThemeBeforePreview = theme;
+                  _activeDrawer = null;
+                }),
+                onCancel: () => setState(() {
+                  _currentTheme = _savedThemeBeforePreview;
+                  _activeDrawer = null;
+                }),
+                onUpgradeTier: () => setState(() => _activeDrawer = 'premium'),
+              ),
+            ),
+
+          if (_activeDrawer == 'premium')
+            Positioned.fill(
+              // Swipe down returns to the free Theme Gallery.
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onVerticalDragEnd: (d) {
+                  if ((d.primaryVelocity ?? 0) > 300) setState(() => _activeDrawer = 'themes');
+                },
+                child: PremiumThemeMarketView(
+                currentTheme: _currentTheme,
+                onApplyTheme: (theme) => setState(() {
+                  _currentTheme = theme;
+                  _savedThemeBeforePreview = theme;
+                  _activeDrawer = null;
+                }),
+                onPreviewTheme: (theme) => setState(() {
+                  _currentTheme = theme;
+                }),
+                onClose: () => setState(() => _activeDrawer = null),
+              ),
+              ),
+            ),
+
+          if (_activeDrawer == 'settings')
+            Positioned.fill(
+              child: SettingsDrawer(
+                onClose: () => setState(() => _activeDrawer = null),
+                incognito: _incognito,
+                autosave: _autosave,
+                onIncognito: (v) => setState(() => _incognito = v),
+                onAutosave: (v) => setState(() => _autosave = v),
+                onOpenPurchased: () {
+                  _filesPlace = 'purchased';
+                  _requestSwitchSurface('files');
+                },
+                onOpenUpgrade: () => setState(() => _activeDrawer = 'upgrade'),
+              ),
+            ),
+
+          // Durable work surfaces sit over one shared scrim (kit overlay + cached blur).
+          if (_activeDrawer == 'smartgen' || _activeDrawer == 'market' || _activeDrawer == 'files')
+            const Positioned.fill(child: VScrim()),
+
+          if (_activeDrawer == 'smartgen')
+            Positioned(
+              left: desktopSurfaceLeft,
+              right: 0,
+              top: 0,
+              bottom: 78,
+              child: SmartGenScreen(
+                onClose: () => _requestSwitchSurface(null),
+                viewMode: _smartGenView,
+                onViewModeChanged: (v) => setState(() => _smartGenView = v),
+                newCardTrigger: _smartGenNewCardTrigger,
+              ),
+            ),
+
+          if (_activeDrawer == 'market')
+            Positioned(
+              left: desktopSurfaceLeft,
+              right: 0,
+              top: 0,
+              bottom: 78,
+              child: MarketScreen(
+                onClose: () => _requestSwitchSurface(null),
+                view: _marketCategory,
+              ),
+            ),
+
+          if (_activeDrawer == 'upgrade')
+            Positioned.fill(
+              child: UpgradeScreen(
+                onClose: () => setState(() => _activeDrawer = null),
+              ),
+            ),
+
+          if (_activeDrawer == 'skills')
+            Positioned.fill(
+              child: SkillsScreen(
+                onClose: () => setState(() => _activeDrawer = null),
+              ),
+            ),
+
+          if (_activeDrawer == 'files')
+            Positioned(
+              left: desktopSurfaceLeft,
+              right: 0,
+              top: 0,
+              bottom: 78,
+              child: FilesScreen(
+                key: ValueKey('files-$_filesPlace'),
+                initialPlace: _filesPlace,
+                onClose: () => _requestSwitchSurface(null),
+              ),
+            ),
+
+          if (_activeDrawer == 'consensus')
+            Positioned.fill(
+              child: ConsensusWebView(
+                job: _currentJobId == null ? null : _jobsById[_currentJobId],
+                onClose: () => setState(() => _activeDrawer = null),
+              ),
+            ),
+
+          // The browser opens over the room; the room goes out of focus behind it via cached blur.
+          if (_browserOpen)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CachedThemeSurface(
+                  assetPath: _currentTheme.assetPath,
+                  preset: ThemeBlurPreset.scrim,
+                ),
+              ),
+            ),
+
+          // ================= PLANE 3: CONTEXTUAL SIDE NAV =================
+          if (isMobile) ...[
+            // Mobile backdrop when side nav is open
+            if (_isMobileSideNavOpen && railVisible)
+              Positioned.fill(
+                child: VScrim(soft: true, onTap: () => setState(() => _isMobileSideNavOpen = false)),
+              ),
+
+            // REQ-21: the rail ornament is present on the resting canvas and every
+            // durable work surface; focused overlays own the stage while open.
+            if (railVisible)
+              Positioned(
+                left: 2,
+                bottom: 84,
+                child: _buildSideNav(isMobile: true),
+              ),
+          ] else ...[
+            if (railVisible)
+            Positioned(
+              left: 12,
+              bottom: 84,
+              child: _buildSideNav(isMobile: false),
+            ),
+          ],
+
+          // ================= MUSIC WIDGET: draggable, stays where it is placed =================
+          if (_activeDrawer != 'premium')
+            Builder(builder: (context) {
+              final size = MediaQuery.of(context).size;
+              final pos = _musicPos ?? Offset((size.width - 308) / 2, 52);
+              return Positioned(
+                left: pos.dx,
+                top: pos.dy,
+                child: GestureDetector(
+                  onPanUpdate: (d) => setState(() {
+                    final n = (_musicPos ?? pos) + d.delta;
+                    _musicPos = Offset(n.dx.clamp(0.0, size.width - 120), n.dy.clamp(0.0, size.height - 60));
+                  }),
+                  child: MusicWidget(onOpenLibrary: _openMusic),
+                ),
+              );
+            }),
+
+          // ================= PLANE 4: PERMANENT BOTTOM DOCK =================
+          // Hidden during Premium Theme Market so transport stays in-frame (Figma Body)
+          if (_activeDrawer != 'premium')
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 12,
+            child: SafeArea(
+              top: false,
+              child: Center(
+                child: PermanentNavBar(
+                  isComposerSummoned: _isComposerSummoned,
+                  onToggleComposer: _toggleComposer,
+                  onHome: () {
+                    if (_activeDrawer != null) {
+                      _requestSwitchSurface(null);
+                    } else {
+                      _openHomeComposer();
+                    }
+                  },
+                  onApps: () => _openDrawer('apps'),
+                  onSettings: () => _openDrawer('settings'),
+                  activeDrawer: _activeDrawer,
+                ),
+              ),
+            ),
+          ),
+
+        ],
+      ),
+    );
+  }
+}
+
